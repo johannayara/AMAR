@@ -95,7 +95,7 @@ preset = {
     # "pretrained_path": "/saved_models/jepa_ssl_empty_room+classroom+meeting_room_20250721_124829/jepa_ssl_final_empty_room+classroom+meeting_room_20250721_124829.pth",
     "transfer_scenario": "freeze_encoder",  # One of ["full", "feature_extractor", "feature_encoder"]
     "save_model": False,  # Whether to save model components
-    "saving_path": "/home/amirmhd/Documents/multi_modal_CSI/results/checkpoints/"
+    "saving_path": "/home/johanna/Documents/multi_modal_CSI/results/checkpoints/"
 }
 
 
