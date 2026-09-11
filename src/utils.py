@@ -10,6 +10,12 @@ import re
 import time
 
 
+LOCATION_SIZE = 5
+ACTIVITY_SIZE = 9
+MAX_NB_PEOPLE = 6
+GT_COLOR = "#F06595"    
+PRED_COLOR = "#66D9E8" 
+CMAP = "cool" 
 
 def load_model_components(model, load_path, lr, scenario="full", device=None):
     """
@@ -227,7 +233,7 @@ def error_per_number_person(y_pred, y_true):
     error_count = np.abs(y_pred - y_true).sum(axis=1) # finding error count in each sample
 
     error_per_person = []
-    for count_index in range(1, 6):
+    for count_index in range(1, MAX_NB_PEOPLE):
         index = np.where(count_num_people == count_index) # gives us index of samples with count_index people
         error_per_person.append(error_count[index].mean()) # finding mean error count for samples with count_index people
 
@@ -236,8 +242,8 @@ def error_per_number_person(y_pred, y_true):
 def count_error(y_pred, y_true):
     """
     Args:
-        y_pred: numpy array of shape (num_samples, 9) containing prediction for each activity
-        y_true: numpy array of shape (num_samples, 9) containing true values
+        y_pred: numpy array of shape (num_samples, n) containing prediction n=9 for activity and 5 for location
+        y_true: numpy array of shape (num_samples, n) containing true values
 
     Returns:
         error for count number people in each sample, (num_samples, 1)
@@ -393,7 +399,7 @@ def performance_metrics_joint_multiSensX(y_true_act, y_pred_act, y_true_loc, y_p
 
     # batchsize by 5 by 9
     mask_ = y_pred_loc==0
-    y_pred_act[mask_] = [0, 0 , 0 , 0 , 0 , 0, 0,0 , 0]
+    y_pred_act[mask_] = [0, 0 , 0 , 0 , 0 , 0, 0, 0 , 0]
     y_pred_act = y_pred_act.sum(axis=1)
 
 
@@ -466,14 +472,13 @@ def performance_metrics(y_true, y_pred, var_mode="joint_multihead", var_threshol
     elif var_mode == "multi_head":
         # Initialize dictionary to store metrics for each layer
         all_layer_metrics = {}
-        
         # Process each layer's predictions
         for layer_idx in range(len(y_pred)):
             layer_pred = y_pred[layer_idx]
             # Convert predictions to one-hot encoded format
             y_pred_indices = np.argmax(layer_pred, axis=-1)
+
             layer_pred_one_hot = np.eye(layer_pred.shape[-1])[y_pred_indices]
-            
             # Sum across heads
             layer_pred_sum = layer_pred_one_hot.sum(axis=1)
             y_true_sum = y_true.sum(axis=1)
@@ -574,25 +579,36 @@ def reduce_dataset_dualband(data, indicies_, num_object_queries=None):
     return np.array(new_data)
 
 
-def reduce_dataset(data, num_object_queries=None):
+def reduce_dataset(data, var_task, num_object_queries=None):
     new_data = []
     zero = np.zeros((5, 1))
-
+    
+    if var_task == "location":
+        mask_vector = [0, 0, 0, 0, 0, 1]
+    else:
+        mask_vector = [0, 0, 0, 0, 0, 0, 0, 0, 0, 1]
     for sample in data:
         # Count non-zero rows-pp
         legend_non_zero = sample.sum(axis=1)
         new_sample = np.delete(sample, (legend_non_zero == 0).argmax(), axis=0)
         new_sample = np.hstack((new_sample, zero))
         legend_non_zero = new_sample.sum(axis=1)
-        new_sample[legend_non_zero == 0, :] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 1]
+        new_sample[legend_non_zero == 0, :] = mask_vector
         if num_object_queries:
-            new_matrix = np.repeat([[0, 0, 0, 0, 0, 0, 0, 0, 0, 1]], num_object_queries-5, axis=0)
+            new_matrix = np.repeat([mask_vector], num_object_queries-5, axis=0)
             new_sample = np.concatenate((new_sample, new_matrix))
         indices = np.random.permutation(num_object_queries)
         new_data.append(new_sample[indices])
     return np.array(new_data)
 
-def visualize_model_performance(y_pred, y_true, save_dir="./visualizations",var_mode="multi_head"):
+
+def threshold_round(x, threshold=0.3):
+    frac = x - np.floor(x)
+    return np.floor(x) if frac < threshold else np.ceil(x)
+
+
+def visualize_model_performance(y_pred, y_true, save_dir="./visualizations",
+                                 var_mode="multi_head", class_names=("a", "b", "c", "d", "e")):
     """
     Creates and saves various visualizations of model performance
     y_pred: numpy array [batch_size, 10] (predicted counts)
@@ -606,8 +622,8 @@ def visualize_model_performance(y_pred, y_true, save_dir="./visualizations",var_
         batch_size, num_heads, num_classes = y_pred.shape
 
         y_pred_indices = np.argmax(y_pred, axis=-1)
-        y_pred = np.eye(num_classes)[y_pred_indices] # this gives us one hot encoded version of it.
-        y_pred = y_pred.sum(axis=1)  # summing along the columns, this should give us count of each activity
+        y_pred = np.eye(num_classes)[y_pred_indices]
+        y_pred = y_pred.sum(axis=1)
         y_true = y_true.sum(axis=1)
         y_pred = y_pred[:, :-1]
         y_true = y_true[:, :-1]
@@ -620,75 +636,119 @@ def visualize_model_performance(y_pred, y_true, save_dir="./visualizations",var_
         y_pred = (1 / (1 + np.exp(-y_pred)) > 0.5).astype(float)
         y_true = y_true.reshape(y_true.shape[0], -1, 9)
         y_pred = y_pred.reshape(y_true.shape[0], y_true.shape[1], y_true.shape[2])
-        y_pred = y_pred.sum(axis=1) # summing along the columns, this should give us count of each activity
+        y_pred = y_pred.sum(axis=1)
         y_true = y_true.sum(axis=1)
     else:
         raise ValueError(f"Unsupported var_mode: {var_mode}")
     os.makedirs(f"{save_dir}", exist_ok=True)
 
-    # 1. Distribution of Predictions vs Ground Truth
-    plt.figure(figsize=(15, 5))
+    num_classes_plotted = int(y_pred.shape[1])
+    if len(class_names) != num_classes_plotted:
+        class_names = [f"Class {i}" for i in range(num_classes_plotted)]
+    ncols = min(5, num_classes_plotted)
+    nrows = int(np.ceil(num_classes_plotted / ncols))
 
-    # Plot for each class
-    for i in range(int(y_pred.shape[1])):
-        plt.subplot(2, 5, i + 1)
-        plt.hist(y_true[:, i], alpha=0.5, label='Ground Truth', bins=range(7))
-        plt.hist(y_pred[:, i], alpha=0.5, label='Predicted', bins=range(7))
-        plt.title(f'Class {i}')
+    # 1. Distribution of Predictions vs Ground Truth
+    plt.figure(figsize=(3 * ncols, 3.5 * nrows))
+    for i in range(num_classes_plotted):
+        plt.subplot(nrows, ncols, i + 1)
+        bins = np.arange(7)
+        width = 0.4
+        gt_counts, _ = np.histogram(y_true[:, i], bins=bins)
+        pred_counts, _ = np.histogram(y_pred[:, i], bins=bins)
+        x = bins[:-1]
+        plt.bar(x - width / 2, gt_counts, width=width, label='Ground Truth', color=GT_COLOR)
+        plt.bar(x + width / 2, pred_counts, width=width, label='Predicted', color=PRED_COLOR)
+        plt.title(class_names[i])
         plt.xlabel('Count')
         plt.ylabel('Frequency')
         if i == 0:
             plt.legend()
     plt.tight_layout()
-    plt.savefig(f'{save_dir}/count_distributions_{var_mode}.png')
+    plt.savefig(f'{save_dir}/count_distributions.png')
     plt.close()
+
 
     # 2. Confusion Matrix for each class
-    fig, axes = plt.subplots(2, 5, figsize=(20, 8))
-    for i in range(int(y_pred.shape[1])):
-        ax = axes[i // 5, i % 5]
+    fig, axes = plt.subplots(nrows, ncols, figsize=(4 * ncols, 4 * nrows), squeeze=False)
+    for i in range(num_classes_plotted):
+        ax = axes[i // ncols, i % ncols]
         cm = confusion_matrix(y_true[:, i], np.round(y_pred[:, i]))
-        sns.heatmap(cm, annot=True, fmt='d', ax=ax, cmap='Blues')
-        ax.set_title(f'Class {i}')
+        sns.heatmap(cm, annot=True, fmt='d', ax=ax, cmap=CMAP,
+                    cbar_kws={'label': 'Count'})
+        ax.set_title(class_names[i])
         ax.set_xlabel('Predicted Count')
         ax.set_ylabel('True Count')
+    for j in range(num_classes_plotted, nrows * ncols):
+        axes[j // ncols, j % ncols].axis('off')
     plt.tight_layout()
-    plt.savefig(f'{save_dir}/confusion_matrices_{var_mode}.png')
+    plt.savefig(f'{save_dir}/confusion_matrices.png')
     plt.close()
 
+ 
     # 3. Error Distribution
     plt.figure(figsize=(10, 6))
     errors = np.abs(y_pred - y_true).mean(axis=1)
-    plt.hist(errors, bins=30)
+    plt.hist(errors, bins=30, color=GT_COLOR, edgecolor='white')
     plt.title('Distribution of Mean Absolute Error per Sample')
     plt.xlabel('Mean Absolute Error')
     plt.ylabel('Frequency')
-    plt.savefig(f'{save_dir}/error_distribution_{var_mode}.png')
+    plt.savefig(f'{save_dir}/error_distribution.png')
     plt.close()
 
+
     # 4. Class-wise Error Analysis
+
     plt.figure(figsize=(10, 6))
     class_errors = np.abs(y_pred - y_true).mean(axis=0)
-    plt.bar(range(int(y_pred.shape[1])), class_errors)
+    plt.bar(range(num_classes_plotted), class_errors, color=PRED_COLOR)
+    plt.xticks(range(num_classes_plotted), class_names, ha='right')
     plt.title('Mean Absolute Error by Class')
     plt.xlabel('Class')
     plt.ylabel('Mean Absolute Error')
-    plt.savefig(f'{save_dir}/class_errors_{var_mode}.png')
+    plt.tight_layout()
+    plt.savefig(f'{save_dir}/class_errors.png')
     plt.close()
 
-    # 5. Prediction vs Ground Truth Scatter
-    plt.figure(figsize=(10, 10))
-    for i in range(int(y_pred.shape[1])):
-        plt.scatter(y_true[:, i], y_pred[:, i], alpha=0.1, label=f'Class {i}')
-    plt.plot([0, 5], [0, 5], 'r--')  # Perfect prediction line
-    plt.xlabel('True Count')
-    plt.ylabel('Predicted Count')
-    plt.title('Predicted vs True Counts')
-    plt.legend()
-    plt.savefig(f'{save_dir}/prediction_scatter_{var_mode}.png')
+    # 5. Prediction vs Ground Truth - fixed
+    fig, axes = plt.subplots(nrows, ncols, figsize=(4 * ncols, 4 * nrows), squeeze=False)
+    rng = np.random.default_rng(0)
+    cmap = sns.color_palette(CMAP, as_cmap=True)
+
+    for i in range(num_classes_plotted):
+        ax = axes[i // ncols, i % ncols]
+        yt = y_true[:, i]
+        yp = y_pred[:, i]
+
+        pairs, counts = np.unique(np.stack([yt, yp], axis=1), axis=0, return_counts=True)
+        jitter = 0.12
+        jx = pairs[:, 0] + rng.uniform(-jitter, jitter, size=len(pairs))
+        jy = pairs[:, 1] + rng.uniform(-jitter, jitter, size=len(pairs))
+
+        sizes = 20 + 180 * (counts / counts.max())
+        sc = ax.scatter(jx, jy, s=sizes, c=counts, cmap=cmap,
+                         alpha=0.85, edgecolors='white', linewidths=0.5)
+
+        lo = min(yt.min(), yp.min()) - 0.5
+        hi = max(yt.max(), yp.max()) + 0.5
+        ax.plot([lo, hi], [lo, hi], linestyle='--', color='#B0413E', linewidth=1.2, label='y = x')
+        ax.set_xlim(lo, hi)
+        ax.set_ylim(lo, hi)
+        ax.set_title(class_names[i])
+        ax.set_xlabel('True Count')
+        ax.set_ylabel('Predicted Count')
+        if i == 0:
+            ax.legend(loc='upper left', fontsize=8)
+        fig.colorbar(sc, ax=ax, label='# samples')
+
+    for j in range(num_classes_plotted, nrows * ncols):
+        axes[j // ncols, j % ncols].axis('off')
+
+    fig.suptitle('Predicted vs True Counts', fontsize=14)
+    plt.tight_layout()
+    plt.savefig(f'{save_dir}/prediction_scatter.png')
     plt.close()
 
-    # Return summary statistics
     return {
         'class_wise_mae': class_errors.tolist(),
         'mean_error': errors.mean(),
@@ -696,7 +756,7 @@ def visualize_model_performance(y_pred, y_true, save_dir="./visualizations",var_
         'perfect_predictions': (np.abs(y_pred - y_true) < 0.5).all(axis=1).mean()
     }
 
-def log_attention_weights(model, y_pred, y_actual, epoch):
+def log_attention_weights(model, y_pred, y_actual, epoch, var_task = "activity"):
     """
     Log averaged attention weights from all decoder layers to wandb based on count of people.
     For each count (0-4), select one random sample and visualize its averaged attention weights across all decoder layers.
@@ -708,13 +768,17 @@ def log_attention_weights(model, y_pred, y_actual, epoch):
         y_pred = torch.from_numpy(y_pred)
 
     # Get count of people (number of non-9 values) in each sequence
-    where_9_happens = y_actual == 9
-    count_no_person = torch.sum(~where_9_happens, dim=1)
+    if var_task == "location":
+        where_n_happens = y_actual == LOCATION_SIZE
+        count_no_person = torch.sum(~where_n_happens, dim=1)
+    else:
+        where_n_happens = y_actual == ACTIVITY_SIZE
+        count_no_person = torch.sum(~where_n_happens, dim=1)
 
     decoder_layers = model.decoder.decoder_layers
 
     # For each possible count (0, 1, 2, 3, 4, 5)
-    for i in range(6):
+    for i in range(MAX_NB_PEOPLE):
         # Find examples with this count
         indices = torch.where(count_no_person == i)[0]
         if len(indices) == 0:
@@ -765,125 +829,92 @@ def log_attention_weights(model, y_pred, y_actual, epoch):
 
             plt.close('all')
     return None
-def log_random_attention_weights_final(model, y_pred, y_actual, epoch, num_samples=50):
-    """
-    Log averaged attention weights from all decoder layers to wandb:
-    1. For 50 randomly selected samples across all counts
-    2. For averaged attention weights per people count (0-5)
-    """
-    # Convert numpy arrays to torch tensors if needed
+def log_random_attention_weights_final(model, y_pred, y_actual, epoch, num_samples=50, var_task="activity"):
     if isinstance(y_actual, np.ndarray):
         y_actual = torch.from_numpy(y_actual)
     if isinstance(y_pred, np.ndarray):
         y_pred = torch.from_numpy(y_pred)
-    
-    # Get total batch size
-    batch_size = y_actual.shape[0]
-    
-    # Count people for each sample
-    where_9_happens = y_actual == 9
-    count_no_person = torch.sum(~where_9_happens, dim=1)
-    
+
     decoder_layers = model.decoder.decoder_layers
     num_layers = len(decoder_layers)
-    # PART 1: Plot random samples
-    # Randomly select indices (up to the requested number or batch size, whichever is smaller)
-    num_to_select = min(num_samples, batch_size)
+    last_layer_idx = num_layers - 1
+    last_layer = decoder_layers[last_layer_idx]
+
+    attn_weights = last_layer.cross_attn_weights
+    if attn_weights is None:
+        return
+    attn_weights = attn_weights.detach().clone()
+
+    # --- KEY FIX: use the attention weights' own batch size as the source of truth ---
+    attn_batch_size = attn_weights.shape[0]
+    batch_size = min(y_actual.shape[0], attn_batch_size)
+
+    # Truncate everything to the aligned batch size so indices can never overflow attn_weights
+    y_actual = y_actual[:batch_size]
+    y_pred = y_pred[:batch_size]
+    attn_weights = attn_weights[:batch_size]
+
+    if var_task == "location":
+        where_n_happens = y_actual == LOCATION_SIZE
+    else:
+        where_n_happens = y_actual == ACTIVITY_SIZE
+    count_no_person = torch.sum(~where_n_happens, dim=1)
+
+    # PART 1: random samples
+    num_to_select = min(int(num_samples), batch_size)
     random_indices = torch.randperm(batch_size)[:num_to_select]
-    
-    # For each randomly selected example
+
     for sample_idx, random_idx in enumerate(random_indices):
-        # Get actual labels and predictions for this example
         actual_sequence = y_actual[random_idx].cpu().numpy()
         pred_sequence = y_pred[random_idx].cpu().numpy()
         people_count = count_no_person[random_idx].item()
-        
-        # Now iterate through layers using the same sample
-        for layer_idx, layer in enumerate(decoder_layers):
-            attn_weights = layer.cross_attn_weights.detach().clone()
-            if attn_weights is None:
-                continue
-            # Only plotting the last layer
-            if layer_idx != num_layers - 1:
-                continue    
-            # Get attention weights for this example - Shape: [num_heads, target_seq_len, source_seq_len]
-            example_attn_weights = attn_weights[random_idx]
-            
-            # Average attention weights across all heads
-            avg_attn_weights = example_attn_weights.mean(dim=0)  # Shape: [target_seq_len, source_seq_len]
-            
-            # Create a heatmap for the averaged attention weights
-            plt.figure(figsize=(10, 8))
-            sns.heatmap(
-                avg_attn_weights.cpu().numpy(),
-                cmap='viridis',
-                xticklabels=range(avg_attn_weights.shape[1]),
-                yticklabels=[f'Q {j}' for j in range(avg_attn_weights.shape[0])],
-                cbar=True
-            )
-            
-            # Add main title with sample info
-            plt.title(f'Average Cross-Attention Weights - Layer {layer_idx}\n' +
-                    f'Sample {sample_idx+1}/50 (Index: {random_idx}) - People Count: {people_count}\n' +
-                    f'Actual: {actual_sequence}\n' +
-                    f'Prediction: {pred_sequence}',
-                    fontsize=14)
-            
-            # Log to wandb
-            wandb.log({
-                f'random_attention_weights/sample_{sample_idx+1}_layer_{layer_idx}': wandb.Image(plt.gcf()),
-            }, step=epoch)
-            
-            plt.close('all')
-    
-    # PART 2: Plot averaged attention weights per people count
-    # For each possible count (0, 1, 2, 3, 4, 5)
-    for i in range(6):
-        # Find all examples with this count
+
+        example_attn_weights = attn_weights[random_idx]
+        avg_attn_weights = example_attn_weights.mean(dim=0)
+
+        plt.figure(figsize=(10, 8))
+        sns.heatmap(
+            avg_attn_weights.cpu().numpy(),
+            cmap='viridis',
+            xticklabels=range(avg_attn_weights.shape[1]),
+            yticklabels=[f'Q {j}' for j in range(avg_attn_weights.shape[0])],
+            cbar=True
+        )
+        plt.title(f'Average Cross-Attention Weights - Layer {last_layer_idx}\n'
+                  f'Sample {sample_idx+1}/{num_to_select} (Index: {random_idx}) - People Count: {people_count}\n'
+                  f'Actual: {actual_sequence}\n'
+                  f'Prediction: {pred_sequence}',
+                  fontsize=14)
+
+        wandb.log({
+            f'random_attention_weights/sample_{sample_idx+1}_layer_{last_layer_idx}': wandb.Image(plt.gcf()),
+        }, step=epoch)
+        plt.close('all')
+
+    # PART 2: averaged per people count
+    for i in range(MAX_NB_PEOPLE):
         indices = torch.where(count_no_person == i)[0]
-        
         if len(indices) == 0:
             continue
-        
-        # Now iterate through layers
-        for layer_idx, layer in enumerate(decoder_layers):
-            attn_weights = layer.cross_attn_weights.detach().clone()
-            if attn_weights is None:
-                continue
-            if layer_idx != num_layers - 1:
-                continue    
-            # Initialize tensor to accumulate attention weights for this count
-            first_sample = attn_weights[indices[0]]
-            accumulated_attn = torch.zeros_like(first_sample.mean(dim=0))
-            
-            # Calculate average attention pattern for all samples with this count
-            for idx in indices:
-                example_attn_weights = attn_weights[idx]
-                # Average attention weights across all heads for this example
-                avg_head_attn = example_attn_weights.mean(dim=0)
-                accumulated_attn += avg_head_attn
-            
-            # Calculate the average across all samples with this count
-            avg_count_attn = accumulated_attn / len(indices)
-            
-            # Create a heatmap for the averaged attention weights
-            plt.figure(figsize=(10, 8))
-            sns.heatmap(
-                avg_count_attn.cpu().numpy(),
-                cmap='viridis',
-                xticklabels=range(avg_count_attn.shape[1]),
-                yticklabels=[f'Q {j}' for j in range(avg_count_attn.shape[0])],
-                cbar=True
-            )
-            
-            # Add main title with count info
-            plt.title(f'Average Cross-Attention Weights - Layer {layer_idx} - {i} People\n' +
-                    f'Averaged across {len(indices)} samples',
-                    fontsize=14)
-            
-            # Log to wandb
-            wandb.log({
-                f'average_attention_weights/count_{i}_layer_{layer_idx}': wandb.Image(plt.gcf()),
-            }, step=epoch)
-            
-            plt.close('all')
+
+        accumulated_attn = torch.zeros_like(attn_weights[indices[0]].mean(dim=0))
+        for idx in indices:
+            accumulated_attn += attn_weights[idx].mean(dim=0)
+        avg_count_attn = accumulated_attn / len(indices)
+
+        plt.figure(figsize=(10, 8))
+        sns.heatmap(
+            avg_count_attn.cpu().numpy(),
+            cmap='viridis',
+            xticklabels=range(avg_count_attn.shape[1]),
+            yticklabels=[f'Q {j}' for j in range(avg_count_attn.shape[0])],
+            cbar=True
+        )
+        plt.title(f'Average Cross-Attention Weights - Layer {last_layer_idx} - {i} People\n'
+                  f'Averaged across {len(indices)} samples',
+                  fontsize=14)
+
+        wandb.log({
+            f'average_attention_weights/count_{i}_layer_{last_layer_idx}': wandb.Image(plt.gcf()),
+        }, step=epoch)
+        plt.close('all')

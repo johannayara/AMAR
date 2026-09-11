@@ -347,7 +347,7 @@ class Transformer_Encoder(torch.nn.Module):
 
 class TransformerDecoder(nn.Module):
     def __init__(self, d_model=20, nhead=2, num_decoder_layers=9, num_queries=5, dim_feedforward=512, dropout=0.1,
-                 temp_cross_attention=1, query_dropout_rate=0.0):
+                 temp_cross_attention=1, query_dropout_rate=0.0, num_classes=10):
         super().__init__()
         self.d_model = d_model
         self.nhead = nhead
@@ -372,7 +372,7 @@ class TransformerDecoder(nn.Module):
 
         # Output projection for classification
         # Assuming 10 is the number of activity classes
-        self.class_embed = nn.Linear(d_model, 10)
+        self.class_embed = nn.Linear(d_model, num_classes)
 
         tgt_embed = torch.zeros(num_queries, d_model)  # Using randn instead of zeros for random initialization
         self.register_buffer('tgt_embed', tgt_embed)

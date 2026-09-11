@@ -89,6 +89,7 @@ def train(model: Module,
             data_batch_x, data_batch_y = data_batch
             data_batch_x = data_batch_x.to(device)
             data_batch_y = data_batch_y.to(device)
+            
 
             if model.training:
                 data_batch_x = apply_augmentation(data_batch_x)
@@ -108,7 +109,6 @@ def train(model: Module,
 
         data_batch_y = data_batch_y.detach().cpu().numpy()
         predict_train_y = predict_train_y.detach().cpu().numpy()
-
         dict_error_train = performance_metrics(data_batch_y.astype(int), predict_train_y,
                                                var_mode=var_mode, var_threshold=var_threshold)
 

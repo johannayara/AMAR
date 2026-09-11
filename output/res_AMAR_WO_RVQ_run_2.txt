@@ -1,0 +1,379 @@
+wandb: Using wandb-core as the SDK backend. Please refer to https://wandb.me/wandb-core for more information.
+wandb: Tracking run with wandb version 0.18.3
+wandb: W&B syncing is set to `offline` in this directory.  
+wandb: Run `wandb online` or set WANDB_MODE=online to enable cloud syncing.
+/cluster/raid/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/torch/cuda/__init__.py:173: UserWarning: 
+NVIDIA H200 NVL with CUDA capability sm_90 is not compatible with the current PyTorch installation.
+The current PyTorch install supports CUDA capabilities sm_37 sm_50 sm_60 sm_61 sm_70 sm_75 sm_80 sm_86 compute_37.
+If you want to use the NVIDIA H200 NVL GPU with PyTorch, please check the instructions at https://pytorch.org/get-started/locally/
+
+  warnings.warn(incompatible_device_warn.format(device_name, capability, " ".join(arch_list), device_name))
+/cluster/raid/home/jajo/amar/src/utils.py:232: RuntimeWarning: Mean of empty slice.
+  error_per_person.append(error_count[index].mean()) # finding mean error count for samples with count_index people
+/cluster/raid/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/numpy/core/_methods.py:189: RuntimeWarning: invalid value encountered in double_scalars
+  ret = ret.dtype.type(ret / rcount)
+Using device: cuda
+AMAR_WO_RVQ(
+  311.08 k, 99.877% Params, 228.77 MMac, 100.000% MACs, 
+  (feature_extractor): Backbone(
+    109.8 k, 35.251% Params, 177.62 MMac, 77.641% MACs, 
+    (ds_conv_pca_replace): DepthwiseSeparableConv(
+      50.22 k, 16.124% Params, 151.2 MMac, 66.092% MACs, 
+      (depthwise): Conv1d(1.08 k, 0.347% Params, 3.24 MMac, 1.416% MACs, 270, 270, kernel_size=(3,), stride=(1,), padding=(1,), groups=270)
+      (pointwise): Conv1d(48.78 k, 15.661% Params, 146.34 MMac, 63.967% MACs, 270, 180, kernel_size=(1,), stride=(1,))
+      (bn): BatchNorm1d(360, 0.116% Params, 1.08 MMac, 0.472% MACs, 180, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (relu): ReLU(0, 0.000% Params, 540.0 KMac, 0.236% MACs, )
+    )
+    (ds_conv_temporal_reduce): DepthwiseSeparableConv(
+      12.79 k, 4.107% Params, 9.64 MMac, 4.215% MACs, 
+      (depthwise): Conv1d(1.08 k, 0.347% Params, 810.0 KMac, 0.354% MACs, 180, 180, kernel_size=(5,), stride=(4,), padding=(2,), groups=180)
+      (pointwise): Conv1d(11.58 k, 3.719% Params, 8.69 MMac, 3.798% MACs, 180, 64, kernel_size=(1,), stride=(1,))
+      (bn): BatchNorm1d(128, 0.041% Params, 96.0 KMac, 0.042% MACs, 64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (relu): ReLU(0, 0.000% Params, 48.0 KMac, 0.021% MACs, )
+    )
+    (ds_conv1): DepthwiseSeparableConv(
+      4.67 k, 1.500% Params, 1.78 MMac, 0.776% MACs, 
+      (depthwise): Conv1d(384, 0.123% Params, 144.0 KMac, 0.063% MACs, 64, 64, kernel_size=(5,), stride=(2,), padding=(2,), groups=64)
+      (pointwise): Conv1d(4.16 k, 1.336% Params, 1.56 MMac, 0.682% MACs, 64, 64, kernel_size=(1,), stride=(1,))
+      (bn): BatchNorm1d(128, 0.041% Params, 48.0 KMac, 0.021% MACs, 64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (relu): ReLU(0, 0.000% Params, 24.0 KMac, 0.010% MACs, )
+    )
+    (hierarchical_dilated_1): AtrousConvBlock(
+      12.48 k, 4.007% Params, 4.7 MMac, 2.056% MACs, 
+      (conv): Conv1d(12.35 k, 3.966% Params, 4.63 MMac, 2.025% MACs, 64, 64, kernel_size=(3,), stride=(1,), padding=(1,))
+      (bn): BatchNorm1d(128, 0.041% Params, 48.0 KMac, 0.021% MACs, 64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (relu): ReLU(0, 0.000% Params, 24.0 KMac, 0.010% MACs, )
+    )
+    (hierarchical_dilated_2): AtrousConvBlock(
+      12.48 k, 4.007% Params, 4.7 MMac, 2.056% MACs, 
+      (conv): Conv1d(12.35 k, 3.966% Params, 4.63 MMac, 2.025% MACs, 64, 64, kernel_size=(3,), stride=(1,), padding=(2,), dilation=(2,))
+      (bn): BatchNorm1d(128, 0.041% Params, 48.0 KMac, 0.021% MACs, 64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (relu): ReLU(0, 0.000% Params, 24.0 KMac, 0.010% MACs, )
+    )
+    (hierarchical_dilated_3): AtrousConvBlock(
+      12.48 k, 4.007% Params, 4.7 MMac, 2.056% MACs, 
+      (conv): Conv1d(12.35 k, 3.966% Params, 4.63 MMac, 2.025% MACs, 64, 64, kernel_size=(3,), stride=(1,), padding=(4,), dilation=(4,))
+      (bn): BatchNorm1d(128, 0.041% Params, 48.0 KMac, 0.021% MACs, 64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (relu): ReLU(0, 0.000% Params, 24.0 KMac, 0.010% MACs, )
+    )
+    (ds_conv2): DepthwiseSeparableConv(
+      4.67 k, 1.500% Params, 890.37 KMac, 0.389% MACs, 
+      (depthwise): Conv1d(384, 0.123% Params, 72.19 KMac, 0.032% MACs, 64, 64, kernel_size=(5,), stride=(2,), padding=(2,), groups=64)
+      (pointwise): Conv1d(4.16 k, 1.336% Params, 782.08 KMac, 0.342% MACs, 64, 64, kernel_size=(1,), stride=(1,))
+      (bn): BatchNorm1d(128, 0.041% Params, 24.06 KMac, 0.011% MACs, 64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (relu): ReLU(0, 0.000% Params, 12.03 KMac, 0.005% MACs, )
+    )
+  )
+  (encoder): Transformer_Encoder(
+    100.99 k, 32.425% Params, 37.54 MMac, 16.409% MACs, 
+    (pos_encoder): FixedPositionalEncoding(0, 0.000% Params, 0.0 Mac, 0.000% MACs, )
+    (layer_embedding_encoder): ModuleList(
+      (0-3): 4 x Encoder(
+        25.22 k, 8.096% Params, 9.38 MMac, 4.101% MACs, 
+        (layer_norm_0): LayerNorm(128, 0.041% Params, 12.03 KMac, 0.005% MACs, (64,), eps=1e-06, elementwise_affine=True)
+        (layer_attention): MultiheadAttention(
+          16.64 k, 5.342% Params, 7.81 MMac, 3.412% MACs, 
+          (out_proj): NonDynamicallyQuantizableLinear(0, 0.000% Params, 0.0 Mac, 0.000% MACs, in_features=64, out_features=64, bias=True)
+        )
+        (layer_dropout_0): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.2, inplace=False)
+        (layer_norm_1): LayerNorm(128, 0.041% Params, 12.03 KMac, 0.005% MACs, (64,), eps=1e-06, elementwise_affine=True)
+        (ffn): Sequential(
+          8.32 k, 2.671% Params, 1.55 MMac, 0.679% MACs, 
+          (0): Linear(4.16 k, 1.336% Params, 770.11 KMac, 0.337% MACs, in_features=64, out_features=64, bias=True)
+          (1): ReLU(0, 0.000% Params, 12.03 KMac, 0.005% MACs, )
+          (2): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.2, inplace=False)
+          (3): Linear(4.16 k, 1.336% Params, 770.11 KMac, 0.337% MACs, in_features=64, out_features=64, bias=True)
+        )
+        (layer_dropout_1): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.2, inplace=False)
+      )
+    )
+    (layer_embedding_norm): LayerNorm(128, 0.041% Params, 12.03 KMac, 0.005% MACs, (64,), eps=1e-06, elementwise_affine=True)
+  )
+  (decoder): TransformerDecoder(
+    100.29 k, 32.201% Params, 13.61 MMac, 5.950% MACs, 
+    (decoder_layers): ModuleList(
+      (0-5): 6 x TransformerDecoderLayer(
+        99.78 k, 32.034% Params, 13.6 MMac, 5.944% MACs, 
+        (self_attn): MultiheadAttention(
+          16.64 k, 5.342% Params, 629.86 KMac, 0.275% MACs, 
+          (out_proj): NonDynamicallyQuantizableLinear(0, 0.000% Params, 0.0 Mac, 0.000% MACs, in_features=64, out_features=64, bias=True)
+        )
+        (dropout1): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+        (norm1): LayerNorm(128, 0.041% Params, 2.3 KMac, 0.001% MACs, (64,), eps=1e-05, elementwise_affine=True)
+        (cross_attn): MultiheadAttention(
+          16.64 k, 5.342% Params, 10.58 MMac, 4.625% MACs, 
+          (out_proj): NonDynamicallyQuantizableLinear(0, 0.000% Params, 0.0 Mac, 0.000% MACs, in_features=64, out_features=64, bias=True)
+        )
+        (dropout2): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+        (norm2): LayerNorm(128, 0.041% Params, 2.3 KMac, 0.001% MACs, (64,), eps=1e-05, elementwise_affine=True)
+        (ffn): Sequential(
+          66.11 k, 21.226% Params, 2.38 MMac, 1.041% MACs, 
+          (0): Linear(33.28 k, 10.685% Params, 1.18 MMac, 0.517% MACs, in_features=64, out_features=512, bias=True)
+          (1): ReLU(0, 0.000% Params, 18.43 KMac, 0.008% MACs, )
+          (2): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+          (3): Linear(32.83 k, 10.541% Params, 1.18 MMac, 0.516% MACs, in_features=512, out_features=64, bias=True)
+        )
+        (dropout3): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+        (norm3): LayerNorm(128, 0.041% Params, 2.3 KMac, 0.001% MACs, (64,), eps=1e-05, elementwise_affine=True)
+      )
+    )
+    (norm): LayerNorm(128, 0.041% Params, 0.0 Mac, 0.000% MACs, (64,), eps=1e-05, elementwise_affine=True)
+    (class_embed): Linear(390, 0.125% Params, 13.86 KMac, 0.006% MACs, in_features=64, out_features=6, bias=True)
+    (memory_pos_encoding): FixedPositionalEncoding(0, 0.000% Params, 0.0 Mac, 0.000% MACs, )
+  )
+)
+Parameters: 311466 - FLOPs: 457545384.0
+Repeat 0
+--- Epoch 0/300 ---
+  Time: 524.006264s
+  Loss Train: 2.371798 | Loss valid: 2.412715
+  Total Error Train: 2.750000 | Total Error valid: 3.404255
+  Perfect Prediction % Train: 18.750000 | Perfect Prediction % valid: 3.191489
+  Accuracy Train: 0.535985 | Accuracy valid: 0.478852
+  Precision: 0.404418 | Recall: 0.247716 | F1 Score: 0.226816
+------------------------------
+--- Epoch 10/300 ---
+  Time: 6.550708s
+  Loss Train: 1.666406 | Loss valid: 1.704036
+  Total Error Train: 0.875000 | Total Error valid: 0.882979
+  Perfect Prediction % Train: 37.500000 | Perfect Prediction % valid: 47.340426
+  Accuracy Train: 0.825000 | Accuracy valid: 0.823590
+  Precision: 0.796492 | Recall: 0.869207 | F1 Score: 0.829715
+------------------------------
+--- Epoch 20/300 ---
+  Time: 6.550040s
+  Loss Train: 1.584922 | Loss valid: 1.636412
+  Total Error Train: 0.625000 | Total Error valid: 0.781915
+  Perfect Prediction % Train: 62.500000 | Perfect Prediction % valid: 51.063830
+  Accuracy Train: 0.875000 | Accuracy valid: 0.844054
+  Precision: 0.814913 | Recall: 0.898916 | F1 Score: 0.852765
+------------------------------
+--- Epoch 30/300 ---
+  Time: 6.550046s
+  Loss Train: 1.715476 | Loss valid: 1.672969
+  Total Error Train: 0.937500 | Total Error valid: 0.824468
+  Perfect Prediction % Train: 50.000000 | Perfect Prediction % valid: 53.723404
+  Accuracy Train: 0.812500 | Accuracy valid: 0.836123
+  Precision: 0.824737 | Recall: 0.851066 | F1 Score: 0.837208
+------------------------------
+--- Epoch 40/300 ---
+  Time: 6.557895s
+  Loss Train: 1.707089 | Loss valid: 1.721068
+  Total Error Train: 1.125000 | Total Error valid: 0.973404
+  Perfect Prediction % Train: 37.500000 | Perfect Prediction % valid: 46.808511
+  Accuracy Train: 0.775000 | Accuracy valid: 0.806851
+  Precision: 0.763482 | Recall: 0.887835 | F1 Score: 0.818973
+------------------------------
+--- Epoch 50/300 ---
+  Time: 6.543727s
+  Loss Train: 1.594011 | Loss valid: 1.691432
+  Total Error Train: 0.437500 | Total Error valid: 0.792553
+  Perfect Prediction % Train: 75.000000 | Perfect Prediction % valid: 57.446809
+  Accuracy Train: 0.912500 | Accuracy valid: 0.841641
+  Precision: 0.845234 | Recall: 0.834628 | F1 Score: 0.839507
+------------------------------
+--- Epoch 60/300 ---
+  Time: 6.554592s
+  Loss Train: 1.649605 | Loss valid: 1.613257
+  Total Error Train: 0.312500 | Total Error valid: 0.643617
+  Perfect Prediction % Train: 75.000000 | Perfect Prediction % valid: 62.234043
+  Accuracy Train: 0.937500 | Accuracy valid: 0.871507
+  Precision: 0.846598 | Recall: 0.909898 | F1 Score: 0.875202
+------------------------------
+--- Epoch 70/300 ---
+  Time: 6.567259s
+  Loss Train: 1.780445 | Loss valid: 1.580058
+  Total Error Train: 0.437500 | Total Error valid: 0.569149
+  Perfect Prediction % Train: 68.750000 | Perfect Prediction % valid: 64.361702
+  Accuracy Train: 0.912500 | Accuracy valid: 0.886227
+  Precision: 0.871200 | Recall: 0.911823 | F1 Score: 0.889696
+------------------------------
+--- Epoch 80/300 ---
+  Time: 6.562088s
+  Loss Train: 1.612761 | Loss valid: 1.613928
+  Total Error Train: 0.750000 | Total Error valid: 0.601064
+  Perfect Prediction % Train: 50.000000 | Perfect Prediction % valid: 64.893617
+  Accuracy Train: 0.850000 | Accuracy valid: 0.879787
+  Precision: 0.867353 | Recall: 0.897759 | F1 Score: 0.881322
+------------------------------
+--- Epoch 90/300 ---
+  Time: 6.669642s
+  Loss Train: 1.566648 | Loss valid: 1.646780
+  Total Error Train: 0.375000 | Total Error valid: 0.686170
+  Perfect Prediction % Train: 75.000000 | Perfect Prediction % valid: 59.574468
+  Accuracy Train: 0.925000 | Accuracy valid: 0.863192
+  Precision: 0.834954 | Recall: 0.897789 | F1 Score: 0.865096
+------------------------------
+--- Epoch 100/300 ---
+  Time: 6.675492s
+  Loss Train: 1.271542 | Loss valid: 1.554793
+  Total Error Train: 0.250000 | Total Error valid: 0.468085
+  Perfect Prediction % Train: 81.250000 | Perfect Prediction % valid: 71.276596
+  Accuracy Train: 0.950000 | Accuracy valid: 0.906411
+  Precision: 0.890022 | Recall: 0.929933 | F1 Score: 0.907786
+------------------------------
+--- Epoch 110/300 ---
+  Time: 6.698333s
+  Loss Train: 1.428569 | Loss valid: 1.582061
+  Total Error Train: 0.500000 | Total Error valid: 0.473404
+  Perfect Prediction % Train: 62.500000 | Perfect Prediction % valid: 72.340426
+  Accuracy Train: 0.900000 | Accuracy valid: 0.905617
+  Precision: 0.906183 | Recall: 0.906712 | F1 Score: 0.905428
+------------------------------
+--- Epoch 120/300 ---
+  Time: 6.552924s
+  Loss Train: 1.637713 | Loss valid: 1.522251
+  Total Error Train: 0.625000 | Total Error valid: 0.356383
+  Perfect Prediction % Train: 62.500000 | Perfect Prediction % valid: 78.191489
+  Accuracy Train: 0.875000 | Accuracy valid: 0.928819
+  Precision: 0.921254 | Recall: 0.939881 | F1 Score: 0.929342
+------------------------------
+--- Epoch 130/300 ---
+  Time: 6.551340s
+  Loss Train: 1.365841 | Loss valid: 1.536856
+  Total Error Train: 0.187500 | Total Error valid: 0.388298
+  Perfect Prediction % Train: 87.500000 | Perfect Prediction % valid: 77.659574
+  Accuracy Train: 0.962500 | Accuracy valid: 0.922609
+  Precision: 0.920454 | Recall: 0.926968 | F1 Score: 0.922789
+------------------------------
+--- Epoch 140/300 ---
+  Time: 6.540335s
+  Loss Train: 1.261508 | Loss valid: 1.547766
+  Total Error Train: 0.500000 | Total Error valid: 0.398936
+  Perfect Prediction % Train: 75.000000 | Perfect Prediction % valid: 76.595745
+  Accuracy Train: 0.902206 | Accuracy valid: 0.920325
+  Precision: 0.913591 | Recall: 0.929548 | F1 Score: 0.920391
+------------------------------
+--- Epoch 150/300 ---
+  Time: 6.561562s
+  Loss Train: 1.586079 | Loss valid: 1.546813
+  Total Error Train: 0.312500 | Total Error valid: 0.382979
+  Perfect Prediction % Train: 87.500000 | Perfect Prediction % valid: 78.723404
+  Accuracy Train: 0.937500 | Accuracy valid: 0.923528
+  Precision: 0.921457 | Recall: 0.924315 | F1 Score: 0.922650
+------------------------------
+--- Epoch 160/300 ---
+  Time: 6.554595s
+  Loss Train: 1.249904 | Loss valid: 1.532516
+  Total Error Train: 0.312500 | Total Error valid: 0.329787
+  Perfect Prediction % Train: 75.000000 | Perfect Prediction % valid: 81.914894
+  Accuracy Train: 0.937500 | Accuracy valid: 0.934166
+  Precision: 0.930992 | Recall: 0.937768 | F1 Score: 0.933861
+------------------------------
+--- Epoch 170/300 ---
+  Time: 6.557235s
+  Loss Train: 1.455609 | Loss valid: 1.539767
+  Total Error Train: 0.000000 | Total Error valid: 0.425532
+  Perfect Prediction % Train: 100.000000 | Perfect Prediction % valid: 76.595745
+  Accuracy Train: 1.000000 | Accuracy valid: 0.915040
+  Precision: 0.910000 | Recall: 0.921456 | F1 Score: 0.914567
+------------------------------
+--- Epoch 180/300 ---
+  Time: 6.554463s
+  Loss Train: 1.368933 | Loss valid: 1.515917
+  Total Error Train: 0.187500 | Total Error valid: 0.345745
+  Perfect Prediction % Train: 87.500000 | Perfect Prediction % valid: 80.851064
+  Accuracy Train: 0.962500 | Accuracy valid: 0.930851
+  Precision: 0.932228 | Recall: 0.929587 | F1 Score: 0.930400
+------------------------------
+--- Epoch 190/300 ---
+  Time: 6.584498s
+  Loss Train: 1.584623 | Loss valid: 1.563795
+  Total Error Train: 0.250000 | Total Error valid: 0.441489
+  Perfect Prediction % Train: 81.250000 | Perfect Prediction % valid: 76.595745
+  Accuracy Train: 0.950000 | Accuracy valid: 0.911972
+  Precision: 0.917602 | Recall: 0.914486 | F1 Score: 0.910477
+------------------------------
+--- Epoch 200/300 ---
+  Time: 6.700404s
+  Loss Train: 1.500238 | Loss valid: 1.501830
+  Total Error Train: 0.250000 | Total Error valid: 0.287234
+  Perfect Prediction % Train: 87.500000 | Perfect Prediction % valid: 82.978723
+  Accuracy Train: 0.950000 | Accuracy valid: 0.942553
+  Precision: 0.936947 | Recall: 0.951086 | F1 Score: 0.942803
+------------------------------
+--- Epoch 210/300 ---
+  Time: 6.625391s
+  Loss Train: 1.462229 | Loss valid: 1.501558
+  Total Error Train: 0.187500 | Total Error valid: 0.207447
+  Perfect Prediction % Train: 87.500000 | Perfect Prediction % valid: 86.702128
+  Accuracy Train: 0.962500 | Accuracy valid: 0.958511
+  Precision: 0.959086 | Recall: 0.957222 | F1 Score: 0.958015
+------------------------------
+--- Epoch 220/300 ---
+  Time: 6.554165s
+  Loss Train: 1.473421 | Loss valid: 1.511406
+  Total Error Train: 0.375000 | Total Error valid: 0.303191
+  Perfect Prediction % Train: 75.000000 | Perfect Prediction % valid: 81.914894
+  Accuracy Train: 0.927206 | Accuracy valid: 0.939632
+  Precision: 0.934050 | Recall: 0.944590 | F1 Score: 0.939149
+------------------------------
+--- Epoch 230/300 ---
+  Time: 6.594089s
+  Loss Train: 1.476609 | Loss valid: 1.501488
+  Total Error Train: 0.250000 | Total Error valid: 0.260638
+  Perfect Prediction % Train: 75.000000 | Perfect Prediction % valid: 84.574468
+  Accuracy Train: 0.950000 | Accuracy valid: 0.948007
+  Precision: 0.945009 | Recall: 0.950210 | F1 Score: 0.947496
+------------------------------
+--- Epoch 240/300 ---
+  Time: 6.679328s
+  Loss Train: 1.536581 | Loss valid: 1.515120
+  Total Error Train: 0.250000 | Total Error valid: 0.308511
+  Perfect Prediction % Train: 81.250000 | Perfect Prediction % valid: 82.978723
+  Accuracy Train: 0.950000 | Accuracy valid: 0.938405
+  Precision: 0.940447 | Recall: 0.935731 | F1 Score: 0.937503
+------------------------------
+--- Epoch 250/300 ---
+  Time: 6.559062s
+  Loss Train: 1.481861 | Loss valid: 1.503661
+  Total Error Train: 0.000000 | Total Error valid: 0.260638
+  Perfect Prediction % Train: 100.000000 | Perfect Prediction % valid: 85.638298
+  Accuracy Train: 1.000000 | Accuracy valid: 0.947872
+  Precision: 0.948448 | Recall: 0.946019 | F1 Score: 0.947193
+------------------------------
+--- Epoch 260/300 ---
+  Time: 6.559633s
+  Loss Train: 1.268854 | Loss valid: 1.507061
+  Total Error Train: 0.000000 | Total Error valid: 0.303191
+  Perfect Prediction % Train: 100.000000 | Perfect Prediction % valid: 83.510638
+  Accuracy Train: 1.000000 | Accuracy valid: 0.939463
+  Precision: 0.941669 | Recall: 0.935501 | F1 Score: 0.938441
+------------------------------
+--- Epoch 270/300 ---
+  Time: 6.584890s
+  Loss Train: 1.501706 | Loss valid: 1.498401
+  Total Error Train: 0.062500 | Total Error valid: 0.250000
+  Perfect Prediction % Train: 93.750000 | Perfect Prediction % valid: 85.638298
+  Accuracy Train: 0.987500 | Accuracy valid: 0.950000
+  Precision: 0.944952 | Recall: 0.954896 | F1 Score: 0.949708
+------------------------------
+--- Epoch 280/300 ---
+  Time: 6.549824s
+  Loss Train: 1.690241 | Loss valid: 1.504488
+  Total Error Train: 0.250000 | Total Error valid: 0.271277
+  Perfect Prediction % Train: 81.250000 | Perfect Prediction % valid: 85.106383
+  Accuracy Train: 0.950000 | Accuracy valid: 0.945790
+  Precision: 0.939083 | Recall: 0.952996 | F1 Score: 0.945586
+------------------------------
+--- Epoch 290/300 ---
+  Time: 6.576301s
+  Loss Train: 1.374982 | Loss valid: 1.503119
+  Total Error Train: 0.125000 | Total Error valid: 0.276596
+  Perfect Prediction % Train: 87.500000 | Perfect Prediction % valid: 84.574468
+  Accuracy Train: 0.975000 | Accuracy valid: 0.944765
+  Precision: 0.936662 | Recall: 0.952361 | F1 Score: 0.944324
+------------------------------
+Epoch that the model was saved 267
+Traceback (most recent call last):
+  File "/cluster/raid/home/jajo/amar/scripts/run_main.py", line 276, in <module>
+    run()
+  File "/cluster/raid/home/jajo/amar/scripts/run_main.py", line 239, in run
+    result = run_model(data_train_x, data_train_y,
+  File "/cluster/raid/home/jajo/amar/src/models/AMAR_WO_RVQ.py", line 228, in run_AMAR_WO_RVQ
+    predict_test_y = predict_test_y.detach().cpu().numpy()
+AttributeError: 'numpy.ndarray' object has no attribute 'detach'
+[1;34mwandb[0m:
+[1;34mwandb[0m: You can sync this run to the cloud by running:
+[1;34mwandb[0m: [1mwandb sync /cluster/raid/home/jajo/amar/wandb/offline-run-20260908_234102-uf9cle0i[0m
+[1;34mwandb[0m: Find logs at: [1;35mwandb/offline-run-20260908_234102-uf9cle0i/logs[0m

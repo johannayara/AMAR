@@ -7,11 +7,13 @@
 import json
 import argparse
 from logging import raiseExceptions
-
+import sys
+import os
 import numpy as np
 from gmpy2 import random_state
 from sklearn.model_selection import train_test_split
 #
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from src.models import *
 from configs.preset import preset
 from src.data.load_data import load_data_x, load_data_y, encode_data_y

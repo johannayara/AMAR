@@ -16,7 +16,7 @@ preset = {
     "task": "location",                                 #  "activity"
     #
     ## number of repeated experiments
-    "repeat": 8,
+    "repeat": 1,
     ## path of data
     "path": {
         "data_x": "dataset/wifi_csi/amp",  # directory of CSI amplitude files
@@ -28,14 +28,14 @@ preset = {
     "data": {
         "num_users": ["0","1", "2", "3", "4", "5"] ,   # TODO: fix this number for my app. select number(s) of users, (e.g., ["0", "1"], ["2", "3", "4", "5"])
         "wifi_band": ["5"],                           # select WiFi band(s) (e.g., ["2.4"], ["5"], ["2.4", "5"])
-        "environment": ["empty_room", "meeting_room", "classroom"],               # select environment(s) (e.g., ["classroom"], ["meeting_room"], ["empty_room"])
+        "environment": ["empty_room", "meeting_room", "classroom"],  
         "length": 3000,                                 # default length of CSI
     },
     #
     ## hyperparameters of models
     "nn": {
         "lr": 5e-4,                                     # learning rate
-        "epoch": 20,                                 # number of epochs 
+        "epoch": 300,                                 # number of epochs 
         "batch_size":16,                              # batch size
         "threshold": 0.5,                               # threshold to binarize sigmoid outputs
         "scheduler": {

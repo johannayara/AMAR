@@ -4,12 +4,12 @@ import torch.nn as nn
 from scipy.optimize import linear_sum_assignment
 
 class HungarianMatchingLoss(nn.Module):
-    def __init__(self, cost_class_weight, aux_loss_weight, label_smoothing, class_imbalance_weight):
+    def __init__(self, cost_class_weight, aux_loss_weight, label_smoothing, class_imbalance_weight, num_classes = 10):
         super().__init__()
         self.cost_class = cost_class_weight
         self.aux_loss_weight = aux_loss_weight
 
-        weights = torch.ones(10)
+        weights = torch.ones(num_classes)
         weights[-1] = class_imbalance_weight
         weights = weights * (len(weights) / weights.sum())
 

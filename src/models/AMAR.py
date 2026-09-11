@@ -178,7 +178,7 @@ def run_AMAR(data_train_x,
         print("Repeat", var_r)
         run = wandb.init(
             project="REALREAL_FINAL_RVQ",
-            name= name_run + preset["wandb_name"],
+            name= name_run ,#+ preset["wandb_name"],
             config=preset,
             reinit=True  # Allow multiple wandb.init() calls in the same process
         )
@@ -325,7 +325,6 @@ def run_AMAR(data_train_x,
                 f"test_results/recall": layer_metrics['recall'],
                 f"test_results/f1_score": layer_metrics['f1_score']
             }, step=var_r + 100000)
-
             print(
                 "- Total Error %.6f" % layer_metrics['total_error'],
                 "- Perfect Prediction Percentage %.6f" % layer_metrics['perfect_prediction_percentage'])
@@ -361,7 +360,6 @@ def run_AMAR(data_train_x,
             'se_accuracy': float(np.std(accuracy_array, ddof=1) / np.sqrt(len(accuracy_array))) if len(accuracy_array) > 1 else 0.0,
             'se_total_error': float(np.std(total_error_array, ddof=1) / np.sqrt(len(total_error_array))) if len(total_error_array) > 1 else 0.0
         }
-        
         wandb.log({
             f"test_results/{layer_idx}/avg_PPP": all_layers_results[layer_idx]['avg_PPP'],
             f"test_results/{layer_idx}/avg_train_time": sum(result_time_train[layer_idx_num]) / len(result_time_train[layer_idx_num]),
@@ -373,7 +371,6 @@ def run_AMAR(data_train_x,
             f"test_results/{layer_idx}/avg_count_error": sum(result_avg_count_error[layer_idx_num]) / len(result_avg_count_error[layer_idx_num]),
             f"test_results/{layer_idx}/avg_accuracy": all_layers_results[layer_idx]['avg_accuracy']
         })  # Use an even larger offset for averages
-
     # Use the last layer for visualization and final results
     last_layer = layers_idxs[-1]
     last_layer_predictions = predict_test_y[last_layer] if isinstance(predict_test_y, dict) else predict_test_y
