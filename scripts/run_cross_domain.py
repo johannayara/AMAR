@@ -74,65 +74,55 @@ def parse_args():
 
 def format_result(var_model, var_task, result):
     """
-    [description]
-    : build a formatted string of the results
+    Build a formatted string of the results.
     """
-    lines = []
-    lines.append("=" * 80)
+    # (avg_key, se_key, label) in display order
+    metric_specs = [
+        ("avg_accuracy",    "se_accuracy",    "Avg Accuracy"),
+        ("avg_precision",   "se_precision",   "Avg Precision"),
+        ("avg_recall",      "se_recall",      "Avg Recall"),
+        ("avg_f1_score",    "se_f1_score",    "Avg F1 Score"),
+        ("avg_PPP",         "se_PPP",         "Avg Perfect Prediction %"),
+        ("avg_total_error", "se_total_error", "Avg Total Error"),
+    ]
+
+    lines = ["=" * 80]
     lines.append(f"EXPERIMENT RESULTS - Model: {var_model}, Task: {var_task}")
     lines.append("=" * 80)
 
-    if isinstance(result, dict) and any(
-        isinstance(key, str) and key.startswith("layer_") for key in result
-    ):
-        lines.append("LAYERED MODEL RESULTS:")
-        for layer_key in sorted(
-            [k for k in result.keys() if isinstance(k, str) and k.startswith("layer_")]
-        ):
-            layer_results = result[layer_key]
-            lines.append(f"\n{layer_key.upper()}:")
-            if 'avg_precision' in layer_results:
-                lines.append(f"  Avg Precision: {layer_results['avg_precision']:.4f} ± {layer_results['se_precision']:.4f} (SE)")
-            if 'avg_recall' in layer_results:
-                lines.append(f"  Avg Recall: {layer_results['avg_recall']:.4f} ± {layer_results['se_recall']:.4f} (SE)")
-            if 'avg_PPP' in layer_results:
-                lines.append(f"  Avg Perfect Prediction %: {layer_results['avg_PPP']:.4f} ± {layer_results['se_PPP']:.4f} (SE)")
-            if 'avg_f1_score' in layer_results:
-                lines.append(f"  Avg F1 Score: {layer_results['avg_f1_score']:.4f} ± {layer_results['se_f1_score']:.4f} (SE)")
-            if 'avg_accuracy' in layer_results:
-                lines.append(f"  Avg Accuracy: {layer_results['avg_accuracy']:.4f} ± {layer_results['se_accuracy']:.4f} (SE)")
-            if 'avg_total_error' in layer_results:
-                lines.append(f"  Avg Total Error: {layer_results['avg_total_error']:.4f} ± {layer_results['se_total_error']:.4f} (SE)")
-    else:
+    per_env = result.get("per_env") if isinstance(result, dict) else None
+
+    if isinstance(per_env, dict) and per_env:
+        lines.append("PER_ENV_RESULTS:")
+        for env_key, env_results in per_env.items():
+            lines.append(f"\n{env_key}:")
+            for avg_key, se_key, label in metric_specs:
+                if avg_key in env_results:
+                    se = env_results.get(se_key, float("nan"))
+                    lines.append(f"  {label}: {env_results[avg_key]:.4f} ± {se:.4f} (SE)")
+    elif isinstance(result, dict):
         lines.append("SINGLE MODEL RESULTS:")
-        if isinstance(result, dict):
-            if 'avg_precision' in result:
-                lines.append(f"  Avg Precision: {result['avg_precision']:.4f} ± {result['se_precision']:.4f} (SE)")
-            if 'avg_recall' in result:
-                lines.append(f"  Avg Recall: {result['avg_recall']:.4f} ± {result['se_recall']:.4f} (SE)")
-            if 'avg_PPP' in result:
-                lines.append(f"  Avg Perfect Prediction %: {result['avg_PPP']:.4f} ± {result['se_PPP']:.4f} (SE)")
-            if 'avg_f1_score' in result:
-                lines.append(f"  Avg F1 Score: {result['avg_f1_score']:.4f} ± {result['se_f1_score']:.4f} (SE)")
-            if 'avg_accuracy' in result:
-                lines.append(f"  Avg Accuracy: {result['avg_accuracy']:.4f} ± {result['se_accuracy']:.4f} (SE)")
-            if 'avg_total_error' in result:
-                lines.append(f"  Avg Total Error: {result['avg_total_error']:.4f} ± {result['se_total_error']:.4f} (SE)")
-            elif 'precision' in result:
-                lines.append(f"  Precision: {result['precision']:.4f}")
-                if 'recall' in result:
-                    lines.append(f"  Recall: {result['recall']:.4f}")
-                if 'perfect_prediction_percentage' in result:
-                    lines.append(f"  Perfect Prediction %: {result['perfect_prediction_percentage']:.4f}")
-                if 'f1_score' in result:
-                    lines.append(f"  F1 Score: {result['f1_score']:.4f}")
-                if 'accuracy' in result:
-                    lines.append(f"  Accuracy: {result['accuracy']:.4f}")
-                if 'total_error' in result:
-                    lines.append(f"  Total Error: {result['total_error']:.4f}")
+        has_aggregated = any(avg_key in result for avg_key, _, _ in metric_specs)
+        if has_aggregated:
+            for avg_key, se_key, label in metric_specs:
+                if avg_key in result:
+                    se = result.get(se_key, float("nan"))
+                    lines.append(f"  {label}: {result[avg_key]:.4f} ± {se:.4f} (SE)")
+        elif "precision" in result:
+            # Raw single-run results (no averaging across repeats)
+            single_specs = [
+                ("precision", "Precision"),
+                ("recall", "Recall"),
+                ("perfect_prediction_percentage", "Perfect Prediction %"),
+                ("f1_score", "F1 Score"),
+                ("accuracy", "Accuracy"),
+                ("total_error", "Total Error"),
+            ]
+            for key, label in single_specs:
+                if key in result:
+                    lines.append(f"  {label}: {result[key]:.4f}")
 
     return "\n".join(lines)
-
 
 def save_result(var_model, var_task, var_repeat, result):
     """
@@ -199,33 +189,14 @@ def run():
 
     # Ensuring there is no data leakage while doing splits.
     data_x_train, data_y_train, test_sets_by_env = master_splitter(preset, var_task, var_model, var_users, var_env)
-    #
 
-    #
-    if var_model == "BCE_ABLSTM": run_model = run_bce_ablstm
-    #
-    elif var_model == "DEM_ABLSTM": run_model = run_dem_ablstm
-    #
-    elif var_model == "BCE_THAT": run_model = run_bce_that
-    #    #
-    elif var_model == "DEM_THAT": run_model = run_DEM_THAT
-
-    elif var_model == "AMAR_WO_RVQ": run_model = run_cross_domain
-
-    elif var_model == "AMAR": run_model = run_AMAR
-    
-    elif var_model == "multi_senseX": run_model = run_multi_senseX
-
-    else:
-        raise Exception("Not valid name for model")
-
-    save_path=Path(f'./visualizations/{var_env}/cross_domain/1')
-    if save_path.is_dir():
+    save_path=Path(f'./visualizations/cross_domain/{var_env}/1')
+    while save_path.is_dir():
         new_name = str((int(save_path.name)+1))
         save_path = save_path.parent / new_name
     #
     ## run WiFi-based model
-    all_envs_results = run_model(data_x_train, data_y_train, test_sets_by_env, var_repeat, var_task, var_env, save_path)
+    all_envs_results = run_cross_domain(data_x_train, data_y_train, test_sets_by_env, var_repeat, var_task, var_env, save_path)
     #
     ##
     result = {
@@ -237,23 +208,9 @@ def run():
     "nn": preset["nn"],
     }
 
-    # Save result dict to a per-run JSON file
-    save_dir = preset["path"].get("save_dir", "output")
-    os.makedirs(save_dir, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    out_path = os.path.join(save_dir, f"result_{var_model}_{var_task}_r{var_repeat}_{timestamp}.json")
-
-    with open(out_path, "w") as f:
-        json.dump(result, f, indent=4, cls=NumpyEncoder)
-
-    print(f"Results saved to: {out_path}")
-
+    
     # Also write a human-readable summary alongside the JSON
     formatted = format_result(var_model, var_task, result)
-    txt_path = out_path.replace(".json", ".txt")
-    with open(txt_path, "w") as f:
-        f.write(formatted + "\n")
-
     print(formatted)
 
 if __name__ == "__main__":

@@ -11,6 +11,6 @@ set -euo pipefail
 source /software/anaconda3/etc/profile.d/conda.sh
 conda activate AMAR
 start=$(date +%s)
-bash -c WANDB_MODE=offline python scripts/run_cross_domain.py --model AMAR_WO_RVQ --task location --repeat 3 --env "$env" > "./output/res_AMAR_WO_RVQ_${env}_cd.txt" 2>&1
+bash -c 'WANDB_MODE=offline python scripts/run_cross_domain.py --model AMAR_WO_RVQ --task location --repeat 5 --env classroom' > "./output/cd/res_test_cd.txt" 2>&1
 end=$(date +%s)
 echo "Total runtime: $((end - start)) seconds"

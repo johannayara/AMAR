@@ -21,36 +21,47 @@ import time
 import json
 from datetime import datetime
 from pathlib import Path
-
+import gc
 #
 ##
 def master_splitter(preset, var_task, var_model, var_users, var_env = "empty_room"):
-   
+    data_x_train = []
+    data_x_test = []
+    data_y_train = []
+    data_y_test = []
+    # load chosen envs data 
     data_pd_y = load_data_y(preset["path"]["data_y"],
-                            var_environment=[var_env],
-                            var_wifi_band=preset["data"]["wifi_band"],
-                            var_num_users=var_users)
-    #
+                                var_environment=[var_env],
+                                var_wifi_band=preset["data"]["wifi_band"],
+                                var_num_users=var_users)
     var_label_list = data_pd_y["label"].to_list()
-    #
-    ## load CSI amplitude
-    X = load_data_x(preset["path"]["data_x"], var_label_list)
+    data_x_test = load_data_x(preset["path"]["data_x"], var_label_list)
+    data_y_test = encode_data_y(data_pd_y, var_task)
+    # here we pad with zeros
+    if var_model in ("AMAR_WO_RVQ", "AMAR"):
+        data_y_test = reduce_dataset(data_y_test, var_task, preset["nn"]["num_obj_queries"])
+    ## create double env train set 
+    other_envs = [e for e in preset["data"]["environment"] if e != var_env]
+    for e in other_envs:
+        data_pd_y = load_data_y(preset["path"]["data_y"],
+                                var_environment=[e],
+                                var_wifi_band=preset["data"]["wifi_band"],
+                                var_num_users=var_users)
 
-
-    y = encode_data_y(data_pd_y, var_task)
-
-
-    if var_model == "AMAR_WO_RVQ" or var_model=="AMAR": # here we pad with zeros
-        y = reduce_dataset(y, var_task, preset["nn"]["num_obj_queries"]) 
-
-
-    X_train, X_test, y_train, y_test = train_test_split(X, y,
-                                                        test_size=0.2,
-                                                        shuffle=True,
-                                                        random_state=103)
-
-
-    return X_train, X_test, y_train, y_test
+        var_label_list = data_pd_y["label"].to_list()
+        X_train = load_data_x(preset["path"]["data_x"], var_label_list)
+        y_train = encode_data_y(data_pd_y, var_task)
+        if var_model in ("AMAR_WO_RVQ", "AMAR"):
+            y_train = reduce_dataset(y_train, var_task, preset["nn"]["num_obj_queries"])
+        data_x_train.append(X_train)
+        data_y_train.append(y_train)
+        del X_train, y_train
+        gc.collect()
+    
+    data_x_train = np.concatenate(data_x_train, axis = 0)
+    data_y_train = np.concatenate(data_y_train, axis = 0)
+    
+    return data_x_train, data_x_test, data_y_train, data_y_test
 
 def parse_args():
     """
@@ -199,35 +210,16 @@ def run():
     var_env = var_args.env
 
     # Ensuring there is no data leakage while doing splits.
-    data_train_x, data_test_x, data_train_y, data_test_y = master_splitter(preset, var_task, var_model, var_users, var_env)
-    #
-
-    #
-    if var_model == "BCE_ABLSTM": run_model = run_bce_ablstm
-    #
-    elif var_model == "DEM_ABLSTM": run_model = run_dem_ablstm
-    #
-    elif var_model == "BCE_THAT": run_model = run_bce_that
-    #    #
-    elif var_model == "DEM_THAT": run_model = run_DEM_THAT
-
-    elif var_model == "AMAR_WO_RVQ": run_model = run_AMAR_WO_RVQ
-
-    elif var_model == "AMAR": run_model = run_AMAR
+    data_train_x, data_test_x, data_train_y, data_test_y = master_splitter(preset, var_task, var_model, var_users, var_env)  
     
-    elif var_model == "multi_senseX": run_model = run_multi_senseX
-
-    else:
-        raise Exception("Not valid name for model")   
-    
-    save_path=Path(f'./visualizations/{var_env}/1')
+    save_path=Path(f'./visualizations/t2t1/{var_env}/1')
     while save_path.is_dir():
         new_name = str((int(save_path.name)+1))
         save_path = save_path.parent / new_name
    
     #
     ## run WiFi-based model
-    result = run_model(data_train_x, data_train_y,
+    result = run_t2t1(data_train_x, data_train_y,
                        data_test_x, data_test_y, var_repeat, var_task, var_env, save_path)
     #
     ##
@@ -237,22 +229,7 @@ def run():
     result["data"] = preset["data"]
     result["nn"] = preset["nn"]
 
-    # Save result dict to a per-run JSON file
-    # save_dir = preset["path"].get("save_dir", "output")
-    # os.makedirs(save_dir, exist_ok=True)
-    # timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    # out_path = os.path.join(save_dir, "text", f"result_{var_model}_{var_task}_r{var_repeat}_{timestamp}.json")
-
-    # with open(out_path, "w") as f:
-    #     json.dump(result, f, indent=4, cls=NumpyEncoder)
-
-    # print(f"Results saved to: {out_path}")
-
-    # Also write a human-readable summary alongside the JSON
     formatted = format_result(var_model, var_task, result)
-    # txt_path = out_path.replace(".json", ".txt")
-    # with open(txt_path, "w") as f:
-    #     f.write(formatted + "\n")
 
     print(formatted)
 
