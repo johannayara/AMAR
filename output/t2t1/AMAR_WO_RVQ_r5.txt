@@ -1,0 +1,384 @@
+wandb: Using wandb-core as the SDK backend. Please refer to https://wandb.me/wandb-core for more information.
+wandb: Tracking run with wandb version 0.18.3
+wandb: W&B syncing is set to `offline` in this directory.  
+wandb: Run `wandb online` or set WANDB_MODE=online to enable cloud syncing.
+Using device: cuda
+AMAR_WO_RVQ(
+  311.08 k, 99.877% Params, 228.77 MMac, 100.000% MACs, 
+  (feature_extractor): Backbone(
+    109.8 k, 35.251% Params, 177.62 MMac, 77.641% MACs, 
+    (ds_conv_pca_replace): DepthwiseSeparableConv(
+      50.22 k, 16.124% Params, 151.2 MMac, 66.092% MACs, 
+      (depthwise): Conv1d(1.08 k, 0.347% Params, 3.24 MMac, 1.416% MACs, 270, 270, kernel_size=(3,), stride=(1,), padding=(1,), groups=270)
+      (pointwise): Conv1d(48.78 k, 15.661% Params, 146.34 MMac, 63.967% MACs, 270, 180, kernel_size=(1,), stride=(1,))
+      (bn): BatchNorm1d(360, 0.116% Params, 1.08 MMac, 0.472% MACs, 180, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (relu): ReLU(0, 0.000% Params, 540.0 KMac, 0.236% MACs, )
+    )
+    (ds_conv_temporal_reduce): DepthwiseSeparableConv(
+      12.79 k, 4.107% Params, 9.64 MMac, 4.215% MACs, 
+      (depthwise): Conv1d(1.08 k, 0.347% Params, 810.0 KMac, 0.354% MACs, 180, 180, kernel_size=(5,), stride=(4,), padding=(2,), groups=180)
+      (pointwise): Conv1d(11.58 k, 3.719% Params, 8.69 MMac, 3.798% MACs, 180, 64, kernel_size=(1,), stride=(1,))
+      (bn): BatchNorm1d(128, 0.041% Params, 96.0 KMac, 0.042% MACs, 64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (relu): ReLU(0, 0.000% Params, 48.0 KMac, 0.021% MACs, )
+    )
+    (ds_conv1): DepthwiseSeparableConv(
+      4.67 k, 1.500% Params, 1.78 MMac, 0.776% MACs, 
+      (depthwise): Conv1d(384, 0.123% Params, 144.0 KMac, 0.063% MACs, 64, 64, kernel_size=(5,), stride=(2,), padding=(2,), groups=64)
+      (pointwise): Conv1d(4.16 k, 1.336% Params, 1.56 MMac, 0.682% MACs, 64, 64, kernel_size=(1,), stride=(1,))
+      (bn): BatchNorm1d(128, 0.041% Params, 48.0 KMac, 0.021% MACs, 64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (relu): ReLU(0, 0.000% Params, 24.0 KMac, 0.010% MACs, )
+    )
+    (hierarchical_dilated_1): AtrousConvBlock(
+      12.48 k, 4.007% Params, 4.7 MMac, 2.056% MACs, 
+      (conv): Conv1d(12.35 k, 3.966% Params, 4.63 MMac, 2.025% MACs, 64, 64, kernel_size=(3,), stride=(1,), padding=(1,))
+      (bn): BatchNorm1d(128, 0.041% Params, 48.0 KMac, 0.021% MACs, 64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (relu): ReLU(0, 0.000% Params, 24.0 KMac, 0.010% MACs, )
+    )
+    (hierarchical_dilated_2): AtrousConvBlock(
+      12.48 k, 4.007% Params, 4.7 MMac, 2.056% MACs, 
+      (conv): Conv1d(12.35 k, 3.966% Params, 4.63 MMac, 2.025% MACs, 64, 64, kernel_size=(3,), stride=(1,), padding=(2,), dilation=(2,))
+      (bn): BatchNorm1d(128, 0.041% Params, 48.0 KMac, 0.021% MACs, 64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (relu): ReLU(0, 0.000% Params, 24.0 KMac, 0.010% MACs, )
+    )
+    (hierarchical_dilated_3): AtrousConvBlock(
+      12.48 k, 4.007% Params, 4.7 MMac, 2.056% MACs, 
+      (conv): Conv1d(12.35 k, 3.966% Params, 4.63 MMac, 2.025% MACs, 64, 64, kernel_size=(3,), stride=(1,), padding=(4,), dilation=(4,))
+      (bn): BatchNorm1d(128, 0.041% Params, 48.0 KMac, 0.021% MACs, 64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (relu): ReLU(0, 0.000% Params, 24.0 KMac, 0.010% MACs, )
+    )
+    (ds_conv2): DepthwiseSeparableConv(
+      4.67 k, 1.500% Params, 890.37 KMac, 0.389% MACs, 
+      (depthwise): Conv1d(384, 0.123% Params, 72.19 KMac, 0.032% MACs, 64, 64, kernel_size=(5,), stride=(2,), padding=(2,), groups=64)
+      (pointwise): Conv1d(4.16 k, 1.336% Params, 782.08 KMac, 0.342% MACs, 64, 64, kernel_size=(1,), stride=(1,))
+      (bn): BatchNorm1d(128, 0.041% Params, 24.06 KMac, 0.011% MACs, 64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (relu): ReLU(0, 0.000% Params, 12.03 KMac, 0.005% MACs, )
+    )
+  )
+  (encoder): Transformer_Encoder(
+    100.99 k, 32.425% Params, 37.54 MMac, 16.409% MACs, 
+    (pos_encoder): FixedPositionalEncoding(0, 0.000% Params, 0.0 Mac, 0.000% MACs, )
+    (layer_embedding_encoder): ModuleList(
+      (0-3): 4 x Encoder(
+        25.22 k, 8.096% Params, 9.38 MMac, 4.101% MACs, 
+        (layer_norm_0): LayerNorm(128, 0.041% Params, 12.03 KMac, 0.005% MACs, (64,), eps=1e-06, elementwise_affine=True)
+        (layer_attention): MultiheadAttention(
+          16.64 k, 5.342% Params, 7.81 MMac, 3.412% MACs, 
+          (out_proj): NonDynamicallyQuantizableLinear(0, 0.000% Params, 0.0 Mac, 0.000% MACs, in_features=64, out_features=64, bias=True)
+        )
+        (layer_dropout_0): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.2, inplace=False)
+        (layer_norm_1): LayerNorm(128, 0.041% Params, 12.03 KMac, 0.005% MACs, (64,), eps=1e-06, elementwise_affine=True)
+        (ffn): Sequential(
+          8.32 k, 2.671% Params, 1.55 MMac, 0.679% MACs, 
+          (0): Linear(4.16 k, 1.336% Params, 770.11 KMac, 0.337% MACs, in_features=64, out_features=64, bias=True)
+          (1): ReLU(0, 0.000% Params, 12.03 KMac, 0.005% MACs, )
+          (2): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.2, inplace=False)
+          (3): Linear(4.16 k, 1.336% Params, 770.11 KMac, 0.337% MACs, in_features=64, out_features=64, bias=True)
+        )
+        (layer_dropout_1): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.2, inplace=False)
+      )
+    )
+    (layer_embedding_norm): LayerNorm(128, 0.041% Params, 12.03 KMac, 0.005% MACs, (64,), eps=1e-06, elementwise_affine=True)
+  )
+  (decoder): TransformerDecoder(
+    100.29 k, 32.201% Params, 13.61 MMac, 5.950% MACs, 
+    (decoder_layers): ModuleList(
+      (0-5): 6 x TransformerDecoderLayer(
+        99.78 k, 32.034% Params, 13.6 MMac, 5.944% MACs, 
+        (self_attn): MultiheadAttention(
+          16.64 k, 5.342% Params, 629.86 KMac, 0.275% MACs, 
+          (out_proj): NonDynamicallyQuantizableLinear(0, 0.000% Params, 0.0 Mac, 0.000% MACs, in_features=64, out_features=64, bias=True)
+        )
+        (dropout1): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+        (norm1): LayerNorm(128, 0.041% Params, 2.3 KMac, 0.001% MACs, (64,), eps=1e-05, elementwise_affine=True)
+        (cross_attn): MultiheadAttention(
+          16.64 k, 5.342% Params, 10.58 MMac, 4.625% MACs, 
+          (out_proj): NonDynamicallyQuantizableLinear(0, 0.000% Params, 0.0 Mac, 0.000% MACs, in_features=64, out_features=64, bias=True)
+        )
+        (dropout2): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+        (norm2): LayerNorm(128, 0.041% Params, 2.3 KMac, 0.001% MACs, (64,), eps=1e-05, elementwise_affine=True)
+        (ffn): Sequential(
+          66.11 k, 21.226% Params, 2.38 MMac, 1.041% MACs, 
+          (0): Linear(33.28 k, 10.685% Params, 1.18 MMac, 0.517% MACs, in_features=64, out_features=512, bias=True)
+          (1): ReLU(0, 0.000% Params, 18.43 KMac, 0.008% MACs, )
+          (2): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+          (3): Linear(32.83 k, 10.541% Params, 1.18 MMac, 0.516% MACs, in_features=512, out_features=64, bias=True)
+        )
+        (dropout3): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+        (norm3): LayerNorm(128, 0.041% Params, 2.3 KMac, 0.001% MACs, (64,), eps=1e-05, elementwise_affine=True)
+      )
+    )
+    (norm): LayerNorm(128, 0.041% Params, 0.0 Mac, 0.000% MACs, (64,), eps=1e-05, elementwise_affine=True)
+    (class_embed): Linear(390, 0.125% Params, 13.86 KMac, 0.006% MACs, in_features=64, out_features=6, bias=True)
+    (memory_pos_encoding): FixedPositionalEncoding(0, 0.000% Params, 0.0 Mac, 0.000% MACs, )
+  )
+)
+Parameters: 311466 - FLOPs: 457545384.0
+Repeat 0
+[warn] no samples with 2 people in this batch — error_per_person[1] = NaN
+[warn] no samples with 2 people in this batch — error_per_person[1] = NaN
+[warn] no samples with 2 people in this batch — error_per_person[1] = NaN
+[warn] no samples with 2 people in this batch — error_per_person[1] = NaN
+[warn] no samples with 2 people in this batch — error_per_person[1] = NaN
+[warn] no samples with 2 people in this batch — error_per_person[1] = NaN
+--- Epoch 0/20 ---
+  Time: 80.937746s
+  Loss Train: 1.924389 | Loss valid: 2.050856
+  Total Error Train: 2.111111 | Total Error valid: 1.809019
+  Perfect Prediction % Train: 11.111111 | Perfect Prediction % valid: 18.567639
+  Accuracy Train: 0.584444 | Accuracy valid: 0.656089
+  Precision: 0.633073 | Recall: 0.733166 | F1 Score: 0.667570
+------------------------------
+[warn] no samples with 4 people in this batch — error_per_person[3] = NaN
+[warn] no samples with 4 people in this batch — error_per_person[3] = NaN
+[warn] no samples with 4 people in this batch — error_per_person[3] = NaN
+[warn] no samples with 4 people in this batch — error_per_person[3] = NaN
+[warn] no samples with 4 people in this batch — error_per_person[3] = NaN
+[warn] no samples with 4 people in this batch — error_per_person[3] = NaN
+[warn] no samples with 2 people in this batch — error_per_person[1] = NaN
+[warn] no samples with 2 people in this batch — error_per_person[1] = NaN
+[warn] no samples with 2 people in this batch — error_per_person[1] = NaN
+[warn] no samples with 2 people in this batch — error_per_person[1] = NaN
+[warn] no samples with 2 people in this batch — error_per_person[1] = NaN
+[warn] no samples with 2 people in this batch — error_per_person[1] = NaN
+[warn] no samples with 3 people in this batch — error_per_person[2] = NaN
+[warn] no samples with 3 people in this batch — error_per_person[2] = NaN
+[warn] no samples with 3 people in this batch — error_per_person[2] = NaN
+[warn] no samples with 3 people in this batch — error_per_person[2] = NaN
+[warn] no samples with 3 people in this batch — error_per_person[2] = NaN
+[warn] no samples with 3 people in this batch — error_per_person[2] = NaN
+[warn] no samples with 2 people in this batch — error_per_person[1] = NaN
+[warn] no samples with 2 people in this batch — error_per_person[1] = NaN
+[warn] no samples with 2 people in this batch — error_per_person[1] = NaN
+[warn] no samples with 2 people in this batch — error_per_person[1] = NaN
+[warn] no samples with 2 people in this batch — error_per_person[1] = NaN
+[warn] no samples with 2 people in this batch — error_per_person[1] = NaN
+[warn] no samples with 3 people in this batch — error_per_person[2] = NaN
+[warn] no samples with 3 people in this batch — error_per_person[2] = NaN
+[warn] no samples with 3 people in this batch — error_per_person[2] = NaN
+[warn] no samples with 3 people in this batch — error_per_person[2] = NaN
+[warn] no samples with 3 people in this batch — error_per_person[2] = NaN
+[warn] no samples with 3 people in this batch — error_per_person[2] = NaN
+[warn] no samples with 2 people in this batch — error_per_person[1] = NaN
+[warn] no samples with 5 people in this batch — error_per_person[4] = NaN
+[warn] no samples with 2 people in this batch — error_per_person[1] = NaN
+[warn] no samples with 5 people in this batch — error_per_person[4] = NaN
+[warn] no samples with 2 people in this batch — error_per_person[1] = NaN
+[warn] no samples with 5 people in this batch — error_per_person[4] = NaN
+[warn] no samples with 2 people in this batch — error_per_person[1] = NaN
+[warn] no samples with 5 people in this batch — error_per_person[4] = NaN
+[warn] no samples with 2 people in this batch — error_per_person[1] = NaN
+[warn] no samples with 5 people in this batch — error_per_person[4] = NaN
+[warn] no samples with 2 people in this batch — error_per_person[1] = NaN
+[warn] no samples with 5 people in this batch — error_per_person[4] = NaN
+[warn] no samples with 3 people in this batch — error_per_person[2] = NaN
+[warn] no samples with 4 people in this batch — error_per_person[3] = NaN
+[warn] no samples with 3 people in this batch — error_per_person[2] = NaN
+[warn] no samples with 4 people in this batch — error_per_person[3] = NaN
+[warn] no samples with 3 people in this batch — error_per_person[2] = NaN
+[warn] no samples with 4 people in this batch — error_per_person[3] = NaN
+[warn] no samples with 3 people in this batch — error_per_person[2] = NaN
+[warn] no samples with 4 people in this batch — error_per_person[3] = NaN
+[warn] no samples with 3 people in this batch — error_per_person[2] = NaN
+[warn] no samples with 4 people in this batch — error_per_person[3] = NaN
+[warn] no samples with 3 people in this batch — error_per_person[2] = NaN
+[warn] no samples with 4 people in this batch — error_per_person[3] = NaN
+[warn] no samples with 2 people in this batch — error_per_person[1] = NaN
+[warn] no samples with 5 people in this batch — error_per_person[4] = NaN
+[warn] no samples with 2 people in this batch — error_per_person[1] = NaN
+[warn] no samples with 5 people in this batch — error_per_person[4] = NaN
+[warn] no samples with 2 people in this batch — error_per_person[1] = NaN
+[warn] no samples with 5 people in this batch — error_per_person[4] = NaN
+[warn] no samples with 2 people in this batch — error_per_person[1] = NaN
+[warn] no samples with 5 people in this batch — error_per_person[4] = NaN
+[warn] no samples with 2 people in this batch — error_per_person[1] = NaN
+[warn] no samples with 5 people in this batch — error_per_person[4] = NaN
+[warn] no samples with 2 people in this batch — error_per_person[1] = NaN
+[warn] no samples with 5 people in this batch — error_per_person[4] = NaN
+[warn] no samples with 3 people in this batch — error_per_person[2] = NaN
+[warn] no samples with 3 people in this batch — error_per_person[2] = NaN
+[warn] no samples with 3 people in this batch — error_per_person[2] = NaN
+[warn] no samples with 3 people in this batch — error_per_person[2] = NaN
+[warn] no samples with 3 people in this batch — error_per_person[2] = NaN
+[warn] no samples with 3 people in this batch — error_per_person[2] = NaN
+--- Epoch 10/20 ---
+  Time: 29.196852s
+  Loss Train: 1.555608 | Loss valid: 1.657107
+  Total Error Train: 1.111111 | Total Error valid: 0.949602
+  Perfect Prediction % Train: 22.222222 | Perfect Prediction % valid: 43.501326
+  Accuracy Train: 0.777778 | Accuracy valid: 0.810080
+  Precision: 0.774856 | Recall: 0.886964 | F1 Score: 0.826809
+------------------------------
+[warn] no samples with 4 people in this batch — error_per_person[3] = NaN
+[warn] no samples with 5 people in this batch — error_per_person[4] = NaN
+[warn] no samples with 4 people in this batch — error_per_person[3] = NaN
+[warn] no samples with 5 people in this batch — error_per_person[4] = NaN
+[warn] no samples with 4 people in this batch — error_per_person[3] = NaN
+[warn] no samples with 5 people in this batch — error_per_person[4] = NaN
+[warn] no samples with 4 people in this batch — error_per_person[3] = NaN
+[warn] no samples with 5 people in this batch — error_per_person[4] = NaN
+[warn] no samples with 4 people in this batch — error_per_person[3] = NaN
+[warn] no samples with 5 people in this batch — error_per_person[4] = NaN
+[warn] no samples with 4 people in this batch — error_per_person[3] = NaN
+[warn] no samples with 5 people in this batch — error_per_person[4] = NaN
+[warn] no samples with 5 people in this batch — error_per_person[4] = NaN
+[warn] no samples with 5 people in this batch — error_per_person[4] = NaN
+[warn] no samples with 5 people in this batch — error_per_person[4] = NaN
+[warn] no samples with 5 people in this batch — error_per_person[4] = NaN
+[warn] no samples with 5 people in this batch — error_per_person[4] = NaN
+[warn] no samples with 5 people in this batch — error_per_person[4] = NaN
+[warn] no samples with 5 people in this batch — error_per_person[4] = NaN
+[warn] no samples with 5 people in this batch — error_per_person[4] = NaN
+[warn] no samples with 5 people in this batch — error_per_person[4] = NaN
+[warn] no samples with 5 people in this batch — error_per_person[4] = NaN
+[warn] no samples with 5 people in this batch — error_per_person[4] = NaN
+[warn] no samples with 5 people in this batch — error_per_person[4] = NaN
+[warn] no samples with 3 people in this batch — error_per_person[2] = NaN
+[warn] no samples with 4 people in this batch — error_per_person[3] = NaN
+[warn] no samples with 3 people in this batch — error_per_person[2] = NaN
+[warn] no samples with 4 people in this batch — error_per_person[3] = NaN
+[warn] no samples with 3 people in this batch — error_per_person[2] = NaN
+[warn] no samples with 4 people in this batch — error_per_person[3] = NaN
+[warn] no samples with 3 people in this batch — error_per_person[2] = NaN
+[warn] no samples with 4 people in this batch — error_per_person[3] = NaN
+[warn] no samples with 3 people in this batch — error_per_person[2] = NaN
+[warn] no samples with 4 people in this batch — error_per_person[3] = NaN
+[warn] no samples with 3 people in this batch — error_per_person[2] = NaN
+[warn] no samples with 4 people in this batch — error_per_person[3] = NaN
+[warn] no samples with 3 people in this batch — error_per_person[2] = NaN
+[warn] no samples with 4 people in this batch — error_per_person[3] = NaN
+[warn] no samples with 3 people in this batch — error_per_person[2] = NaN
+[warn] no samples with 4 people in this batch — error_per_person[3] = NaN
+[warn] no samples with 3 people in this batch — error_per_person[2] = NaN
+[warn] no samples with 4 people in this batch — error_per_person[3] = NaN
+[warn] no samples with 3 people in this batch — error_per_person[2] = NaN
+[warn] no samples with 4 people in this batch — error_per_person[3] = NaN
+[warn] no samples with 3 people in this batch — error_per_person[2] = NaN
+[warn] no samples with 4 people in this batch — error_per_person[3] = NaN
+[warn] no samples with 3 people in this batch — error_per_person[2] = NaN
+[warn] no samples with 4 people in this batch — error_per_person[3] = NaN
+[warn] no samples with 5 people in this batch — error_per_person[4] = NaN
+[warn] no samples with 5 people in this batch — error_per_person[4] = NaN
+[warn] no samples with 5 people in this batch — error_per_person[4] = NaN
+[warn] no samples with 5 people in this batch — error_per_person[4] = NaN
+[warn] no samples with 5 people in this batch — error_per_person[4] = NaN
+[warn] no samples with 5 people in this batch — error_per_person[4] = NaN
+[warn] no samples with 3 people in this batch — error_per_person[2] = NaN
+[warn] no samples with 5 people in this batch — error_per_person[4] = NaN
+[warn] no samples with 3 people in this batch — error_per_person[2] = NaN
+[warn] no samples with 5 people in this batch — error_per_person[4] = NaN
+[warn] no samples with 3 people in this batch — error_per_person[2] = NaN
+[warn] no samples with 5 people in this batch — error_per_person[4] = NaN
+[warn] no samples with 3 people in this batch — error_per_person[2] = NaN
+[warn] no samples with 5 people in this batch — error_per_person[4] = NaN
+[warn] no samples with 3 people in this batch — error_per_person[2] = NaN
+[warn] no samples with 5 people in this batch — error_per_person[4] = NaN
+[warn] no samples with 3 people in this batch — error_per_person[2] = NaN
+[warn] no samples with 5 people in this batch — error_per_person[4] = NaN
+Epoch that the model was saved 19
+Traceback (most recent call last):
+  File "/cluster/raid/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/torch/_dynamo/utils.py", line 1196, in run_node
+    return getattr(args[0], node.target)(*args[1:], **kwargs)
+  File "/cluster/raid/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/torch/utils/_stats.py", line 20, in wrapper
+    return fn(*args, **kwargs)
+  File "/cluster/raid/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/torch/_subclasses/fake_tensor.py", line 987, in __torch_dispatch__
+    return self.dispatch(func, types, args, kwargs)
+  File "/cluster/raid/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/torch/_subclasses/fake_tensor.py", line 1170, in dispatch
+    r = func(*args, **kwargs)
+  File "/cluster/raid/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/torch/_ops.py", line 287, in __call__
+    return self._op(*args, **kwargs or {})
+  File "/cluster/raid/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/torch/_refs/__init__.py", line 3058, in permute
+    return prims.transpose(a, _permutation)
+  File "/cluster/raid/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/torch/_ops.py", line 287, in __call__
+    return self._op(*args, **kwargs or {})
+  File "/cluster/raid/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/torch/_prims/__init__.py", line 1735, in _transpose_meta
+    raise ValueError(msg)
+ValueError: Attempting to permute a tensor of rank 5, but received a permutation of length 3!
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/cluster/raid/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/torch/_dynamo/utils.py", line 1152, in get_fake_value
+    return wrap_fake_exception(
+  File "/cluster/raid/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/torch/_dynamo/utils.py", line 808, in wrap_fake_exception
+    return fn()
+  File "/cluster/raid/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/torch/_dynamo/utils.py", line 1153, in <lambda>
+    lambda: run_node(tx.output, node, args, kwargs, nnmodule)
+  File "/cluster/raid/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/torch/_dynamo/utils.py", line 1206, in run_node
+    raise RuntimeError(
+RuntimeError: Failed running call_method permute(*(FakeTensor(FakeTensor(..., device='meta', size=(16, 3000, 3, 3, 30)), cuda:0), 0, 2, 1), **{}):
+Attempting to permute a tensor of rank 5, but received a permutation of length 3!
+(scroll up for backtrace)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/cluster/raid/home/jajo/AMAR/scripts/run_t2t1.py", line 240, in <module>
+    run()
+  File "/cluster/raid/home/jajo/AMAR/scripts/run_t2t1.py", line 222, in run
+    result = run_t2t1(data_train_x, data_train_y,
+  File "/cluster/raid/home/jajo/AMAR/src/models/AMAR_WO_RVQ.py", line 744, in run_t2t1
+    preds.append(model_AMAR_WO_RVQ(xb.to(device)).cpu())
+  File "/cluster/raid/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1501, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/cluster/raid/home/jajo/AMAR/src/models/AMAR_WO_RVQ.py", line 50, in forward
+    extracted_features = self.feature_extractor(x)
+  File "/cluster/raid/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1501, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/cluster/raid/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/torch/_dynamo/eval_frame.py", line 82, in forward
+    return self.dynamo_ctx(self._orig_mod.forward)(*args, **kwargs)
+  File "/cluster/raid/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/torch/_dynamo/eval_frame.py", line 209, in _fn
+    return fn(*args, **kwargs)
+  File "/cluster/raid/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/torch/_dynamo/eval_frame.py", line 337, in catch_errors
+    return callback(frame, cache_size, hooks)
+  File "/cluster/raid/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/torch/_dynamo/convert_frame.py", line 404, in _convert_frame
+    result = inner_convert(frame, cache_size, hooks)
+  File "/cluster/raid/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/torch/_dynamo/convert_frame.py", line 104, in _fn
+    return fn(*args, **kwargs)
+  File "/cluster/raid/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/torch/_dynamo/convert_frame.py", line 262, in _convert_frame_assert
+    return _compile(
+  File "/cluster/raid/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/torch/_dynamo/utils.py", line 163, in time_wrapper
+    r = func(*args, **kwargs)
+  File "/cluster/raid/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/torch/_dynamo/convert_frame.py", line 324, in _compile
+    out_code = transform_code_object(code, transform)
+  File "/cluster/raid/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/torch/_dynamo/bytecode_transformation.py", line 445, in transform_code_object
+    transformations(instructions, code_options)
+  File "/cluster/raid/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/torch/_dynamo/convert_frame.py", line 311, in transform
+    tracer.run()
+  File "/cluster/raid/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/torch/_dynamo/symbolic_convert.py", line 1726, in run
+    super().run()
+  File "/cluster/raid/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/torch/_dynamo/symbolic_convert.py", line 576, in run
+    and self.step()
+  File "/cluster/raid/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/torch/_dynamo/symbolic_convert.py", line 540, in step
+    getattr(self, inst.opname)(inst)
+  File "/cluster/raid/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/torch/_dynamo/symbolic_convert.py", line 342, in wrapper
+    return inner_fn(self, inst)
+  File "/cluster/raid/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/torch/_dynamo/symbolic_convert.py", line 965, in CALL_FUNCTION
+    self.call_function(fn, args, {})
+  File "/cluster/raid/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/torch/_dynamo/symbolic_convert.py", line 474, in call_function
+    self.push(fn.call_function(self, args, kwargs))
+  File "/cluster/raid/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/torch/_dynamo/variables/misc.py", line 744, in call_function
+    return self.obj.call_method(tx, self.name, args, kwargs).add_options(self)
+  File "/cluster/raid/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/torch/_dynamo/variables/tensor.py", line 424, in call_method
+    return wrap_fx_proxy(
+  File "/cluster/raid/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/torch/_dynamo/variables/builder.py", line 754, in wrap_fx_proxy
+    return wrap_fx_proxy_cls(
+  File "/cluster/raid/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/torch/_dynamo/variables/builder.py", line 789, in wrap_fx_proxy_cls
+    example_value = get_fake_value(proxy.node, tx)
+  File "/cluster/raid/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/torch/_dynamo/utils.py", line 1173, in get_fake_value
+    raise TorchRuntimeError() from e
+torch._dynamo.exc.TorchRuntimeError: 
+
+from user code:
+   File "/cluster/raid/home/jajo/AMAR/src/models/modules/molecules.py", line 249, in forward
+    x = x.permute(0, 2, 1)  # Conv1d format: (B, 270, T)
+
+Set torch._dynamo.config.verbose=True for more information
+
+
+You can suppress this exception and fall back to eager by setting:
+    torch._dynamo.config.suppress_errors = True
+
+[1;34mwandb[0m:
+[1;34mwandb[0m: You can sync this run to the cloud by running:
+[1;34mwandb[0m: [1mwandb sync /cluster/raid/home/jajo/AMAR/wandb/offline-run-20260916_214229-cue1eme1[0m
+[1;34mwandb[0m: Find logs at: [1;35mwandb/offline-run-20260916_214229-cue1eme1/logs[0m
