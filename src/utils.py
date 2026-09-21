@@ -8,7 +8,7 @@ import wandb
 import os
 import re
 import time
-
+import warnings
 
 LOCATION_SIZE = 5
 ACTIVITY_SIZE = 9
@@ -198,9 +198,6 @@ def save_model_components(preset, model):
     if not preset.get("save_model"):
         return
 
-    import os
-    import time
-
     # Create save directory
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     save_dir = os.path.join(
@@ -229,16 +226,21 @@ def error_per_number_person(y_pred, y_true):
     Returns:
         error count if we have one activity, error count if we have two persons, and so on
     """
-    count_num_people = y_true.sum(axis=1) # finding number of people in each sample
-    error_count = np.abs(y_pred - y_true).sum(axis=1) # finding error count in each sample
+ 
+    count_num_people = y_true.sum(axis=1)
+    error_count = np.abs(y_pred - y_true).sum(axis=1)
 
     error_per_person = []
     for count_index in range(1, MAX_NB_PEOPLE):
-        index = np.where(count_num_people == count_index) # gives us index of samples with count_index people
-        error_per_person.append(error_count[index].mean()) # finding mean error count for samples with count_index people
+        index = np.where(count_num_people == count_index)[0]
+        if index.size == 0:
+            warnings.warn(f"No samples with {count_index} people in this batch — error_per_person[{count_index-1}] = NaN")
+            error_per_person.append(np.nan)
+        else:
+            error_per_person.append(error_count[index].mean())
 
     return error_per_person
-
+    
 def count_error(y_pred, y_true):
     """
     Args:
@@ -399,7 +401,7 @@ def performance_metrics_joint_multiSensX(y_true_act, y_pred_act, y_true_loc, y_p
 
     # batchsize by 5 by 9
     mask_ = y_pred_loc==0
-    y_pred_act[mask_] = [0, 0 , 0 , 0 , 0 , 0, 0, 0 , 0]
+    y_pred_act[mask_] = [0 ,0 ,0 ,0 ,0 , 0, 0, 0, 0]
     y_pred_act = y_pred_act.sum(axis=1)
 
 
@@ -614,7 +616,7 @@ def visualize_model_performance(y_pred, y_true, save_dir="./visualizations",
     y_pred: numpy array [batch_size, 10] (predicted counts)
     y_true: numpy array [batch_size, 10] (true counts)
     """
-    print(var_mode)
+   
     if var_mode == "count_classification_withConstrain":
         pass
     elif var_mode == "multi_head":
@@ -676,16 +678,32 @@ def visualize_model_performance(y_pred, y_true, save_dir="./visualizations",
         cm = confusion_matrix(y_true[:, i], np.round(y_pred[:, i]))
         sns.heatmap(cm, annot=True, fmt='d', ax=ax, cmap=CMAP,
                     cbar_kws={'label': 'Count'})
+        ax.invert_yaxis()
         ax.set_title(class_names[i])
         ax.set_xlabel('Predicted Count')
         ax.set_ylabel('True Count')
-    for j in range(num_classes_plotted, nrows * ncols):
-        axes[j // ncols, j % ncols].axis('off')
+
     plt.tight_layout()
     plt.savefig(f'{save_dir}/confusion_matrices.png')
     plt.close()
+    # 2. Confusion Matrix for each class normalized
+    fig, axes = plt.subplots(nrows, ncols, figsize=(4 * ncols, 4 * nrows), squeeze=False)
+    for i in range(num_classes_plotted):
+        ax = axes[i // ncols, i % ncols]
+        cm = confusion_matrix(y_true[:, i], np.round(y_pred[:, i]), normalize='true')
+        sns.heatmap(cm, annot=True, fmt='.2f', ax=ax, cmap=CMAP,
+                    cbar_kws={'label': 'Count'})
+        ax.invert_yaxis()
+        ax.set_title(class_names[i])
+        ax.set_xlabel('Predicted Count')
+        ax.set_ylabel('True Count')
 
+    plt.tight_layout()
+    plt.savefig(f'{save_dir}/confusion_matrices_norm.png')
+    plt.close()
  
+
+
     # 3. Error Distribution
     plt.figure(figsize=(10, 6))
     errors = np.abs(y_pred - y_true).mean(axis=1)
@@ -703,14 +721,14 @@ def visualize_model_performance(y_pred, y_true, save_dir="./visualizations",
     class_errors = np.abs(y_pred - y_true).mean(axis=0)
     plt.bar(range(num_classes_plotted), class_errors, color=PRED_COLOR)
     plt.xticks(range(num_classes_plotted), class_names, ha='right')
-    plt.title('Mean Absolute Error by Class')
-    plt.xlabel('Class')
+    plt.title('Mean Absolute Error by location')
+    plt.xlabel('Location')
     plt.ylabel('Mean Absolute Error')
     plt.tight_layout()
     plt.savefig(f'{save_dir}/class_errors.png')
     plt.close()
 
-    # 5. Prediction vs Ground Truth - fixed
+    # 5. Prediction vs Ground Truth
     fig, axes = plt.subplots(nrows, ncols, figsize=(4 * ncols, 4 * nrows), squeeze=False)
     rng = np.random.default_rng(0)
     cmap = sns.color_palette(CMAP, as_cmap=True)
@@ -755,6 +773,7 @@ def visualize_model_performance(y_pred, y_true, save_dir="./visualizations",
         'error_std': errors.std(),
         'perfect_predictions': (np.abs(y_pred - y_true) < 0.5).all(axis=1).mean()
     }
+
 
 def log_attention_weights(model, y_pred, y_actual, epoch, var_task = "activity"):
     """

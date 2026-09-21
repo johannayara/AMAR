@@ -73,7 +73,7 @@ def load_data_x(var_path_data_x,
         #
         data_x.append(data_csi_pad)
     #
-    data_x = np.array(data_x)
+    data_x = np.array(data_x, dtype=np.float32)
     #
     return data_x
 
