@@ -616,7 +616,7 @@ def visualize_model_performance(y_pred, y_true, save_dir="./visualizations",
     y_pred: numpy array [batch_size, 10] (predicted counts)
     y_true: numpy array [batch_size, 10] (true counts)
     """
-   
+
     if var_mode == "count_classification_withConstrain":
         pass
     elif var_mode == "multi_head":
@@ -670,7 +670,6 @@ def visualize_model_performance(y_pred, y_true, save_dir="./visualizations",
     plt.savefig(f'{save_dir}/count_distributions.png')
     plt.close()
 
-
     # 2. Confusion Matrix for each class
     fig, axes = plt.subplots(nrows, ncols, figsize=(4 * ncols, 4 * nrows), squeeze=False)
     for i in range(num_classes_plotted):
@@ -686,7 +685,8 @@ def visualize_model_performance(y_pred, y_true, save_dir="./visualizations",
     plt.tight_layout()
     plt.savefig(f'{save_dir}/confusion_matrices.png')
     plt.close()
-    # 2. Confusion Matrix for each class normalized
+
+    # 2b. Confusion Matrix for each class normalized
     fig, axes = plt.subplots(nrows, ncols, figsize=(4 * ncols, 4 * nrows), squeeze=False)
     for i in range(num_classes_plotted):
         ax = axes[i // ncols, i % ncols]
@@ -701,8 +701,6 @@ def visualize_model_performance(y_pred, y_true, save_dir="./visualizations",
     plt.tight_layout()
     plt.savefig(f'{save_dir}/confusion_matrices_norm.png')
     plt.close()
- 
-
 
     # 3. Error Distribution
     plt.figure(figsize=(10, 6))
@@ -714,13 +712,12 @@ def visualize_model_performance(y_pred, y_true, save_dir="./visualizations",
     plt.savefig(f'{save_dir}/error_distribution.png')
     plt.close()
 
-
     # 4. Class-wise Error Analysis
-
     plt.figure(figsize=(10, 6))
     class_errors = np.abs(y_pred - y_true).mean(axis=0)
-    plt.bar(range(num_classes_plotted), class_errors, color=PRED_COLOR)
-    plt.xticks(range(num_classes_plotted), class_names, ha='right')
+    bars = plt.bar(range(num_classes_plotted), class_errors, color=PRED_COLOR)
+    plt.xticks(range(num_classes_plotted), class_names, rotation=45, ha='right')
+    plt.bar_label(bars, fmt='%.3f', label_type='edge')
     plt.title('Mean Absolute Error by location')
     plt.xlabel('Location')
     plt.ylabel('Mean Absolute Error')
@@ -767,13 +764,21 @@ def visualize_model_performance(y_pred, y_true, save_dir="./visualizations",
     plt.savefig(f'{save_dir}/prediction_scatter.png')
     plt.close()
 
+    perfect_predictions = (np.abs(y_pred - y_true) < 0.5).all(axis=1).mean()
+    print(f"\nVisualizations saved at {save_dir}")
+    print("\nDetailed Performance Analysis:")
+    print(f"Mean Error: {errors.mean():.4f} ± {errors.std():.4f}")
+    print("\nClass-wise Mean Absolute Error:")
+    for i, error in enumerate(class_errors.tolist()):
+        print(f"Class {i}: {error:.4f}")
+    print(f"\nPerfect Predictions: {perfect_predictions * 100:.2f}%")
+
     return {
         'class_wise_mae': class_errors.tolist(),
         'mean_error': errors.mean(),
         'error_std': errors.std(),
-        'perfect_predictions': (np.abs(y_pred - y_true) < 0.5).all(axis=1).mean()
+        'perfect_predictions': perfect_predictions
     }
-
 
 def log_attention_weights(model, y_pred, y_actual, epoch, var_task = "activity"):
     """

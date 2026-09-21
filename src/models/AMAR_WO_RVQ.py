@@ -339,12 +339,7 @@ def run_AMAR_WO_RVQ(data_train_x,
         var_mode=var_mode,
         save_dir=save_path
     )
-    print("\nDetailed Performance Analysis:")
-    print(f"Mean Error: {viz_stats['mean_error']:.4f} ± {viz_stats['error_std']:.4f}")
-    print("\nClass-wise Mean Absolute Error:")
-    for i, error in enumerate(viz_stats['class_wise_mae']):
-        print(f"Class {i}: {error:.4f}")
-    print(f"\nPerfect Predictions: {viz_stats['perfect_predictions'] * 100:.2f}%")
+
     wandb.finish()
     return all_layers_results
 ## ====================================================================================================================
@@ -870,11 +865,6 @@ def run_t2t1(data_train_x,
         var_mode=var_mode,
         save_dir=save_path
     )
-    print("\nDetailed Performance Analysis:")
-    print(f"Mean Error: {viz_stats['mean_error']:.4f} ± {viz_stats['error_std']:.4f}")
-    print("\nClass-wise Mean Absolute Error:")
-    for i, error in enumerate(viz_stats['class_wise_mae']):
-        print(f"Class {i}: {error:.4f}")
-    print(f"\nPerfect Predictions: {viz_stats['perfect_predictions'] * 100:.2f}%")
+
     wandb.finish()
     return all_layers_results
