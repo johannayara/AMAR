@@ -770,7 +770,7 @@ def visualize_model_performance(y_pred, y_true, save_dir="./visualizations",
     print(f"Mean Error: {errors.mean():.4f} ± {errors.std():.4f}")
     print("\nClass-wise Mean Absolute Error:")
     for i, error in enumerate(class_errors.tolist()):
-        print(f"Class {i}: {error:.4f}")
+        print(f"Class {class_names[i]}: {error:.4f}")
     print(f"\nPerfect Predictions: {perfect_predictions * 100:.2f}%")
 
     return {
