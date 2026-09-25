@@ -1,6 +1,7 @@
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from scipy.optimize import linear_sum_assignment
 
 class HungarianMatchingLoss(nn.Module):
@@ -146,3 +147,86 @@ class HungarianMatchingLoss(nn.Module):
         else:  # No auxiliary outputs, just compute regular loss
             indices = self.Hungarian_matching(outputs, targets)
             return self._get_layer_loss(outputs, targets, indices)
+
+
+class SetDistillationLoss(nn.Module):
+    """
+    Permutation-invariant distillation between a frozen teacher and a trainable student.
+
+    Both networks are set predictors: their queries carry no fixed ordering, so a plain
+    element-wise KL between teacher and student logits is meaningless. Instead the student's
+    queries are matched to the teacher's queries with a Hungarian assignment computed on the
+    final-layer class probabilities (the same cost used by HungarianMatchingLoss), and the
+    matched pairs supervise every decoder layer with a temperature-scaled soft cross-entropy.
+
+    Args:
+        outputs (student): [num_layers, B, num_queries, num_classes] (or [B, num_queries, num_classes])
+        outputs (teacher): same shape as the student outputs
+    """
+
+    def __init__(self, temperature=1.0, aux_loss_weight=1.0, cost_class_weight=1.0):
+        super().__init__()
+        self.temperature = temperature
+        self.aux_loss_weight = aux_loss_weight
+        self.cost_class = cost_class_weight
+
+    @torch.no_grad()
+    def Hungarian_matching(self, student_final, teacher_final):
+        """
+        Match student queries to teacher queries.
+
+        Args:
+            student_final: [B, num_queries, num_classes] student final-layer logits
+            teacher_final: [B, num_queries, num_classes] teacher final-layer logits
+        Returns:
+            List of (row_ind, col_ind) per batch item, where row_ind indexes student queries and
+            col_ind the teacher queries they are matched to.
+        """
+        bs, num_queries = student_final.shape[:2]
+        student_prob = student_final.softmax(-1)
+        teacher_ids = teacher_final.argmax(-1)  # [B, num_queries] teacher pseudo-labels
+
+        indices = []
+        for b in range(bs):
+            cost_matrix = -student_prob[b][:, teacher_ids[b]]  # [student_q, teacher_q]
+            cost_matrix = self.cost_class * cost_matrix.cpu().numpy()
+            row_ind, col_ind = linear_sum_assignment(cost_matrix)
+            row_ind = torch.as_tensor(row_ind, dtype=torch.int64, device=student_final.device)
+            col_ind = torch.as_tensor(col_ind, dtype=torch.int64, device=student_final.device)
+            indices.append((row_ind, col_ind))
+
+        return indices
+
+    def _get_layer_loss(self, student_layer, teacher_layer, indices):
+        """Temperature-scaled soft cross-entropy over the matched student/teacher queries."""
+        temperature = self.temperature
+        teacher_layer = teacher_layer.detach()
+        losses = []
+        for batch_idx, (student_idx, teacher_idx) in enumerate(indices):
+            student_log_prob = F.log_softmax(student_layer[batch_idx][student_idx] / temperature, dim=-1)
+            teacher_prob = F.softmax(teacher_layer[batch_idx][teacher_idx] / temperature, dim=-1)
+            losses.append(-(teacher_prob * student_log_prob).sum(-1).mean())
+        return torch.stack(losses).mean() * (temperature ** 2)
+
+    def forward(self, student_outputs, teacher_outputs):
+        if student_outputs.dim() == 4:  # [num_layers, B, num_queries, num_classes]
+            student_aux, student_final = student_outputs[:-1], student_outputs[-1]
+            teacher_aux, teacher_final = teacher_outputs[:-1], teacher_outputs[-1]
+        else:  # [B, num_queries, num_classes]
+            student_aux, student_final = None, student_outputs
+            teacher_aux, teacher_final = None, teacher_outputs
+
+        indices = self.Hungarian_matching(student_final, teacher_final)
+
+        final_loss = self._get_layer_loss(student_final, teacher_final, indices)
+
+        if student_aux is None or len(student_aux) == 0:
+            return final_loss
+
+        aux_losses = [
+            self._get_layer_loss(student_layer, teacher_layer, indices)
+            for student_layer, teacher_layer in zip(student_aux, teacher_aux)
+        ]
+        aux_loss = torch.stack(aux_losses).mean()
+
+        return final_loss + self.aux_loss_weight * aux_loss

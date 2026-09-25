@@ -151,6 +151,20 @@ preset = {
 python scripts/run_main.py --model AMAR 
 ```
 
+**Few-shot distillation experiment (AMAR_WO_RVQ):**
+```bash
+python scripts/run_few_shot.py --model AMAR_WO_RVQ --task location --env empty_room \
+    --repeat 5 --few_shot_ratio 0.01 --kd_weight 1.0
+```
+This trains on the single environment `--env` and tests on every other environment in
+`preset["data"]["environment"]`. A teacher `AMAR_WO_RVQ` is trained on the full training
+environment, frozen, and used to supervise a student `AMAR_WO_RVQ` trained on `--few_shot_ratio` of
+that same environment with `HungarianMatchingLoss + kd_weight * SetDistillationLoss`. Distillation
+matches student queries to teacher queries with a Hungarian assignment on the final-layer class
+probabilities, so it is invariant to the arbitrary query ordering of set prediction. Extra
+arguments: `--kd_temperature` (soft-target temperature), `--teacher_epochs` (defaults to
+`preset["nn"]["epoch"]`), `--no_compile`.
+
 ## Available Models
 
 | Model | Type | Description | Reference |

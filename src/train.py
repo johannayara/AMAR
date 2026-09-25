@@ -43,7 +43,21 @@ def train(model: Module,
           var_epochs: int,
           device: device,
           var_mode: str,
-          patience: int = 150): 
+          patience: int = 150,
+          teacher: Module = None,
+          kd_loss: Module = None,
+          kd_weight: float = 0.0): 
+    """
+    [description]
+    : train a model. When `teacher` and `kd_loss` are provided, the frozen teacher is run on
+      every batch (train and validation) and its outputs are distilled into the model with
+      `kd_weight * kd_loss(student_outputs, teacher_outputs)` added to the supervised loss.
+    [parameter]
+    : teacher: frozen model used as distillation target (evaluated under torch.no_grad)
+    : kd_loss: distillation criterion taking (student_outputs, teacher_outputs)
+    : kd_weight: weight of the distillation term
+    """
+    use_distillation = teacher is not None and kd_loss is not None and kd_weight > 0
     var_epoch_saved = 0
     g = torch.Generator()
     data_train_loader = DataLoader(data_train_set, var_batch_size, shuffle=True, pin_memory=True, generator=g)
@@ -59,7 +73,7 @@ def train(model: Module,
         scheduler = get_cosine_schedule_with_warmup(
             optimizer,
             num_warmup_steps=preset["nn"]["scheduler"]["num_warmup_epochs"] * len(data_train_loader),
-            num_training_steps=preset["nn"]["epoch"] * len(data_train_loader),
+            num_training_steps=var_epochs * len(data_train_loader),
             min_lr_ratio=preset["nn"]["scheduler"]["min_lr_ratio"]
         )
 
@@ -101,6 +115,12 @@ def train(model: Module,
 
             predict_train_y = model(data_batch_x)
             var_loss_train = loss(predict_train_y, data_batch_y.float())
+            var_loss_kd_train = None
+            if use_distillation:
+                with torch.no_grad():
+                    teacher_train_y = teacher(data_batch_x)
+                var_loss_kd_train = kd_loss(predict_train_y, teacher_train_y)
+                var_loss_train = var_loss_train + kd_weight * var_loss_kd_train
             optimizer.zero_grad()
             var_loss_train.backward()
             optimizer.step()
@@ -124,11 +144,23 @@ def train(model: Module,
 
             predict_valid_y = model(data_valid_x)
             var_loss_valid = loss(predict_valid_y, data_valid_y.float())
+            var_loss_kd_valid = None
+            if use_distillation:
+                teacher_valid_y = teacher(data_valid_x)
+                var_loss_kd_valid = kd_loss(predict_valid_y, teacher_valid_y)
+                var_loss_valid = var_loss_valid + kd_weight * var_loss_kd_valid
 
             data_valid_y = data_valid_y.detach().cpu().numpy()
             predict_valid_y = predict_valid_y.detach().cpu().numpy()
 
             dict_error_valid = performance_metrics(data_valid_y, predict_valid_y, var_mode, var_threshold)
+
+        kd_logs = {}
+        if use_distillation:
+            kd_logs = {
+                "train_loss_kd": var_loss_kd_train.item(),
+                "valid_loss_kd": var_loss_kd_valid.item(),
+            }
 
         if preset["model"] == "AMAR":
             layers_idxs = ["layer_" +str(preset["nn"]["num_decoder_layers"] - 1)]
@@ -149,7 +181,8 @@ def train(model: Module,
                     f"{layer_idx}/precision": layer_metrics['precision'],
                     f"{layer_idx}/recall": layer_metrics['recall'],
                     f"{layer_idx}/f1_score": layer_metrics['f1_score'],
-                    "learning_rate": optimizer.param_groups[0]['lr']
+                    "learning_rate": optimizer.param_groups[0]['lr'],
+                    **kd_logs
                 }, 
                 step=var_epoch)
 
@@ -177,7 +210,8 @@ def train(model: Module,
                 "learning_rate": optimizer.param_groups[0]['lr'],
                 "precision": dict_error_valid['precision'],
                 "recall": dict_error_valid['recall'],
-                "f1_score": dict_error_valid['f1_score']
+                "f1_score": dict_error_valid['f1_score'],
+                **kd_logs
             }, 
             step=var_epoch)
             if var_epoch % 10 == 0:
