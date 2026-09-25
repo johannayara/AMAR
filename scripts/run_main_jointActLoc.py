@@ -21,11 +21,6 @@ from src.utils import *
 #
 ##
 
-
-
-
-
-
 def parse_args():
     """
     [description]
