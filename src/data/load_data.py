@@ -61,19 +61,31 @@ def load_data_x(var_path_data_x,
     ##
     var_path_list = [os.path.join(var_path_data_x, var_label + ".npy") for var_label in var_label_list]
     #
-    data_x = []
+    # Preallocate the output and write each sample in place. Building a Python list of padded
+    # samples first would transiently hold a second full copy of the whole dataset in memory.
+    var_length = preset["data"]["length"]
+    data_x = None
     #
-    for var_path in var_path_list:
+    for var_idx, var_path in enumerate(var_path_list):
         #
         data_csi = np.load(var_path)
         #
-        var_pad_length = preset["data"]["length"] - data_csi.shape[0]
+        if data_x is None:
+            data_x = np.zeros((len(var_path_list), var_length) + data_csi.shape[1:], dtype=np.float32)
         #
-        data_csi_pad = np.pad(data_csi, ((var_pad_length, 0), (0, 0), (0, 0), (0, 0)))
+        var_pad_length = var_length - data_csi.shape[0]
         #
-        data_x.append(data_csi_pad)
+        if var_pad_length < 0:
+            raise ValueError(
+                f"{var_path} has {data_csi.shape[0]} timesteps, longer than "
+                f"preset['data']['length']={var_length}"
+            )
+        #
+        # Same leading zero-padding as np.pad(data_csi, ((var_pad_length, 0), ...))
+        data_x[var_idx, var_pad_length:] = data_csi
     #
-    data_x = np.array(data_x, dtype=np.float32)
+    if data_x is None:
+        data_x = np.zeros((0, var_length), dtype=np.float32)
     #
     return data_x
 

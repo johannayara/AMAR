@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #SBATCH --cpus-per-task 1
-#SBATCH --mem 32G
+#SBATCH --mem 40G
 #SBATCH --qos normal
 #SBATCH --time 6:00:00
 #SBATCH --gres gpu:a100:2

@@ -948,14 +948,13 @@ def run_AMAR_WO_RVQ_few_shot(data_train_x,
     data_train_x = data_train_x.reshape(data_train_x.shape[0], data_train_x.shape[1], -1)
     var_x_shape = data_train_x[0].shape
 
-    ## Teacher trains on the full training environment (90/10 train/valid split)
-    data_teacher_x, data_teacher_valid_x, data_teacher_y, data_teacher_valid_y = train_test_split(
-        data_train_x, data_train_y, test_size=0.1, shuffle=True, random_state=39)
-    teacher_train_set = TensorDataset(torch.from_numpy(data_teacher_x), torch.from_numpy(data_teacher_y))
-    teacher_valid_set = TensorDataset(torch.from_numpy(data_teacher_valid_x), torch.from_numpy(data_teacher_valid_y))
-
-    ## Student only sees a few-shot slice of the same environment; early stopping uses a held-out
-    ## slice of the remaining training-environment samples.
+    ## Student only sees a few-shot slice of the same environment; the teacher and the student's
+    ## early-stopping validation use the rest.
+    ## NOTE: the partition is done with index arrays rather than chained train_test_split calls. The
+    ## raw CSI arrays are multi-GB per environment, and a chained split would transiently hold the
+    ## original array plus a full-size "rest" copy plus the teacher copies, exhausting RAM. Here the
+    ## three disjoint partitions are sliced straight out of the original (the original itself stays
+    ## alive because the caller still references it).
     num_train = data_train_x.shape[0]
     num_few = max(1, int(round(var_few_shot_ratio * num_train)))
     if num_few >= num_train - 1:
@@ -963,16 +962,24 @@ def run_AMAR_WO_RVQ_few_shot(data_train_x,
             f"var_few_shot_ratio={var_few_shot_ratio} leaves no validation data "
             f"({num_few}/{num_train} training-environment samples). Lower the ratio or provide more data."
         )
-    data_few_x, data_rest_x, data_few_y, data_rest_y = train_test_split(
-        data_train_x, data_train_y, train_size=num_few, shuffle=True, random_state=39)
-    _, data_student_valid_x, _, data_student_valid_y = train_test_split(
-        data_rest_x, data_rest_y, test_size=0.1, shuffle=True, random_state=39)
+    shuffle_idx = np.random.RandomState(39).permutation(num_train)
+    few_idx = shuffle_idx[:num_few]
+    rest_idx = shuffle_idx[num_few:]
+    num_valid = max(1, int(round(0.1 * rest_idx.shape[0])))
+    valid_idx = rest_idx[:num_valid]
+    teacher_idx = rest_idx[num_valid:]
 
+    data_few_x, data_few_y = data_train_x[few_idx], data_train_y[few_idx]
+    data_teacher_valid_x, data_teacher_valid_y = data_train_x[valid_idx], data_train_y[valid_idx]
+    data_teacher_x, data_teacher_y = data_train_x[teacher_idx], data_train_y[teacher_idx]
+
+    teacher_train_set = TensorDataset(torch.from_numpy(data_teacher_x), torch.from_numpy(data_teacher_y))
+    teacher_valid_set = TensorDataset(torch.from_numpy(data_teacher_valid_x), torch.from_numpy(data_teacher_valid_y))
     student_train_set = TensorDataset(torch.from_numpy(data_few_x), torch.from_numpy(data_few_y))
-    student_valid_set = TensorDataset(torch.from_numpy(data_student_valid_x), torch.from_numpy(data_student_valid_y))
+    student_valid_set = TensorDataset(torch.from_numpy(data_teacher_valid_x), torch.from_numpy(data_teacher_valid_y))
     print(f"Training environment [{env_name}] - teacher train {data_teacher_x.shape[0]} | "
           f"student few-shot train {num_few}/{num_train} ({var_few_shot_ratio:.2%}) | "
-          f"student validation {data_student_valid_x.shape[0]}")
+          f"student validation {data_teacher_valid_x.shape[0]}")
     print(f"Test environments: {list(test_sets_by_env.keys())}")
 
     #
