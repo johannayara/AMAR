@@ -6,7 +6,7 @@
 ##
 
 import argparse
-import random # Added
+import random
 from sklearn.model_selection import train_test_split
 import sys
 import os
@@ -112,7 +112,7 @@ def format_result(var_model, var_task, result):
                 lines.append(f"  Avg Perfect Prediction %: {result['avg_PPP']:.4f} ± {result['se_PPP']:.4f} (SE)")
             if 'avg_f1_score' in result:
                 lines.append(f"  Avg F1 Score: {result['avg_f1_score']:.4f} ± {result['se_f1_score']:.4f} (SE)")
-            if 'avg_accuracy' in result:
+            if 'avg_accuracy' in result and 'avg_mae' not in result:
                 lines.append(f"  Avg Accuracy: {result['avg_accuracy']:.4f} ± {result['se_accuracy']:.4f} (SE)")
             if 'avg_total_error' in result:
                 lines.append(f"  Avg Total Error: {result['avg_total_error']:.4f} ± {result['se_total_error']:.4f} (SE)")
@@ -128,6 +128,16 @@ def format_result(var_model, var_task, result):
                     lines.append(f"  Accuracy: {result['accuracy']:.4f}")
                 if 'total_error' in result:
                     lines.append(f"  Total Error: {result['total_error']:.4f}")
+            if 'avg_mae' in result:
+                lines.append("  GROUP-COUNT METRICS:")
+                lines.append(f"  Exact-count Accuracy: {result['avg_accuracy']:.4f} ± {result['se_accuracy']:.4f} (SE)")
+                lines.append(f"  Count MAE: {result['avg_mae']:.4f} ± {result['se_mae']:.4f} (SE)")
+                lines.append(f"  Occupancy Accuracy: {result['avg_occupancy_accuracy']:.4f} ± {result['se_occupancy_accuracy']:.4f} (SE)")
+                lines.append(f"  Occupancy F1: {result['avg_occupancy_f1']:.4f} ± {result['se_occupancy_f1']:.4f} (SE)")
+                per_class = result.get('per_class_accuracy', {})
+                if per_class:
+                    formatted = ", ".join(f"{k}:{v:.3f}" for k, v in per_class.items())
+                    lines.append(f"  Per-count Accuracy: {formatted}")
 
     return "\n".join(lines)
 
@@ -214,6 +224,8 @@ def run():
     elif var_model == "AMAR_WO_RVQ": run_model = run_AMAR_WO_RVQ
 
     elif var_model == "AMAR": run_model = run_AMAR
+
+    elif var_model == "AMAR_COUNT": run_model = run_AMAR_COUNT
     
     elif var_model == "multi_senseX": run_model = run_multi_senseX
 
