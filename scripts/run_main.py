@@ -43,6 +43,10 @@ def master_splitter(preset, var_task, var_model, var_users, var_env = "empty_roo
     if var_model == "AMAR_WO_RVQ" or var_model=="AMAR": # here we pad with zeros
         y = reduce_dataset(y, var_task, preset["nn"]["num_obj_queries"]) 
 
+    elif var_model == "multi_senseX":
+        ## MultiSenseX location-only: binary presence of a person at each of the 5 locations.
+        y = (encode_data_y(data_pd_y, "location").sum(axis=1) > 0).astype(np.float32)
+
 
     X_train, X_test, y_train, y_test = train_test_split(X, y,
                                                         test_size=0.2,

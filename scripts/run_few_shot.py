@@ -77,12 +77,15 @@ def parse_args():
     var_args.add_argument("--repeat", default=preset["repeat"], type=int)
     var_args.add_argument("--users", default="0,1,2,3,4,5", type=str, help="Comma-separated list of user IDs")
     var_args.add_argument("--env", default="empty_room", type=str, help="the single training room")
-    var_args.add_argument("--few_shot_ratio", default=0.01, type=float,
+    var_args.add_argument("--few_shot_ratio", default=0.05, type=float,
                           help="fraction of the training environment used to train the student")
+    var_args.add_argument("--epochs", default=200, type=int,
+                          help="student training epochs (default 200; the student only sees a few-shot "
+                               "slice, so 20 epochs is a handful of optimizer steps)")
+    var_args.add_argument("--teacher_epochs", default=None, type=int,
+                          help="teacher training epochs (defaults to --epochs)")
     var_args.add_argument("--kd_weight", default=1.0, type=float, help="weight of the distillation loss")
     var_args.add_argument("--kd_temperature", default=1.0, type=float, help="temperature of the soft targets")
-    var_args.add_argument("--teacher_epochs", default=None, type=int,
-                          help="teacher training epochs (defaults to preset['nn']['epoch'])")
     var_args.add_argument("--no_compile", action="store_true", help="disable torch.compile of the feature extractors")
     return var_args.parse_args()
 
@@ -130,7 +133,7 @@ def save_result(var_model, var_task, var_repeat, result):
     out_path = os.path.join(
         save_dir,
         "json",
-        f"result_{var_model}_fewshot_r{var_repeat}_{timestamp}.json",
+        f"result_{var_model}_fewshot_{var_task}_r{var_repeat}_{timestamp}.json",
     )
 
     with open(out_path, "w") as f:
@@ -169,40 +172,47 @@ def run():
     data_train_x, data_train_y, test_sets_by_env = master_splitter(
         preset, var_task, var_model, var_users, var_env)
 
-    save_path = Path(f'./visualizations/few_shot/{var_env}/1')
-    while save_path.is_dir():
-        new_name = str((int(save_path.name) + 1))
-        save_path = save_path.parent / new_name
+        save_path = Path(f'./visualizations/few_shot/{var_env}/{var_task}/1')
+        while save_path.is_dir():
+            new_name = str((int(save_path.name) + 1))
+            save_path = save_path.parent / new_name
 
-    #
-    ## run few-shot distillation
-    result = run_AMAR_WO_RVQ_few_shot(
-        data_train_x, data_train_y,
-        test_sets_by_env,
-        var_few_shot_ratio=var_args.few_shot_ratio,
-        var_kd_weight=var_args.kd_weight,
-        var_kd_temperature=var_args.kd_temperature,
-        var_teacher_epochs=var_args.teacher_epochs,
-        var_compile=not var_args.no_compile,
-        var_repeat=var_repeat, var_task=var_task, var_env=var_env, save_path=save_path)
+        #
+        ## run few-shot distillation
+        result = run_AMAR_WO_RVQ_few_shot(
+            data_train_x, data_train_y,
+            test_sets_by_env,
+            var_few_shot_ratio=var_args.few_shot_ratio,
+            var_kd_weight=var_args.kd_weight,
+            var_kd_temperature=var_args.kd_temperature,
+            var_teacher_epochs=var_teacher_epochs,
+            var_student_epochs=var_args.epochs,
+            var_compile=not var_args.no_compile,
+            var_repeat=var_repeat, var_task=var_task, var_env=var_env, save_path=save_path)
 
-    #
-    ##
-    result["model"] = var_model
-    result["task"] = var_task
-    result["repeat"] = var_repeat
-    result["data"] = preset["data"]
-    result["nn"] = preset["nn"]
-    result["few_shot_ratio"] = var_args.few_shot_ratio
-    result["kd_weight"] = var_args.kd_weight
-    result["kd_temperature"] = var_args.kd_temperature
-    result["train_env"] = var_env
+        #
+        ##
+        result["model"] = var_model
+        result["task"] = var_task
+        result["repeat"] = var_repeat
+        result["data"] = preset["data"]
+        result["nn"] = preset["nn"]
+        result["few_shot_ratio"] = var_args.few_shot_ratio
+        result["kd_weight"] = var_args.kd_weight
+        result["kd_temperature"] = var_args.kd_temperature
+        result["train_env"] = var_env
+        result["student_epochs"] = var_args.epochs
+        result["teacher_epochs"] = var_teacher_epochs
 
-    formatted = format_result(var_model, var_task, result, var_args.few_shot_ratio, var_args.kd_weight, var_env)
-    out_path = save_result(var_model, var_task, var_repeat, result)
+        formatted = format_result(var_model, var_task, result, var_args.few_shot_ratio, var_args.kd_weight, var_env)
+        out_path = save_result(var_model, var_task, var_repeat, result)
 
-    print(formatted)
-    print(f"\nResults saved to: {out_path}")
+        print(formatted)
+        print(f"\nResults saved to: {out_path}")
+
+        # Release the multi-GB per-task arrays before the next task
+        del data_train_x, data_train_y, test_sets_by_env
+        gc.collect()
 
 
 if __name__ == "__main__":

@@ -116,6 +116,10 @@ def encode_data_y(data_pd_y,
         #
         data_y = encode_location(data_pd_y, preset["encoding"]["location"])
     #
+    elif var_task == "count":
+        #
+        data_y = encode_count(data_pd_y)
+    #
     return data_y
 
 #
@@ -193,6 +197,25 @@ def encode_location(data_pd_y,
     data_location_onehot_y = np.array([[var_encoding[var_y] for var_y in var_sample] for var_sample in data_location_y])
     #
     return data_location_onehot_y
+
+#
+##
+def encode_count(data_pd_y):
+    """
+    [description]
+    : encode the group-count label (number of people occupying the space) in a pandas dataframe.
+      Unlike activity/location, this label is room-agnostic: it does not depend on where in the
+      room each person is, only on how many people are present.
+    [parameter]
+    : data_pd_y: pandas dataframe, labels of different tasks
+    [return]
+    : data_count_y: numpy array of shape (num_samples,), integer class index in [0, 5]
+    """
+    #
+    ##
+    data_count_y = data_pd_y["number_of_users"].to_numpy(copy = True).astype("int64")
+    #
+    return data_count_y
 
 #
 ##
@@ -288,6 +311,23 @@ def test_encode_location():
 
 #
 ##
+def test_encode_count():
+    """
+    [description]
+    : test encode_count() function
+    """
+    #
+    ##
+    data_pd_y = pd.read_csv(preset["path"]["data_y"], dtype = str)
+    #
+    data_count_y = encode_count(data_pd_y)
+    #
+    print(data_count_y.shape)
+    #
+    print(np.bincount(data_count_y))
+
+#
+##
 if __name__ == "__main__":
     #
     ##
@@ -300,3 +340,5 @@ if __name__ == "__main__":
     test_encode_activity()
     #
     test_encode_location()
+    #
+    test_encode_count()

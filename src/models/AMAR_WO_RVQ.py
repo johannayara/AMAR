@@ -909,6 +909,7 @@ def run_AMAR_WO_RVQ_few_shot(data_train_x,
                              var_kd_weight=1.0,
                              var_kd_temperature=1.0,
                              var_teacher_epochs=None,
+                             var_student_epochs=None,
                              var_compile=True,
                              var_repeat=10, var_task="activity", var_env="empty_room",
                              save_path="./visualizations/temp"):
@@ -928,6 +929,7 @@ def run_AMAR_WO_RVQ_few_shot(data_train_x,
     : var_kd_weight: float, weight of the distillation term
     : var_kd_temperature: float, temperature of the distillation soft targets
     : var_teacher_epochs: int, teacher training epochs (defaults to preset["nn"]["epoch"])
+    : var_student_epochs: int, student training epochs (defaults to preset["nn"]["epoch"])
     : var_compile: bool, torch.compile both feature extractors
     : var_repeat: int, number of repeated experiments
     : var_env: str or list, training environment name(s) used for the run name
@@ -940,6 +942,8 @@ def run_AMAR_WO_RVQ_few_shot(data_train_x,
 
     if var_teacher_epochs is None:
         var_teacher_epochs = preset["nn"]["epoch"]
+    if var_student_epochs is None:
+        var_student_epochs = preset["nn"]["epoch"]
     env_name = var_env if isinstance(var_env, str) else "_".join(var_env)
 
     #
@@ -1079,7 +1083,7 @@ def run_AMAR_WO_RVQ_few_shot(data_train_x,
                                     data_valid_set=student_valid_set,
                                     var_threshold=preset["nn"]["threshold"],
                                     var_batch_size=preset["nn"]["batch_size"],
-                                    var_epochs=preset["nn"]["epoch"],
+                                    var_epochs=var_student_epochs,
                                     device=device,
                                     var_mode=var_mode,
                                     teacher=teacher,

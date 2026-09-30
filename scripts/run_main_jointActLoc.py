@@ -79,7 +79,7 @@ def run():
      y_train_act, y_test_act) = my_train_test_split(X, y_location_n, y_activity_n, test_size=0.2, random_state=103)
 
     if preset["model"] == "multiSense_X":
-        run_model  = run_multi_senseX
+        run_model  = run_multi_senseX_joint
     if preset["model"] == "joint_AMAR":
         run_model = run_joint_AMAR
 

@@ -230,3 +230,50 @@ class SetDistillationLoss(nn.Module):
         aux_loss = torch.stack(aux_losses).mean()
 
         return final_loss + self.aux_loss_weight * aux_loss
+
+
+class JointDistillationLoss(nn.Module):
+    """
+    Distillation between a frozen teacher and a trainable student for MultiSenseX.
+
+    Unlike the AMAR set predictor, MultiSenseX has a fixed head layout: one activity head per
+    location and one multi-label location head. There is no query permutation to resolve, so the
+    soft targets are matched element-wise:
+      - activity: temperature-scaled soft cross-entropy over the 9 classes of each location head
+      - location: temperature-scaled Bernoulli cross-entropy on the 5 sigmoid outputs
+
+    Args:
+        student_outputs / teacher_outputs: (act_logits, loc_pred) where act_logits is
+            (batch, 5, 9) and loc_pred is (batch, 5) sigmoid probabilities.
+    """
+
+    def __init__(self, temperature=1.0, activity_weight=1.0, location_weight=1.0, eps=1e-6):
+        super().__init__()
+        self.temperature = temperature
+        self.activity_weight = activity_weight
+        self.location_weight = location_weight
+        self.eps = eps
+
+    def forward(self, student_outputs, teacher_outputs):
+        student_act, student_loc = student_outputs[0], student_outputs[1]
+        teacher_act = teacher_outputs[0].detach()
+        teacher_loc = teacher_outputs[1].detach()
+
+        temperature = self.temperature
+
+        # Activity: soft cross-entropy over the class dimension of every location head
+        activity_kd = -(
+            F.softmax(teacher_act / temperature, dim=-1)
+            * F.log_softmax(student_act / temperature, dim=-1)
+        ).sum(dim=-1).mean() * (temperature ** 2)
+
+        # Location: Bernoulli soft cross-entropy, temperature applied in logit space
+        student_logit = torch.logit(student_loc.clamp(self.eps, 1.0 - self.eps))
+        teacher_prob = torch.sigmoid(
+            torch.logit(teacher_loc.clamp(self.eps, 1.0 - self.eps)) / temperature
+        )
+        location_kd = F.binary_cross_entropy_with_logits(
+            student_logit / temperature, teacher_prob
+        ) * (temperature ** 2)
+
+        return self.activity_weight * activity_kd + self.location_weight * location_kd

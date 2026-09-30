@@ -154,7 +154,7 @@ python scripts/run_main.py --model AMAR
 **Few-shot distillation experiment (AMAR_WO_RVQ):**
 ```bash
 python scripts/run_few_shot.py --model AMAR_WO_RVQ --task location --env empty_room \
-    --repeat 5 --few_shot_ratio 0.01 --kd_weight 1.0
+    --repeat 3 --few_shot_ratio 0.05 --epochs 200 --kd_weight 1.0
 ```
 This trains on the single environment `--env` and tests on every other environment in
 `preset["data"]["environment"]`. A teacher `AMAR_WO_RVQ` is trained on the full training
@@ -177,9 +177,6 @@ arguments: `--kd_temperature` (soft-target temperature), `--teacher_epochs` (def
 | `DEM_THAT` | Baseline | Two-stream Transformer + Smooth L1 | [Li et al., AAAI'21](https://ojs.aaai.org/index.php/AAAI/article/view/16103) |
 
 **Note:** BCE variants follow the WiMANS dataset formulation [[Huang et al., arXiv'24]](https://arxiv.org/abs/2402.09430) for multi-label classification. DEM variants use regression to predict activity counts directly.
-
-
-
 
 ## Configuration
 
