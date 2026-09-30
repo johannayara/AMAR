@@ -232,7 +232,7 @@ def run():
     else:
         raise Exception("Not valid name for model")   
     
-    save_path=Path(f'./visualizations/{var_env}/1')
+    save_path=Path(f'./visualizations/{var_model}/{var_env}/1')
     while save_path.is_dir():
         new_name = str((int(save_path.name)+1))
         save_path = save_path.parent / new_name

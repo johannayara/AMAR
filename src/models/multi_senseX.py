@@ -313,10 +313,6 @@ def run_multi_senseX(data_train_x,
     wandb.finish()
     return dict_true_acc_act, dict_true_acc_loc
 
-
-
-
-
 def  multisense_loss(act_logits, activity_targets, loc_pred, location_targets,   mask):
     """
     Calculate the combined loss for location and activity prediction.
@@ -570,3 +566,201 @@ def train(model,
     print(f"Best location metrics - F1: {var_best_f1_score_loc:.6f}, PPP: {var_best_PPP_loc:.6f}")
 
     return var_best_weight
+
+
+def run_model_multiSenseX(data_train_x,
+                     data_train_y,
+                     data_test_x,
+                     data_test_y,
+                     var_repeat=10, var_task = "location", var_env = "empty_room", save_path = "./visualizations/temp"):
+   
+    #
+    ##
+    ## ============================================ Preprocess ============================================
+    #
+    ##
+    device = select_device()
+    print(f"Using device: {device}")
+    data_valid_x, data_test_x, data_valid_y, data_test_y = train_test_split(data_test_x, data_test_y,
+                                                                            test_size=0.5,
+                                                                            shuffle=True,
+                                                                            random_state=39)
+    data_valid_x = data_valid_x.reshape(data_valid_x.shape[0], data_valid_x.shape[1], -1)
+    data_train_x = data_train_x.reshape(data_train_x.shape[0], data_train_x.shape[1], -1)
+    data_test_x = data_test_x.reshape(data_test_x.shape[0], data_test_x.shape[1], -1)
+    #
+    ## shape for model
+    var_x_shape = data_train_x[0].shape
+    #
+    data_train_set = TensorDataset(torch.from_numpy(data_train_x), torch.from_numpy(data_train_y))
+    data_valid_set = TensorDataset(torch.from_numpy(data_valid_x), torch.from_numpy(data_valid_y))
+
+    #
+    ##
+    ## ========================================= Train & Evaluate =========================================
+    #
+    ##
+    result_accuracy = []
+    result_ppp = []
+    result_time_train = []
+    result_time_test = []
+    result_total_error = []
+    result_precision = []
+    result_recall = []
+    result_f1_score = []
+    result_avg_count_error = []
+    #
+    var_macs, var_params = get_model_complexity_info(MultiSenseX(var_x_shape),
+                                                     var_x_shape, as_strings=False)
+    #
+    print("Parameters:", var_params, "- FLOPs:", var_macs * 2)
+    #
+    ##
+    for var_r in range(var_repeat):
+        #
+        ##
+        print("Repeat", var_r)
+        name_run = f"MultiSenseX{var_r}_" + "_".join(preset["data"]["environment"])
+
+        run = wandb.init(
+            project="multiSenseX",
+            name= name_run,
+            config=preset,
+            reinit=True  # Allow multiple wandb.init() calls in the same process
+        )
+        #
+        torch.random.manual_seed(var_r + 39)
+        #
+        model_multiSenseX = MultiSenseX(var_x_shape,
+                 embedding_dim=100,
+                 threshold=0.5).to(device)
+        #
+
+        optimizer = torch.optim.Adam(model_multiSenseX.parameters(),
+                                         lr=preset["nn"]["lr"],
+                                         weight_decay=preset["nn"]["weight_decay"])
+
+        #
+        loss_mode = "multi_senseX"
+        var_time_0 = time.time()
+        #
+        ## ---------------------------------------- Train -----------------------------------------
+        #
+        var_best_weight = train(model = model_multiSenseX,
+                                optimizer = optimizer,
+                                data_train_set = data_train_set,
+                                data_test_set = data_valid_set,
+                                var_threshold = preset["nn"]["threshold"],
+                                var_batch_size = preset["nn"]["batch_size"],
+                                var_epochs = preset["nn"]["epoch"],
+                                device = device,
+                                var_mode = loss_mode)
+        #
+        var_time_1 = time.time()
+
+        ##
+        ## ---------------------------------------- Test ------------------------------------------
+        #
+        model_multiSenseX.load_state_dict(var_best_weight)
+        #
+        with torch.no_grad():
+            predict_test_y_act, predict_test_y_loc, mask = model_multiSenseX(torch.from_numpy(data_test_x).to(device))
+        #
+        # predict_test_y = torch.clamp(torch.round(predict_test_y), min=0, max=5).float()
+        predict_test_act = predict_test_y_act.detach().cpu().numpy()
+        predict_test_loc = predict_test_y_loc.detach().cpu().numpy()
+
+        #
+        var_time_2 = time.time()
+        #
+        ## -------------------------------------- Evaluate ----------------------------------------
+        #
+        ##
+
+        dict_true_acc_act, dict_true_acc_loc = performance_metrics_joint_multiSensX(data_test_y_act, predict_test_act,
+                                                                         data_test_y_loc, predict_test_loc)
+
+        wandb.log({
+            "repeat": var_r,
+            "train_time": var_time_1 - var_time_0,
+            "test_time": var_time_2 - var_time_1,
+
+            # Activity metrics
+            "ACT_TOTAL_TESTSET_ERROR": dict_true_acc_act['total_error'],
+            "ACT_TOTAL_TESTSET_perfect_prediction_percentage": dict_true_acc_act['perfect_prediction_percentage'],
+            "ACT_TOTAL_ACCURACY": dict_true_acc_act['accuracy'],
+            "ACT_mean_count_error": dict_true_acc_act['mean_count_error'],
+            "ACT_error_per_person_1": dict_true_acc_act['error_per_person'][0],
+            "ACT_error_per_person_2": dict_true_acc_act['error_per_person'][1],
+            "ACT_error_per_person_3": dict_true_acc_act['error_per_person'][2],
+            "ACT_error_per_person_4": dict_true_acc_act['error_per_person'][3],
+            "ACT_error_per_person_5": dict_true_acc_act['error_per_person'][4],
+            "ACT_precision": dict_true_acc_act['precision'],
+            "ACT_recall": dict_true_acc_act['recall'],
+            "ACT_f1_score": dict_true_acc_act['f1_score'],
+
+            # Location metrics
+            "LOC_TOTAL_TESTSET_ERROR": dict_true_acc_loc['total_error'],
+            "LOC_TOTAL_TESTSET_perfect_prediction_percentage": dict_true_acc_loc['perfect_prediction_percentage'],
+            "LOC_TOTAL_ACCURACY": dict_true_acc_loc['accuracy'],
+            "LOC_mean_count_error": dict_true_acc_loc['mean_count_error'],
+            "LOC_error_per_person_1": dict_true_acc_loc['error_per_person'][0],
+            "LOC_error_per_person_2": dict_true_acc_loc['error_per_person'][1],
+            "LOC_error_per_person_3": dict_true_acc_loc['error_per_person'][2],
+            "LOC_error_per_person_4": dict_true_acc_loc['error_per_person'][3],
+            "LOC_error_per_person_5": dict_true_acc_loc['error_per_person'][4],
+            "LOC_precision": dict_true_acc_loc['precision'],
+            "LOC_recall": dict_true_acc_loc['recall'],
+            "LOC_f1_score": dict_true_acc_loc['f1_score']
+        })
+        #
+        #
+
+        #
+        result_ppp_act.append(dict_true_acc_act['perfect_prediction_percentage'])
+        result_total_error_act.append(dict_true_acc_act['total_error'])
+        result_precision_act.append(dict_true_acc_act['precision'])
+        result_recall_act.append(dict_true_acc_act['recall'])
+        result_f1_score_act.append(dict_true_acc_act['f1_score'])
+        result_avg_count_error_act.append(dict_true_acc_act['mean_count_error'])
+
+        result_ppp_loc.append(dict_true_acc_loc['perfect_prediction_percentage'])
+        result_total_error_loc.append(dict_true_acc_loc['total_error'])
+        result_precision_loc.append(dict_true_acc_loc['precision'])
+        result_recall_loc.append(dict_true_acc_loc['recall'])
+        result_f1_score_loc.append(dict_true_acc_loc['f1_score'])
+        result_avg_count_error_loc.append(dict_true_acc_loc['mean_count_error'])
+
+    wandb.log({
+        # Activity averages
+        "ACT_avg_accuracy": sum(result_ppp_act) / len(result_ppp_act),
+        "ACT_avg_total_error": sum(result_total_error_act) / len(result_total_error_act),
+        "ACT_avg_precision": sum(result_precision_act) / len(result_precision_act),
+        "ACT_avg_recall": sum(result_recall_act) / len(result_recall_act),
+        "ACT_avg_f1_score": sum(result_f1_score_act) / len(result_f1_score_act),
+        "ACT_avg_count_error": sum(result_avg_count_error_act) / len(result_avg_count_error_act),
+
+        # Location averages
+        "LOC_avg_accuracy": sum(result_ppp_loc) / len(result_ppp_loc),
+        "LOC_avg_total_error": sum(result_total_error_loc) / len(result_total_error_loc),
+        "LOC_avg_precision": sum(result_precision_loc) / len(result_precision_loc),
+        "LOC_avg_recall": sum(result_recall_loc) / len(result_recall_loc),
+        "LOC_avg_f1_score": sum(result_f1_score_loc) / len(result_f1_score_loc),
+        "LOC_avg_count_error": sum(result_avg_count_error_loc) / len(result_avg_count_error_loc),
+    })
+
+    # viz_stats = visualize_model_performance(
+    #     y_pred=predict_test_y,
+    #     y_true=data_test_y_act,
+    #     var_mode=var_mode,
+    #     save_dir=f'./visualizations/experiment_{var_r}_{var_mode}'
+    # )
+    # print("\nDetailed Performance Analysis:")
+    # print(f"Mean Error: {viz_stats['mean_error']:.4f} ± {viz_stats['error_std']:.4f}")
+    # print("\nClass-wise Mean Absolute Error:")
+    # for i, error in enumerate(viz_stats['class_wise_mae']):
+    #     print(f"Class {i}: {error:.4f}")
+    # print(f"\nPerfect Predictions: {viz_stats['perfect_predictions'] * 100:.2f}%")
+    wandb.finish()
+    return dict_true_acc_act, dict_true_acc_loc
+

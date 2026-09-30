@@ -20,7 +20,7 @@ start=$(date +%s)
 echo "Start: $(date)"
 export WANDB_MODE=offline 
 python scripts/run_main.py --model "${model}" --task location --repeat 3 --env "${env}" \
-  > "./output/${model}/${env}" 2>&1
+  > "./output/${model}/${env}.txt" 2>&1
 end=$(date +%s)
 
 echo "Total runtime: $((end - start)) seconds"
