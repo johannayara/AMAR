@@ -571,7 +571,9 @@ def run_density_map(data_train_x,
         #
         ## render the ground-truth density from the occupancy targets with the same kernels
         with torch.no_grad():
-            var_kernels = model_density.kernels
+            ## the kernels are a registered buffer on `device`; the targets are numpy, so move the
+            ## kernels to CPU before the einsum
+            var_kernels = model_density.kernels.cpu()
             true_density = torch.einsum("bl,lhw->bhw", torch.from_numpy(data_test_y), var_kernels).numpy()
         #
         ## -------------------------------------- Evaluate ----------------------------------------

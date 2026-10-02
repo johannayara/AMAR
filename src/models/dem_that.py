@@ -7,6 +7,7 @@
 ##
 import time
 import torch
+import torch.nn.functional as F
 import numpy as np
 #
 import torch.nn as nn
@@ -93,6 +94,29 @@ class Gaussian_Position(torch.nn.Module):
 
 #
 ##
+class SamePadConv1d(torch.nn.Module):
+    """
+    [description]
+    : Conv1d that preserves the input length with explicit padding. Replicates padding="same"
+      exactly (left = (k-1)//2, right = (k-1) - left) but avoids PyTorch's warning for even kernel
+      sizes, which otherwise forces an internal zero-padded copy.
+    """
+    #
+    ##
+    def __init__(self, var_in_channels, var_out_channels, var_kernel_size):
+        super().__init__()
+        self.var_total_padding = var_kernel_size - 1
+        self.layer_conv = torch.nn.Conv1d(var_in_channels, var_out_channels, var_kernel_size)
+
+    #
+    ##
+    def forward(self, var_input):
+        var_left = self.var_total_padding // 2
+        var_right = self.var_total_padding - var_left
+        return self.layer_conv(F.pad(var_input, (var_left, var_right)))
+
+#
+##
 ## ------------------------------------------------------------------------------------------ ##
 ## --------------------------------------- Encoder ------------------------------------------ ##
 ## ------------------------------------------------------------------------------------------ ##
@@ -124,10 +148,9 @@ class Encoder(torch.nn.Module):
         #
         for var_size in var_size_cnn:
             #
-            layer = torch.nn.Sequential(torch.nn.Conv1d(var_dim_feature,
-                                                        var_dim_feature,
-                                                        var_size, 
-                                                        padding = "same"),
+            layer = torch.nn.Sequential(SamePadConv1d(var_dim_feature,
+                                                      var_dim_feature,
+                                                      var_size),
                                         torch.nn.BatchNorm1d(var_dim_feature),
                                         torch.nn.Dropout(0.1),
                                         torch.nn.LeakyReLU())
