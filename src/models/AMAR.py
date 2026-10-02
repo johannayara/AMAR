@@ -96,7 +96,8 @@ def run_AMAR(data_train_x,
                      data_train_y,
                      data_test_x,
                      data_test_y,
-                     var_repeat=10):
+                     var_repeat=10, var_task="location", var_env="empty_room",
+                     save_path="./visualizations/temp"):
     """
     [description]
     : run WiFi-based model Transformer_Encoder_DECODER with Residual Vector Quantization (RVQ)

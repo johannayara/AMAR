@@ -14,6 +14,7 @@
 import copy
 import gc
 import math
+import os
 import time
 
 import numpy as np
@@ -184,6 +185,65 @@ def localization_metrics(var_true_density, var_pred_density, var_threshold_frac=
         "loc_error": float(np.mean(var_distances)) if var_distances else 0.0,
         "loc_detection": float(var_hits / var_total) if var_total else 0.0,
     }
+
+
+def visualize_density_map(data_true_density,
+                          data_pred_density,
+                          save_dir,
+                          var_num_samples=6,
+                          var_threshold_frac=0.25,
+                          var_tag="density_map"):
+    """
+    [description]
+    : plot the ground-truth and predicted density maps for a spread of test samples (one row per
+      sample, ground truth on the left, prediction on the right). Detected locations are circled.
+      The title of each panel reports the count, i.e. the integral of the map.
+    [parameter]
+    : data_true_density: numpy array, ground-truth maps of shape (N, grid, grid)
+    : data_pred_density: numpy array, predicted maps of the same shape
+    : save_dir: str, directory the figure is written to
+    : var_num_samples: int, number of samples to show
+    : var_threshold_frac: float, peak threshold as a fraction of the map maximum
+    : var_tag: str, label used in the title and file name (typically the environment)
+    [return]
+    : out_path: str, path of the saved figure
+    """
+    #
+    ##
+    os.makedirs(save_dir, exist_ok=True)
+    var_num_samples = min(var_num_samples, len(data_true_density))
+    #
+    ## spread the rows over the whole count range so the figure shows empty, single and crowded frames
+    var_true_count = data_true_density.sum(axis=(1, 2))
+    var_order = np.argsort(var_true_count)
+    var_pick = var_order[np.linspace(0, len(var_order) - 1, var_num_samples).astype(int)]
+    #
+    var_fig, var_axes = plt.subplots(var_num_samples, 2, figsize=(8, 3 * var_num_samples), squeeze=False)
+    var_fig.suptitle(f"Density map - ground truth vs prediction (env {var_tag})")
+    #
+    for var_row, var_idx in enumerate(var_pick):
+        var_maps = ((data_true_density[var_idx], "ground truth"), (data_pred_density[var_idx], "prediction"))
+        var_vmax = max(float(data_true_density[var_idx].max()), float(data_pred_density[var_idx].max()), 1e-6)
+        #
+        for var_col, (var_map, var_title) in enumerate(var_maps):
+            var_ax = var_axes[var_row][var_col]
+            var_ax.imshow(var_map, origin="upper", cmap="viridis", vmin=0, vmax=var_vmax)
+            var_ax.set_xticks([])
+            var_ax.set_yticks([])
+            #
+            var_peaks = _extract_peaks(var_map, var_threshold_frac)
+            if len(var_peaks):
+                var_ax.scatter(var_peaks[:, 0] * var_map.shape[1] - 0.5,
+                               var_peaks[:, 1] * var_map.shape[0] - 0.5,
+                               s=70, facecolors="none", edgecolors="red", linewidths=1.5)
+            var_ax.set_title(f"{var_title} - count {var_map.sum():.2f}")
+    #
+    var_fig.tight_layout(rect=[0, 0, 1, 0.95])
+    var_out_path = os.path.join(save_dir, f"density_map_{var_tag}.png")
+    var_fig.savefig(var_out_path, dpi=120)
+    plt.close(var_fig)
+    #
+    return var_out_path
 
 
 #
@@ -428,6 +488,12 @@ def run_density_map(data_train_x,
                  var_count_metrics["occupancy_accuracy"], var_count_metrics["occupancy_f1"]))
         print("  WHERE: mean distance %.4f - detection %.4f"
               % (var_loc_metrics["loc_error"], var_loc_metrics["loc_detection"]))
+        #
+        if var_r == var_repeat - 1:
+            var_fig_path = visualize_density_map(data_test_y, pred_density, save_path,
+                                                 var_threshold_frac=preset["density"]["peak_threshold"],
+                                                 var_tag=var_env)
+            print(f"  Figure saved to {var_fig_path}")
         #
         result_accuracy.append(var_count_metrics["accuracy"])
         result_mae.append(var_count_metrics["mae"])
