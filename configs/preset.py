@@ -97,31 +97,35 @@ preset = {
     "save_model": False,  # Whether to save model components
     "saving_path": "./multi_modal_CSI/results/checkpoints/",
 
-    ## Room-agnostic normalized coordinates (x right, y up, origin tx) of the 5 WiMANS
-    ## locations, taken from the environment layouts in WiMANS Fig. 2 (all rooms are 510x1030 cm).
-    ## This is the shared frame the density map is predicted in, so a location means the same
-    ## physical spot in every room.
+    ## Room-agnostic normalized coordinates of the 5 WiMANS locations, in a frame shared by every
+    ## room: origin at the transmitter (bottom-left corner of the room), x increasing to the right,
+    ## y increasing away from the transmitter (up), distances in cm divided by 1000.
+    ##
+    ## Derived from the dimensions printed on the WiMANS Fig. 2 layouts (all rooms are 510 x 1030 cm,
+    ## with the TX-side wall 890 cm tall). Values are the ideal positions, i.e. the red markers in
+    ## the figures minus their systematic ~4 cm downward offset. Classroom columns are at 410 / 255 /
+    ## 100 cm from the left wall, at 600 (A/D), 455 (C) and 310 (B/E) cm from the TX wall.
     "layouts": {
         "classroom": {
             "a": (0.410, 0.600),
-            "b": (0.410, 0.165),
+            "b": (0.410, 0.310),
             "c": (0.255, 0.455),
             "d": (0.100, 0.600),
-            "e": (0.100, 0.165),
+            "e": (0.100, 0.310),
         },
         "meeting_room": {
-            "a": (0.9401, 0.3376),
-            "b": (0.9389, 0.5855),
-            "c": (0.4991, 0.4617),
-            "d": (0.0571, 0.3379),
-            "e": (0.0577, 0.5855),
+            "a": (0.480, 0.545),
+            "b": (0.480, 0.285),
+            "c": (0.255, 0.415),
+            "d": (0.030, 0.545),
+            "e": (0.030, 0.285),
         },
         "empty_room": {
-            "a": (0.7244, 0.2614),
-            "b": (0.7232, 0.6045),
-            "c": (0.4991, 0.4331),
-            "d": (0.2728, 0.2617),
-            "e": (0.2734, 0.6045),
+            "a": (0.370, 0.625),
+            "b": (0.370, 0.265),
+            "c": (0.255, 0.445),
+            "d": (0.140, 0.625),
+            "e": (0.140, 0.265),
         },
     },
 

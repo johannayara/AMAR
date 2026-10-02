@@ -244,6 +244,14 @@ def encode_density_y(data_pd_y,
     var_sigma = var_sigma or preset["density"]["sigma"]
     var_layout = preset["layouts"][var_environment]
     #
+    ## A coordinate outside [0,1] would place the blob off the grid and silently move the peak, so
+    ## fail loudly instead. This catches e.g. coordinates left in cm after a layout redefinition.
+    for var_letter, (var_cx, var_cy) in var_layout.items():
+        if not (0.0 <= var_cx <= 1.0 and 0.0 <= var_cy <= 1.0):
+            raise ValueError(
+                f"layout coordinate for '{var_letter}' in '{var_environment}' is "
+                f"({var_cx}, {var_cy}), outside the normalized [0,1] density grid")
+    #
     var_axis = (np.arange(var_grid_size) + 0.5) / var_grid_size
     var_yy, var_xx = np.meshgrid(var_axis, var_axis, indexing = "ij")  # rows -> y, cols -> x
     #

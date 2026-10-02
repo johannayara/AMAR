@@ -24,7 +24,7 @@ from pathlib import Path
 
 #
 ##
-def master_splitter(preset, var_task, var_model, var_users, var_env = "empty_room"):
+def master_splitter(preset, var_task, var_model, var_users, var_env = "empty_room", var_train_samples = 0):
    
     data_pd_y = load_data_y(preset["path"]["data_y"],
                             var_environment=[var_env],
@@ -53,11 +53,26 @@ def master_splitter(preset, var_task, var_model, var_users, var_env = "empty_roo
             y = (encode_data_y(data_pd_y, "location").sum(axis=1) > 0).astype(np.float32)
 
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y,
-                                                        test_size=0.2,
-                                                        shuffle=True,
-                                                        random_state=103)
+    ## Fixed split: the test set is identical for every training-set size, so a sample-count study
+    ## compares like with like.
+    var_indices = np.arange(len(X))
+    var_num_users = data_pd_y["number_of_users"].to_numpy()
+    var_idx_train, var_idx_test = train_test_split(var_indices,
+                                                   test_size=0.2,
+                                                   shuffle=True,
+                                                   random_state=103)
+    #
+    if 0 < var_train_samples < len(var_idx_train):
+        ## Subsample the training split only, stratified by the number of people, so the study
+        ## measures the effect of the training-set size and not of a changing class mix.
+        var_idx_train, _ = train_test_split(var_idx_train,
+                                            train_size=var_train_samples,
+                                            shuffle=True,
+                                            random_state=103,
+                                            stratify=var_num_users[var_idx_train])
 
+    X_train, X_test = X[var_idx_train], X[var_idx_test]
+    y_train, y_test = y[var_idx_train], y[var_idx_test]
 
     return X_train, X_test, y_train, y_test
 
@@ -75,6 +90,12 @@ def parse_args():
     var_args.add_argument("--repeat", default = preset["repeat"], type = int)
     var_args.add_argument("--users", default="0,1,2,3,4,5", type=str, help="Comma-separated list of user IDs")
     var_args.add_argument("--env", default="empty_room", type=str, help="room name")
+    var_args.add_argument("--train_samples", default=0, type=int,
+                          help="Number of training samples to use (0 = all). The test split is "
+                               "kept fixed, so different values are directly comparable.")
+    var_args.add_argument("--epochs", default=None, type=int,
+                          help="Override preset['nn']['epoch']. The cosine LR schedule is tied to "
+                               "this value, so it must match the actual training length.")
     #
     return var_args.parse_args()
 
@@ -220,9 +241,12 @@ def run():
     var_repeat = var_args.repeat
     var_users = [u.strip() for u in var_args.users.split(',')]
     var_env = var_args.env
+    #
+    if var_args.epochs is not None:
+        preset["nn"]["epoch"] = var_args.epochs
 
     # Ensuring there is no data leakage while doing splits.
-    data_train_x, data_test_x, data_train_y, data_test_y = master_splitter(preset, var_task, var_model, var_users, var_env)
+    data_train_x, data_test_x, data_train_y, data_test_y = master_splitter(preset, var_task, var_model, var_users, var_env, var_args.train_samples)
     #
 
     #
@@ -258,20 +282,26 @@ def run():
     ##
     result["model"] = var_model
     result["task"] = var_task
+    result["env"] = var_env
     result["repeat"] = var_repeat
+    result["train_samples"] = var_args.train_samples
+    result["epochs"] = preset["nn"]["epoch"]
     result["data"] = preset["data"]
     result["nn"] = preset["nn"]
 
-    # Save result dict to a per-run JSON file
-    # save_dir = preset["path"].get("save_dir", "output")
-    # os.makedirs(save_dir, exist_ok=True)
-    # timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    # out_path = os.path.join(save_dir, "text", f"result_{var_model}_{var_task}_r{var_repeat}_{timestamp}.json")
+    # Save result dict to a per-run JSON file (the sample-count study aggregates these)
+    save_dir = preset["path"].get("save_dir", "output")
+    os.makedirs(os.path.join(save_dir, "json"), exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    sample_tag = "all" if not var_args.train_samples else str(var_args.train_samples)
+    out_path = os.path.join(
+        save_dir, "json",
+        f"result_{var_model}_{var_task}_{var_env}_n{sample_tag}_r{var_repeat}_{timestamp}.json")
 
-    # with open(out_path, "w") as f:
-    #     json.dump(result, f, indent=4, cls=NumpyEncoder)
+    with open(out_path, "w") as f:
+        json.dump(result, f, indent=4, cls=NumpyEncoder)
 
-    # print(f"Results saved to: {out_path}")
+    print(f"Results saved to: {out_path}")
 
     # Also write a human-readable summary alongside the JSON
     formatted = format_result(var_model, var_task, result)
