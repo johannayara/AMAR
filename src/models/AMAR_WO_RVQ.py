@@ -77,13 +77,7 @@ def run_AMAR_WO_RVQ(data_train_x,
     ## ============================================ Preprocess ============================================
     #
     # Update device selection to check for CUDA first, then MPS (Apple Silicon), then CPU
-    if torch.cuda.is_available():
-        device = torch.device("cuda")
-    elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-        device = torch.device("mps")
-    else:
-        device = torch.device("cpu")
-    
+    device = select_device()
     print(f"Using device: {device}")
 
     data_valid_x, data_test_x, data_valid_y, data_test_y = train_test_split(data_test_x, data_test_y,
@@ -94,7 +88,6 @@ def run_AMAR_WO_RVQ(data_train_x,
     data_train_x = data_train_x.reshape(data_train_x.shape[0], data_train_x.shape[1], -1)
     data_test_x = data_test_x.reshape(data_test_x.shape[0], data_test_x.shape[1], -1)
     #
-    data_x_mean = np.mean(data_train_x, axis=1)
     ## shape for model
     var_x_shape = data_train_x[0].shape
     #
@@ -363,13 +356,7 @@ def run_cross_domain(data_x_train, data_y_train, test_sets_by_env, var_repeat=10
     ## ============================================ Preprocess ============================================
     #
     # Update device selection to check for CUDA first, then MPS (Apple Silicon), then CPU
-    if torch.cuda.is_available():
-        device = torch.device("cuda")
-    elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-        device = torch.device("mps")
-    else:
-        device = torch.device("cpu")
-    
+    device = select_device()
     print(f"Using device: {device}")
 
     data_x_train, data_x_valid, data_y_train, data_y_valid = train_test_split(
@@ -606,14 +593,7 @@ def run_t2t1(data_train_x,
     ##
     ## ============================================ Preprocess ============================================
     #
-    # Update device selection to check for CUDA first, then MPS (Apple Silicon), then CPU
-    if torch.cuda.is_available():
-        device = torch.device("cuda")
-    elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-        device = torch.device("mps")
-    else:
-        device = torch.device("cpu")
-    
+    device = select_device()
     print(f"Using device: {device}")
 
     data_train_x, data_valid_x, data_train_y, data_valid_y = train_test_split(
@@ -870,16 +850,6 @@ def run_t2t1(data_train_x,
     return all_layers_results
 ## ====================================================================================================================
 # FEW-SHOT KNOWLEDGE DISTILLATION
-
-def _select_device():
-    """Select CUDA, then MPS (Apple Silicon), then CPU."""
-    if torch.cuda.is_available():
-        return torch.device("cuda")
-    if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-        return torch.device("mps")
-    return torch.device("cpu")
-
-
 def _build_amar_wo_rvq(var_x_shape, device):
     """Instantiate AMAR_WO_RVQ with the preset hyperparameters."""
     return AMAR_WO_RVQ(var_x_shape,
@@ -916,12 +886,7 @@ def run_AMAR_WO_RVQ_few_shot(data_train_x,
     """
     [description]
     : Few-shot knowledge distillation for AMAR_WO_RVQ trained on a single environment and tested on
-      the others. A teacher AMAR_WO_RVQ is trained on the full training environment, frozen, and used
-      to supervise a student AMAR_WO_RVQ that only sees a small fraction (var_few_shot_ratio) of that
-      same environment. The student objective is
-      HungarianMatchingLoss + var_kd_weight * SetDistillationLoss against the teacher. The student is
-      then evaluated on every environment in test_sets_by_env.
-    [parameter]
+      the others.
     : data_train_x: numpy array, CSI amplitude of the single training environment
     : data_train_y: numpy array, labels of the training environment
     : test_sets_by_env: dict, {env_name: (X, y)} test sets of the other environments
@@ -937,7 +902,7 @@ def run_AMAR_WO_RVQ_few_shot(data_train_x,
     [return]
     : all_envs_results: dict, per-environment averaged metrics
     """
-    device = _select_device()
+    device = select_device()
     print(f"Using device: {device}")
 
     if var_teacher_epochs is None:
@@ -952,13 +917,6 @@ def run_AMAR_WO_RVQ_few_shot(data_train_x,
     data_train_x = data_train_x.reshape(data_train_x.shape[0], data_train_x.shape[1], -1)
     var_x_shape = data_train_x[0].shape
 
-    ## Student only sees a few-shot slice of the same environment; the teacher and the student's
-    ## early-stopping validation use the rest.
-    ## NOTE: the partition is done with index arrays rather than chained train_test_split calls. The
-    ## raw CSI arrays are multi-GB per environment, and a chained split would transiently hold the
-    ## original array plus a full-size "rest" copy plus the teacher copies, exhausting RAM. Here the
-    ## three disjoint partitions are sliced straight out of the original (the original itself stays
-    ## alive because the caller still references it).
     num_train = data_train_x.shape[0]
     num_few = max(1, int(round(var_few_shot_ratio * num_train)))
     if num_few >= num_train - 1:
