@@ -648,3 +648,189 @@ def run_density_map(data_train_x,
     wandb.finish()
     #
     return results
+
+
+#
+## ---------------------------------------------------------------------------------------------- ##
+## ------------------------------------ cross-domain runner -------------------------------------- ##
+#
+##
+def run_density_map_cross_domain(data_x_train,
+                                 data_y_train,
+                                 test_sets_by_env,
+                                 var_repeat=10, var_task="count", var_env="empty_room",
+                                 save_path="./visualizations/temp"):
+    """
+    [description]
+    : cross-domain run of the density-map group-counting model: train on var_env and evaluate on
+      every other environment in test_sets_by_env. The occupancy head predicts the room's sorted
+      location slots (a-e), which is the same index set in every room, so it transfers directly.
+      Each test room's density map is rendered with that room's own layout kernels, and the
+      occupancy threshold is calibrated on the training room's validation split only (no test-room
+      labels are used), which is the honest cross-domain setting.
+    [parameter]
+    : data_x_train: numpy array, CSI amplitude to train model (train room)
+    : data_y_train: numpy array, occupancy targets of shape (N, num_locations) for the train room
+    : test_sets_by_env: dict, env name -> (CSI amplitude, occupancy targets) of that room
+    : var_repeat: int, number of repeated experiments
+    : var_task: str, task name kept for interface compatibility (the model is always counting)
+    : var_env: str, training room name (also selects the training-room kernels)
+    : save_path: str, directory for the per-room visualizations
+    : return: dict, env name -> averaged count and localization metrics with SE
+    """
+    #
+    ##
+    data_y_train = np.asarray(data_y_train, dtype=np.float32)
+    for var_env_name in list(test_sets_by_env):
+        var_x_env, var_y_env = test_sets_by_env[var_env_name]
+        test_sets_by_env[var_env_name] = (var_x_env, np.asarray(var_y_env, dtype=np.float32))
+    #
+    device = select_device()
+    print(f"Using device: {device}")
+    #
+    var_layout = preset["layouts"][var_env]
+    var_grid_size = preset["density"]["grid_size"]
+    var_sigma = preset["density"]["sigma"]
+
+    #
+    ## ============================================ Preprocess ============================================
+    #
+    ## The validation split used for threshold calibration comes from the training room; the test
+    ## rooms are never touched during training or calibration.
+    data_x_train, data_x_valid, data_y_train, data_y_valid = train_test_split(
+        data_x_train, data_y_train, test_size=0.1, shuffle=True, random_state=39)
+    data_x_valid = data_x_valid.reshape(data_x_valid.shape[0], data_x_valid.shape[1], -1)
+    data_x_train = data_x_train.reshape(data_x_train.shape[0], data_x_train.shape[1], -1)
+    #
+    var_x_shape = data_x_train[0].shape
+    data_train_set = TensorDataset(torch.from_numpy(data_x_train), torch.from_numpy(data_y_train))
+    data_valid_set = TensorDataset(torch.from_numpy(data_x_valid), torch.from_numpy(data_y_valid))
+    #
+    var_macs, var_params = get_model_complexity_info(
+        DensityMapNet(var_x_shape, var_layout, grid_size=var_grid_size), var_x_shape, as_strings=False)
+    print("Parameters:", var_params, "- FLOPs:", var_macs * 2)
+
+    #
+    ## ========================================= Train & Evaluate =========================================
+    #
+    env_rep_metrics = {}
+    env_last_density = {}
+    #
+    for var_r in range(var_repeat):
+        print("Repeat", var_r)
+        name_run = f"DensityMapCD{var_r}_" + "_".join([var_env])
+        wandb.init(project="density_map_cross_domain", name=name_run, config=preset, reinit=True)
+        #
+        torch.random.manual_seed(var_r + 39)
+        #
+        model_density = DensityMapNet(var_x_shape, var_layout,
+                                      embedding_dim=100, grid_size=var_grid_size).to(device)
+        optimizer = torch.optim.Adam(model_density.parameters(),
+                                     lr=preset["nn"]["lr"],
+                                     weight_decay=preset["nn"]["weight_decay"])
+        #
+        var_best_weight = train_density(model=model_density,
+                                        optimizer=optimizer,
+                                        data_train_set=data_train_set,
+                                        data_valid_set=data_valid_set,
+                                        var_batch_size=preset["nn"]["batch_size"],
+                                        var_epochs=preset["nn"]["epoch"],
+                                        device=device)
+        model_density.load_state_dict(var_best_weight)
+        model_density.eval()
+        #
+        ## occupancy threshold from the training room's validation split
+        with torch.no_grad():
+            _, _, var_valid_logits = model_density(torch.from_numpy(data_x_valid).to(device))
+            var_valid_occupancy = torch.sigmoid(var_valid_logits).cpu().numpy()
+        var_threshold, _ = calibrate_threshold(var_valid_occupancy, data_y_valid.sum(axis=1).round())
+        #
+        ## -------------------------------------- Test per room ----------------------------------------
+        #
+        for var_env_name, (var_x_env, var_y_env) in test_sets_by_env.items():
+            var_x_env = var_x_env.reshape(var_x_env.shape[0], var_x_env.shape[1], -1)
+            ## render the maps with the test room's own layout
+            var_test_kernels = torch.from_numpy(
+                build_kernels(preset["layouts"][var_env_name], var_grid_size, var_sigma)[0])
+            env_loader = torch.utils.data.DataLoader(
+                TensorDataset(torch.from_numpy(var_x_env)),
+                batch_size=preset["nn"]["batch_size"], shuffle=False)
+            var_occupancy = []
+            with torch.no_grad():
+                for (var_x,) in env_loader:
+                    _, _, var_logits = model_density(var_x.to(device))
+                    var_occupancy.append(torch.sigmoid(var_logits).cpu())
+            var_occupancy = torch.cat(var_occupancy, dim=0)
+            #
+            pred_density = torch.einsum("bl,lhw->bhw", var_occupancy, var_test_kernels).numpy()
+            true_density = torch.einsum("bl,lhw->bhw",
+                                        torch.from_numpy(var_y_env), var_test_kernels).numpy()
+            var_occupancy = var_occupancy.numpy()
+            #
+            var_count_metrics = count_metrics(var_y_env.sum(axis=1).round(),
+                                              predict_counts(var_occupancy, var_threshold))
+            var_loc_metrics = localization_metrics(
+                true_density, pred_density, var_threshold_frac=preset["density"]["peak_threshold"])
+            #
+            var_rep = {**var_count_metrics, **var_loc_metrics, "threshold": var_threshold}
+            env_rep_metrics.setdefault(var_env_name, []).append(var_rep)
+            env_last_density[var_env_name] = (true_density, pred_density)
+            #
+            wandb.log({
+                f"test_results_per_env/{var_env_name}/accuracy": var_count_metrics["accuracy"],
+                f"test_results_per_env/{var_env_name}/mae": var_count_metrics["mae"],
+                f"test_results_per_env/{var_env_name}/occupancy_accuracy": var_count_metrics["occupancy_accuracy"],
+                f"test_results_per_env/{var_env_name}/occupancy_f1": var_count_metrics["occupancy_f1"],
+                f"test_results_per_env/{var_env_name}/loc_error": var_loc_metrics["loc_error"],
+                f"test_results_per_env/{var_env_name}/loc_detection": var_loc_metrics["loc_detection"],
+            }, step=var_r + 100000)
+            #
+            print(f"  [{var_env_name}] COUNT Acc {var_count_metrics['accuracy']:.4f} - "
+                  f"MAE {var_count_metrics['mae']:.4f} - "
+                  f"Occ F1 {var_count_metrics['occupancy_f1']:.4f} | "
+                  f"WHERE err {var_loc_metrics['loc_error']:.4f} - "
+                  f"det {var_loc_metrics['loc_detection']:.4f} (Thr {var_threshold:.2f})")
+        #
+        if var_r != var_repeat - 1:
+            del model_density, optimizer
+            torch.cuda.empty_cache()
+            gc.collect()
+
+    #
+    ## -------------------------------------- Aggregate per room ----------------------------------------
+    #
+    var_num_classes = preset["nn"]["num_count_classes"]
+    var_metric_names = ("accuracy", "mae", "occupancy_accuracy", "occupancy_f1",
+                        "loc_error", "loc_detection")
+    results = {}
+    for var_env_name, var_rep_list in env_rep_metrics.items():
+        var_env_result = {}
+        for var_name in var_metric_names:
+            var_arr = np.array([var_rep[var_name] for var_rep in var_rep_list])
+            var_env_result[f"avg_{var_name}"] = float(var_arr.mean())
+            var_std = float(var_arr.std(ddof=1)) if len(var_arr) > 1 else 0.0
+            var_env_result[f"std_{var_name}"] = var_std
+            var_env_result[f"se_{var_name}"] = var_std / np.sqrt(len(var_arr)) if len(var_arr) > 1 else 0.0
+        var_env_result["avg_threshold"] = float(np.mean([var_rep["threshold"] for var_rep in var_rep_list]))
+        var_env_result["per_class_accuracy"] = {
+            var_class: float(np.mean([var_rep["per_class_accuracy"][var_class] for var_rep in var_rep_list]))
+            for var_class in range(var_num_classes)
+        }
+        results[var_env_name] = var_env_result
+        #
+        var_true_density, var_pred_density = env_last_density[var_env_name]
+        visualize_density_map(var_true_density, var_pred_density,
+                              os.path.join(save_path, var_env_name),
+                              var_threshold_frac=preset["density"]["peak_threshold"],
+                              var_tag=var_env_name)
+        #
+        print(f"\n[{var_env_name}] avg over {var_repeat} repeats: "
+              f"Accuracy {var_env_result['avg_accuracy']:.4f} ± {var_env_result['se_accuracy']:.4f} | "
+              f"MAE {var_env_result['avg_mae']:.4f} ± {var_env_result['se_mae']:.4f} | "
+              f"Occ F1 {var_env_result['avg_occupancy_f1']:.4f} ± {var_env_result['se_occupancy_f1']:.4f} | "
+              f"Loc err {var_env_result['avg_loc_error']:.4f} ± {var_env_result['se_loc_error']:.4f} | "
+              f"Det {var_env_result['avg_loc_detection']:.4f} ± {var_env_result['se_loc_detection']:.4f}")
+    #
+    wandb.finish()
+    #
+    return results

@@ -13,7 +13,7 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from src.models import *
-from src.data.load_data import load_data_x, load_data_y, encode_data_y
+from src.data.load_data import load_data_x, load_data_y, encode_data_y, encode_occupancy_y
 from src.utils import *
 from configs.preset import preset
 
@@ -31,10 +31,16 @@ def master_splitter(preset, var_task, var_model, var_users, var_env="empty_room"
                              var_num_users=var_users)
     var_label_list = data_pd_y["label"].to_list()
     data_x_train = load_data_x(preset["path"]["data_x"], var_label_list)
-    data_y_train = encode_data_y(data_pd_y, var_task)
 
-    if var_model in ("AMAR_WO_RVQ", "AMAR"):
-        data_y_train = reduce_dataset(data_y_train, var_task, preset["nn"]["num_obj_queries"])
+    if var_model == "density_map":
+        ## Density-map group counting predicts per-location occupancy, so the label is the room's
+        ## occupancy vector rather than a task encoding.
+        data_y_train = encode_occupancy_y(data_pd_y, var_env)
+    else:
+        data_y_train = encode_data_y(data_pd_y, var_task)
+
+        if var_model in ("AMAR_WO_RVQ", "AMAR"):
+            data_y_train = reduce_dataset(data_y_train, var_task, preset["nn"]["num_obj_queries"])
 
     test_sets_by_env = {}
     other_envs = [e for e in preset["data"]["environment"] if e != var_env]
@@ -45,10 +51,14 @@ def master_splitter(preset, var_task, var_model, var_users, var_env="empty_room"
                                       var_num_users=var_users)
         var_label_list_test = data_pd_y_test["label"].to_list()
         X_test_e = load_data_x(preset["path"]["data_x"], var_label_list_test)
-        y_test_e = encode_data_y(data_pd_y_test, var_task)
 
-        if var_model in ("AMAR_WO_RVQ", "AMAR"):
-            y_test_e = reduce_dataset(y_test_e, var_task, preset["nn"]["num_obj_queries"])
+        if var_model == "density_map":
+            y_test_e = encode_occupancy_y(data_pd_y_test, e)
+        else:
+            y_test_e = encode_data_y(data_pd_y_test, var_task)
+
+            if var_model in ("AMAR_WO_RVQ", "AMAR"):
+                y_test_e = reduce_dataset(y_test_e, var_task, preset["nn"]["num_obj_queries"])
 
         test_sets_by_env[e] = (X_test_e, y_test_e)
 
@@ -96,10 +106,26 @@ def format_result(var_model, var_task, result):
         lines.append("PER_ENV_RESULTS:")
         for env_key, env_results in per_env.items():
             lines.append(f"\n{env_key}:")
-            for avg_key, se_key, label in metric_specs:
-                if avg_key in env_results:
-                    se = env_results.get(se_key, float("nan"))
-                    lines.append(f"  {label}: {env_results[avg_key]:.4f} ± {se:.4f} (SE)")
+            if 'avg_mae' in env_results:
+                ## density-map group-count metrics + localization
+                lines.append("  GROUP-COUNT METRICS:")
+                lines.append(f"  Exact-count Accuracy: {env_results['avg_accuracy']:.4f} ± {env_results['se_accuracy']:.4f} (SE)")
+                lines.append(f"  Count MAE: {env_results['avg_mae']:.4f} ± {env_results['se_mae']:.4f} (SE)")
+                lines.append(f"  Occupancy Accuracy: {env_results['avg_occupancy_accuracy']:.4f} ± {env_results['se_occupancy_accuracy']:.4f} (SE)")
+                lines.append(f"  Occupancy F1: {env_results['avg_occupancy_f1']:.4f} ± {env_results['se_occupancy_f1']:.4f} (SE)")
+                per_class = env_results.get('per_class_accuracy', {})
+                if per_class:
+                    lines.append("  Per-count Accuracy: "
+                                 + ", ".join(f"{k}:{v:.3f}" for k, v in per_class.items()))
+                if 'avg_loc_error' in env_results:
+                    lines.append("  LOCALIZATION (normalized room units):")
+                    lines.append(f"  Mean Distance to Nearest Predicted Peak: {env_results['avg_loc_error']:.4f} ± {env_results['se_loc_error']:.4f} (SE)")
+                    lines.append(f"  Detection (within 0.1): {env_results['avg_loc_detection']:.4f} ± {env_results['se_loc_detection']:.4f} (SE)")
+            else:
+                for avg_key, se_key, label in metric_specs:
+                    if avg_key in env_results:
+                        se = env_results.get(se_key, float("nan"))
+                        lines.append(f"  {label}: {env_results[avg_key]:.4f} ± {se:.4f} (SE)")
     elif isinstance(result, dict):
         lines.append("SINGLE MODEL RESULTS:")
         has_aggregated = any(avg_key in result for avg_key, _, _ in metric_specs)
@@ -196,7 +222,11 @@ def run():
         save_path = save_path.parent / new_name
     #
     ## run WiFi-based model
-    all_envs_results = run_cross_domain(data_x_train, data_y_train, test_sets_by_env, var_repeat, var_task, var_env, save_path)
+    if var_model == "density_map":
+        all_envs_results = run_density_map_cross_domain(data_x_train, data_y_train, test_sets_by_env,
+                                                        var_repeat, var_task, var_env, save_path)
+    else:
+        all_envs_results = run_cross_domain(data_x_train, data_y_train, test_sets_by_env, var_repeat, var_task, var_env, save_path)
     #
     ##
     result = {
