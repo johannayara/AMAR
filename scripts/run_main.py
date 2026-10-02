@@ -31,6 +31,12 @@ def master_splitter(preset, var_task, var_model, var_users, var_env = "empty_roo
                             var_wifi_band=preset["data"]["wifi_band"],
                             var_num_users=var_users)
     #
+    if len(data_pd_y) == 0:
+        raise ValueError(
+            f"no annotation rows for environment={var_env!r}, "
+            f"wifi_band={preset['data']['wifi_band']}, users={var_users}. "
+            f"Check the room name against dataset/annotation.csv and the preset['data'] filters.")
+    #
     var_label_list = data_pd_y["label"].to_list()
     #
     ## load CSI amplitude
