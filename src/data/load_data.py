@@ -219,6 +219,52 @@ def encode_count(data_pd_y):
 
 #
 ##
+def encode_density_y(data_pd_y,
+                     var_environment,
+                     var_grid_size = None,
+                     var_sigma = None):
+    """
+    [description]
+    : encode the ground-truth density map for group counting. Each occupied location of a sample is
+      turned into a unit-mass Gaussian placed at that location's normalized room coordinate, and the
+      blobs are summed. The integral of the map therefore equals the number of people, and its peaks
+      are the (approximate) locations of the people. Because the coordinates come from the shared
+      WiMANS room layout, the map means the same physical thing in every room.
+    [parameter]
+    : data_pd_y: pandas dataframe, labels of different tasks
+    : var_environment: string, room name used to look up the location coordinates
+    : var_grid_size: int, spatial resolution of the map 
+    : var_sigma: float, Gaussian width in normalized units
+    [return]
+    : data_density_y: numpy array of shape (num_samples, grid_size, grid_size)
+    """
+    #
+    ##
+    var_grid_size = var_grid_size or preset["density"]["grid_size"]
+    var_sigma = var_sigma or preset["density"]["sigma"]
+    var_layout = preset["layouts"][var_environment]
+    #
+    var_axis = (np.arange(var_grid_size) + 0.5) / var_grid_size
+    var_yy, var_xx = np.meshgrid(var_axis, var_axis, indexing = "ij")  # rows -> y, cols -> x
+    #
+    var_locations = data_pd_y[["user_1_location", "user_2_location",
+                               "user_3_location", "user_4_location",
+                               "user_5_location", "user_6_location"]].to_numpy(copy = True).astype(str)
+    #
+    data_density_y = np.zeros((len(data_pd_y), var_grid_size, var_grid_size), dtype = np.float32)
+    #
+    for var_idx, var_sample in enumerate(var_locations):
+        for var_letter in var_sample:
+            if var_letter not in var_layout:
+                continue
+            var_cx, var_cy = var_layout[var_letter]
+            var_blob = np.exp(-((var_xx - var_cx) ** 2 + (var_yy - var_cy) ** 2) / (2 * var_sigma ** 2))
+            data_density_y[var_idx] += var_blob / var_blob.sum()
+    #
+    return data_density_y
+
+#
+##
 def test_load_data_y():
     """
     [description]

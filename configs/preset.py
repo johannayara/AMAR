@@ -95,8 +95,44 @@ preset = {
     # "pretrained_path": "/saved_models/jepa_ssl_empty_room+classroom+meeting_room_20250721_124829/jepa_ssl_final_empty_room+classroom+meeting_room_20250721_124829.pth",
     "transfer_scenario": "freeze_encoder",  # One of ["full", "feature_extractor", "feature_encoder"]
     "save_model": False,  # Whether to save model components
-    "saving_path": "./multi_modal_CSI/results/checkpoints/"
+    "saving_path": "./multi_modal_CSI/results/checkpoints/",
+
+    ## Room-agnostic normalized coordinates (x right, y up, origin tx) of the 5 WiMANS
+    ## locations, taken from the environment layouts in WiMANS Fig. 2 (all rooms are 510x1030 cm).
+    ## This is the shared frame the density map is predicted in, so a location means the same
+    ## physical spot in every room.
+    "layouts": {
+        "classroom": {
+            "a": (0.410, 0.600),
+            "b": (0.410, 0.165),
+            "c": (0.255, 0.455),
+            "d": (0.100, 0.600),
+            "e": (0.100, 0.165),
+        },
+        "meeting_room": {
+            "a": (0.9401, 0.3376),
+            "b": (0.9389, 0.5855),
+            "c": (0.4991, 0.4617),
+            "d": (0.0571, 0.3379),
+            "e": (0.0577, 0.5855),
+        },
+        "empty_room": {
+            "a": (0.7244, 0.2614),
+            "b": (0.7232, 0.6045),
+            "c": (0.4991, 0.4331),
+            "d": (0.2728, 0.2617),
+            "e": (0.2734, 0.6045),
+        },
+    },
+
+    ## Density-map group counting: spatial resolution of the map and the width of the Gaussian
+    ## placed on each occupied location when building the target.
+    "density": {
+        "grid_size": 32,
+        "sigma": 0.06,
+        "count_loss_weight": 1.0,
+        "peak_threshold": 0.25,  # fraction of the map max used to extract predicted locations
+    },
 }
 
 preset["nn"]["num_classes"] = 6 if preset["task"] in ("location", "count") else 10
-preset["nn"]["num_count_classes"] = 6  # group-count task: 0..5 people

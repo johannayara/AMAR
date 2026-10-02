@@ -11,8 +11,8 @@ source /software/anaconda3/etc/profile.d/conda.sh
 conda activate AMAR
 
 
-model=multi_senseX
-env=empty_room
+model=density_map
+env=classroom
 
 mkdir -p "./output/${model}/${env}"
 

@@ -13,7 +13,7 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from src.models import *
-from src.data.load_data import load_data_x, load_data_y, encode_data_y
+from src.data.load_data import load_data_x, load_data_y, encode_data_y, encode_density_y
 from src.utils import *
 from configs.preset import preset
 
@@ -37,15 +37,20 @@ def master_splitter(preset, var_task, var_model, var_users, var_env = "empty_roo
     X = load_data_x(preset["path"]["data_x"], var_label_list)
 
 
-    y = encode_data_y(data_pd_y, var_task)
+    if var_model == "density_map":
+        ## Density-map group counting: target is a spatial map in the shared room frame, so var_task
+        ## does not select a label set.
+        y = encode_density_y(data_pd_y, var_env)
 
+    else:
+        y = encode_data_y(data_pd_y, var_task)
 
-    if var_model == "AMAR_WO_RVQ" or var_model=="AMAR": # here we pad with zeros
-        y = reduce_dataset(y, var_task, preset["nn"]["num_obj_queries"]) 
+        if var_model == "AMAR_WO_RVQ" or var_model=="AMAR": # here we pad with zeros
+            y = reduce_dataset(y, var_task, preset["nn"]["num_obj_queries"]) 
 
-    elif var_model == "multi_senseX":
-        ## MultiSenseX location-only: binary presence of a person at each of the 5 locations.
-        y = (encode_data_y(data_pd_y, "location").sum(axis=1) > 0).astype(np.float32)
+        elif var_model == "multi_senseX":
+            ## MultiSenseX location-only: binary presence of a person at each of the 5 locations.
+            y = (encode_data_y(data_pd_y, "location").sum(axis=1) > 0).astype(np.float32)
 
 
     X_train, X_test, y_train, y_test = train_test_split(X, y,
@@ -142,6 +147,10 @@ def format_result(var_model, var_task, result):
                 if per_class:
                     formatted = ", ".join(f"{k}:{v:.3f}" for k, v in per_class.items())
                     lines.append(f"  Per-count Accuracy: {formatted}")
+                if 'avg_loc_error' in result:
+                    lines.append("  LOCALIZATION (normalized room units):")
+                    lines.append(f"  Mean Distance to Nearest Predicted Peak: {result['avg_loc_error']:.4f} ± {result['se_loc_error']:.4f} (SE)")
+                    lines.append(f"  Detection (within 0.1): {result['avg_loc_detection']:.4f} ± {result['se_loc_detection']:.4f} (SE)")
 
     return "\n".join(lines)
 
@@ -228,10 +237,10 @@ def run():
     elif var_model == "AMAR_WO_RVQ": run_model = run_AMAR_WO_RVQ
 
     elif var_model == "AMAR": run_model = run_AMAR
-
-    elif var_model == "AMAR_COUNT": run_model = run_AMAR_COUNT
     
     elif var_model == "multi_senseX": run_model = run_multi_senseX
+
+    elif var_model == "density_map": run_model = run_density_map
 
     else:
         raise Exception("Not valid name for model")   
