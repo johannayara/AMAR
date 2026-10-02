@@ -12,7 +12,7 @@ conda activate AMAR
 
 
 model=density_map
-env=classroom
+env=meeting_room
 
 mkdir -p "./output/${model}/${env}"
 
