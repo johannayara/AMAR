@@ -136,3 +136,4 @@ preset = {
 }
 
 preset["nn"]["num_classes"] = 6 if preset["task"] in ("location", "count") else 10
+preset["nn"]["num_count_classes"] = 6  # group-count task: 0..5 people
