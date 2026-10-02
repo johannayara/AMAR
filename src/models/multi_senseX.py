@@ -1004,11 +1004,7 @@ def run_multi_senseX(data_train_x,
                      save_path="./visualizations/temp"):
     """
     [description]
-    : run WiFi-based location model MultiSenseX (location-only). This is the entry point dispatched
-      by scripts/run_main.py, so it follows the same call convention as run_AMAR_WO_RVQ:
-          run_model(data_train_x, data_train_y, data_test_x, data_test_y,
-                    var_repeat, var_task, var_env, save_path)
-      Only the location head is trained and evaluated.
+    : run WiFi-based location model MultiSenseX (location-only).
     [parameter]
     : data_train_x: numpy array, CSI amplitude to train model
     : data_train_y: numpy array, location targets of shape (N, 5) with 0/1 entries
@@ -1027,12 +1023,7 @@ def run_multi_senseX(data_train_x,
     data_test_y = np.asarray(data_test_y, dtype=np.float32)
 
     # Update device selection to check for CUDA first, then MPS (Apple Silicon), then CPU
-    if torch.cuda.is_available():
-        device = torch.device("cuda")
-    elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-        device = torch.device("mps")
-    else:
-        device = torch.device("cpu")
+    device = select_device()
     print(f"Using device: {device}")
 
     #
@@ -1050,7 +1041,6 @@ def run_multi_senseX(data_train_x,
     data_train_set = TensorDataset(torch.from_numpy(data_train_x), torch.from_numpy(data_train_y))
     data_valid_set = TensorDataset(torch.from_numpy(data_valid_x), torch.from_numpy(data_valid_y))
     data_test_set = TensorDataset(torch.from_numpy(data_test_x), torch.from_numpy(data_test_y))
-
     #
     ##
     ## ========================================= Train & Evaluate =========================================
@@ -1067,12 +1057,12 @@ def run_multi_senseX(data_train_x,
         #
         ##
         print("Repeat", var_r)
-        name_run = f"MultiSenseX{var_r}_" + "_".join(preset["data"]["environment"])
+        name_run = f"MultiSenseX{var_r}_" + "_".join(var_env)
         wandb.init(
             project="multiSenseX",
             name=name_run,
             config=preset,
-            reinit=True  # Allow multiple wandb.init() calls in the same process
+            reinit=True 
         )
         #
         torch.random.manual_seed(var_r + 39)
@@ -1105,56 +1095,138 @@ def run_multi_senseX(data_train_x,
         test_loader = torch.utils.data.DataLoader(data_test_set,
                                                   batch_size=preset["nn"]["batch_size"],
                                                   shuffle=False)
-        loc_preds = []
+        preds = []
         with torch.no_grad():
-            for data_batch_x, _ in test_loader:
-                _, predict_test_y_loc, _ = model_multiSenseX(data_batch_x.to(device))
-                loc_preds.append(predict_test_y_loc.cpu())
-        predict_test_loc = torch.cat(loc_preds, dim=0).numpy()
+            for xb, _ in test_loader:
+                preds.append(model_multiSenseX(xb.to(device))[1].cpu())
+        predict_test_y = torch.cat(preds, dim=0).numpy()
+        #
         var_time_2 = time.time()
         #
         ## -------------------------------------- Evaluate ----------------------------------------
         #
-        dict_true_acc_loc = calculate_scores(data_test_y, (predict_test_loc > 0.5).astype(int))
+        ##
 
+        layers_idxs = ["layer_"+str(i) for i in range(preset["nn"]["num_decoder_layers"])]
+        last_layer_only = True
+        # Store results for each layer
+        all_layers_results = {}
+        dict_layer_acc = performance_metrics(data_test_y, predict_test_y, var_mode="multi_head")
+
+        # Process each layer separately
+        for idx, layer_idx in enumerate(layers_idxs):
+            layer_metrics = dict_layer_acc[layer_idx]
+            if var_r == 0:  # Initialize lists on first repeat
+                result_ppp.append([])
+                result_time_train.append([])
+                result_time_test.append([])
+                result_total_error.append([])
+                result_precision.append([])
+                result_recall.append([])
+                result_f1_score.append([])
+                result_avg_count_error.append([])
+                result_accuracy.append([])
+            result_accuracy[idx].append(layer_metrics['accuracy'])
+            result_ppp[idx].append(layer_metrics['perfect_prediction_percentage'])
+            result_time_train[idx].append(var_time_1 - var_time_0)
+            result_time_test[idx].append(var_time_2 - var_time_1)
+            result_total_error[idx].append(layer_metrics['total_error'])
+            result_precision[idx].append(layer_metrics['precision'])
+            result_recall[idx].append(layer_metrics['recall'])
+            result_f1_score[idx].append(layer_metrics['f1_score'])
+            result_avg_count_error[idx].append(layer_metrics['mean_count_error'])
+
+        if last_layer_only:
+            layer_metrics = dict_layer_acc["layer_" +str(preset["nn"]["num_decoder_layers"] - 1)]
+            wandb.log({
+                f"test_results/repeat": var_r,
+                f"test_results/train_time": var_time_1 - var_time_0,
+                f"test_results/test_time": var_time_2 - var_time_1,
+                f"test_results/TOTAL_TESTSET_ERROR": layer_metrics['total_error'],
+                f"test_results/TOTAL_TESTSET_perfect_prediction_percentage": layer_metrics[
+                    'perfect_prediction_percentage'],
+                f"test_results/TOTAL_ACCURACY": layer_metrics['accuracy'],
+                f"test_results/mean_count_error": layer_metrics['mean_count_error'],
+                f"test_results/error_per_person_1": layer_metrics['error_per_person'][0],
+                f"test_results/error_per_person_2": layer_metrics['error_per_person'][1],
+                f"test_results/error_per_person_3": layer_metrics['error_per_person'][2],
+                f"test_results/error_per_person_4": layer_metrics['error_per_person'][3],
+                f"test_results/error_per_person_5": layer_metrics['error_per_person'][4],
+                f"test_results/precision": layer_metrics['precision'],
+                f"test_results/recall": layer_metrics['recall'],
+                f"test_results/f1_score": layer_metrics['f1_score']
+            }, step=var_r + 100000)
+
+            print(
+                "- Total Error %.6f" % layer_metrics['total_error'],
+                "- Perfect Prediction Percentage %.6f" % layer_metrics['perfect_prediction_percentage'])
+            
+        del optimizer, loss
+        torch.cuda.empty_cache()
+        gc.collect()
+        if var_r == var_repeat - 1:
+            last_model = model_AMAR_WO_RVQ   
+        else:
+            del model_AMAR_WO_RVQ
+    # Calculate averages and standard errors for each layer
+    for layer_idx_num, layer_idx in enumerate(layers_idxs):
+        # Calculate metrics with standard errors
+        ppp_array = np.array(result_ppp[layer_idx_num])
+        precision_array = np.array(result_precision[layer_idx_num])
+        recall_array = np.array(result_recall[layer_idx_num])
+        f1_array = np.array(result_f1_score[layer_idx_num])
+        accuracy_array = np.array(result_accuracy[layer_idx_num])
+        total_error_array = np.array(result_total_error[layer_idx_num])
+        
+        # Store results for this layer
+        all_layers_results[layer_idx] = {
+            'avg_PPP': float(np.mean(ppp_array)),
+            'avg_precision': float(np.mean(precision_array)),
+            'avg_recall': float(np.mean(recall_array)),
+            'avg_f1_score': float(np.mean(f1_array)),
+            'avg_accuracy': float(np.mean(accuracy_array)),
+            'avg_total_error': float(np.mean(total_error_array)),
+            'std_PPP': float(np.std(ppp_array, ddof=1)) if len(ppp_array) > 1 else 0.0,
+            'std_precision': float(np.std(precision_array, ddof=1)) if len(precision_array) > 1 else 0.0,
+            'std_recall': float(np.std(recall_array, ddof=1)) if len(recall_array) > 1 else 0.0,
+            'std_f1_score': float(np.std(f1_array, ddof=1)) if len(f1_array) > 1 else 0.0,
+            'std_accuracy': float(np.std(accuracy_array, ddof=1)) if len(accuracy_array) > 1 else 0.0,
+            'std_total_error': float(np.std(total_error_array, ddof=1)) if len(total_error_array) > 1 else 0.0,
+            'se_PPP': float(np.std(ppp_array, ddof=1) / np.sqrt(len(ppp_array))) if len(ppp_array) > 1 else 0.0,
+            'se_precision': float(np.std(precision_array, ddof=1) / np.sqrt(len(precision_array))) if len(precision_array) > 1 else 0.0,
+            'se_recall': float(np.std(recall_array, ddof=1) / np.sqrt(len(recall_array))) if len(recall_array) > 1 else 0.0,
+            'se_f1_score': float(np.std(f1_array, ddof=1) / np.sqrt(len(f1_array))) if len(f1_array) > 1 else 0.0,
+            'se_accuracy': float(np.std(accuracy_array, ddof=1) / np.sqrt(len(accuracy_array))) if len(accuracy_array) > 1 else 0.0,
+            'se_total_error': float(np.std(total_error_array, ddof=1) / np.sqrt(len(total_error_array))) if len(total_error_array) > 1 else 0.0
+        }
+        
         wandb.log({
-            "repeat": var_r,
-            "train_time": var_time_1 - var_time_0,
-            "test_time": var_time_2 - var_time_1,
-            "LOC_TOTAL_TESTSET_ERROR": dict_true_acc_loc['total_error'],
-            "LOC_TOTAL_TESTSET_perfect_prediction_percentage": dict_true_acc_loc['perfect_prediction_percentage'],
-            "LOC_TOTAL_ACCURACY": dict_true_acc_loc['accuracy'],
-            "LOC_precision": dict_true_acc_loc['precision'],
-            "LOC_recall": dict_true_acc_loc['recall'],
-            "LOC_f1_score": dict_true_acc_loc['f1_score'],
-        }, step=var_r + 100000)
+            f"test_results/{layer_idx}/avg_PPP": all_layers_results[layer_idx]['avg_PPP'],
+            f"test_results/{layer_idx}/avg_train_time": sum(result_time_train[layer_idx_num]) / len(result_time_train[layer_idx_num]),
+            f"test_results/{layer_idx}/avg_test_time": sum(result_time_test[layer_idx_num]) / len(result_time_test[layer_idx_num]),
+            f"test_results/{layer_idx}/avg_total_error": all_layers_results[layer_idx]['avg_total_error'],
+            f"test_results/{layer_idx}/avg_precision": all_layers_results[layer_idx]['avg_precision'],
+            f"test_results/{layer_idx}/avg_recall": all_layers_results[layer_idx]['avg_recall'],
+            f"test_results/{layer_idx}/avg_f1_score": all_layers_results[layer_idx]['avg_f1_score'],
+            f"test_results/{layer_idx}/avg_count_error": sum(result_avg_count_error[layer_idx_num]) / len(result_avg_count_error[layer_idx_num]),
+            f"test_results/{layer_idx}/avg_accuracy": all_layers_results[layer_idx]['avg_accuracy']
+        })  # Use an even larger offset for averages
+    
+    # Use the last layer for visualization and final results
+    last_layer = layers_idxs[-1]
+    last_layer_predictions = predict_test_y[last_layer] if isinstance(predict_test_y, dict) else predict_test_y
+    # dict_true_acc = all_layers_results[last_layer]
 
-        result_ppp.append(dict_true_acc_loc['perfect_prediction_percentage'])
-        result_total_error.append(dict_true_acc_loc['total_error'])
-        result_precision.append(dict_true_acc_loc['precision'])
-        result_recall.append(dict_true_acc_loc['recall'])
-        result_f1_score.append(dict_true_acc_loc['f1_score'])
-        result_accuracy.append(dict_true_acc_loc['accuracy'])
+    # Run visualization with the last layer's predictions
+    
+    log_random_attention_weights_final(last_model, np.argmax(predict_test_y[-1], axis=-1), np.argmax(data_test_y, axis=-1), 1000000000, 50, var_task)
+    
+    viz_stats = visualize_model_performance(
+        y_pred=last_layer_predictions,
+        y_true=data_test_y,
+        var_mode=var_mode,
+        save_dir=save_path
+    )
 
-        result_time_train.append(var_time_1 - var_time_0)
-        result_time_test.append(var_time_2 - var_time_1)
-
-        if var_r != var_repeat - 1:
-            del model_multiSenseX, optimizer, test_loader, loc_preds
-            torch.cuda.empty_cache()
-            gc.collect()
-
-    #
-    ## -------------------------------------- Aggregate ----------------------------------------
-    #
-    results = _summarize_metrics(result_ppp, result_total_error, result_precision,
-                                 result_recall, result_f1_score, result_accuracy)
-    results["avg_train_time"] = float(np.mean(result_time_train))
-    results["avg_test_time"] = float(np.mean(result_time_test))
-
-    wandb.log({
-        f"LOC_avg_{metric}": results[f"avg_{metric}"]
-        for metric in ("PPP", "total_error", "precision", "recall", "f1_score", "accuracy")
-    })
     wandb.finish()
-    return results
+    return all_layers_results

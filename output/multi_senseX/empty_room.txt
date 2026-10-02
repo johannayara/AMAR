@@ -1,0 +1,165 @@
+/cluster/raid/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/torch/nn/modules/conv.py:309: UserWarning: Using padding='same' with even kernel lengths and odd dilation may require a zero-padded copy of the input be created (Triggered internally at /opt/conda/conda-bld/pytorch_1682343964576/work/aten/src/ATen/native/Convolution.cpp:1003.)
+  return F.conv1d(input, weight, bias, self.stride,
+wandb: Using wandb-core as the SDK backend. Please refer to https://wandb.me/wandb-core for more information.
+wandb: Tracking run with wandb version 0.18.3
+wandb: W&B syncing is set to `offline` in this directory.  
+wandb: Run `wandb online` or set WANDB_MODE=online to enable cloud syncing.
+Using device: cuda
+MultiSenseX(
+  4.91 M, 99.945% Params, 825.18 MMac, 100.000% MACs, 
+  (backbone): THAT(
+    4.91 M, 99.876% Params, 825.18 MMac, 100.000% MACs, 
+    (layer_left_pooling): AvgPool1d(0, 0.000% Params, 810.0 KMac, 0.098% MACs, kernel_size=(20,), stride=(20,), padding=(0,))
+    (layer_left_gaussian): Gaussian_Position(0, 0.000% Params, 0.0 Mac, 0.000% MACs, )
+    (layer_left_encoder): ModuleList(
+      (0-3): 4 x Encoder(
+        952.29 k, 19.368% Params, 155.3 MMac, 18.820% MACs, 
+        (layer_norm_0): LayerNorm(540, 0.011% Params, 40.5 KMac, 0.005% MACs, (270,), eps=1e-06, elementwise_affine=True)
+        (layer_attention): MultiheadAttention(
+          292.68 k, 5.953% Params, 56.32 MMac, 6.825% MACs, 
+          (out_proj): NonDynamicallyQuantizableLinear(0, 0.000% Params, 0.0 Mac, 0.000% MACs, in_features=270, out_features=270, bias=True)
+        )
+        (layer_dropout_0): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+        (layer_norm_1): LayerNorm(540, 0.011% Params, 40.5 KMac, 0.005% MACs, (270,), eps=1e-06, elementwise_affine=True)
+        (layer_cnn): ModuleList(
+          (0): Sequential(
+            73.71 k, 1.499% Params, 11.1 MMac, 1.345% MACs, 
+            (0): Conv1d(73.17 k, 1.488% Params, 10.98 MMac, 1.330% MACs, 270, 270, kernel_size=(1,), stride=(1,), padding=same)
+            (1): BatchNorm1d(540, 0.011% Params, 81.0 KMac, 0.010% MACs, 270, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (2): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+            (3): LeakyReLU(0, 0.000% Params, 40.5 KMac, 0.005% MACs, negative_slope=0.01)
+          )
+          (1): Sequential(
+            219.51 k, 4.465% Params, 32.97 MMac, 3.995% MACs, 
+            (0): Conv1d(218.97 k, 4.454% Params, 32.85 MMac, 3.980% MACs, 270, 270, kernel_size=(3,), stride=(1,), padding=same)
+            (1): BatchNorm1d(540, 0.011% Params, 81.0 KMac, 0.010% MACs, 270, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (2): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+            (3): LeakyReLU(0, 0.000% Params, 40.5 KMac, 0.005% MACs, negative_slope=0.01)
+          )
+          (2): Sequential(
+            365.31 k, 7.430% Params, 54.84 MMac, 6.645% MACs, 
+            (0): Conv1d(364.77 k, 7.419% Params, 54.72 MMac, 6.631% MACs, 270, 270, kernel_size=(5,), stride=(1,), padding=same)
+            (1): BatchNorm1d(540, 0.011% Params, 81.0 KMac, 0.010% MACs, 270, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (2): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+            (3): LeakyReLU(0, 0.000% Params, 40.5 KMac, 0.005% MACs, negative_slope=0.01)
+          )
+        )
+        (layer_dropout_1): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+      )
+    )
+    (layer_left_norm): LayerNorm(540, 0.011% Params, 40.5 KMac, 0.005% MACs, (270,), eps=1e-06, elementwise_affine=True)
+    (layer_left_cnn_0): Conv1d(276.61 k, 5.626% Params, 39.55 MMac, 4.793% MACs, 270, 128, kernel_size=(8,), stride=(1,))
+    (layer_left_cnn_1): Conv1d(553.09 k, 11.249% Params, 74.67 MMac, 9.049% MACs, 270, 128, kernel_size=(16,), stride=(1,))
+    (layer_left_dropout): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.5, inplace=False)
+    (layer_right_pooling): AvgPool1d(0, 0.000% Params, 810.0 KMac, 0.098% MACs, kernel_size=(20,), stride=(20,), padding=(0,))
+    (layer_right_encoder): ModuleList(
+      (0): Encoder(
+        227.55 k, 4.628% Params, 84.12 MMac, 10.194% MACs, 
+        (layer_norm_0): LayerNorm(300, 0.006% Params, 40.5 KMac, 0.005% MACs, (150,), eps=1e-06, elementwise_affine=True)
+        (layer_attention): MultiheadAttention(
+          90.6 k, 1.843% Params, 47.1 MMac, 5.708% MACs, 
+          (out_proj): NonDynamicallyQuantizableLinear(0, 0.000% Params, 0.0 Mac, 0.000% MACs, in_features=150, out_features=150, bias=True)
+        )
+        (layer_dropout_0): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+        (layer_norm_1): LayerNorm(300, 0.006% Params, 40.5 KMac, 0.005% MACs, (150,), eps=1e-06, elementwise_affine=True)
+        (layer_cnn): ModuleList(
+          (0): Sequential(
+            22.95 k, 0.467% Params, 6.24 MMac, 0.756% MACs, 
+            (0): Conv1d(22.65 k, 0.461% Params, 6.12 MMac, 0.741% MACs, 150, 150, kernel_size=(1,), stride=(1,), padding=same)
+            (1): BatchNorm1d(300, 0.006% Params, 81.0 KMac, 0.010% MACs, 150, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (2): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+            (3): LeakyReLU(0, 0.000% Params, 40.5 KMac, 0.005% MACs, negative_slope=0.01)
+          )
+          (1): Sequential(
+            45.45 k, 0.924% Params, 12.31 MMac, 1.492% MACs, 
+            (0): Conv1d(45.15 k, 0.918% Params, 12.19 MMac, 1.477% MACs, 150, 150, kernel_size=(2,), stride=(1,), padding=same)
+            (1): BatchNorm1d(300, 0.006% Params, 81.0 KMac, 0.010% MACs, 150, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (2): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+            (3): LeakyReLU(0, 0.000% Params, 40.5 KMac, 0.005% MACs, negative_slope=0.01)
+          )
+          (2): Sequential(
+            67.95 k, 1.382% Params, 18.39 MMac, 2.228% MACs, 
+            (0): Conv1d(67.65 k, 1.376% Params, 18.27 MMac, 2.214% MACs, 150, 150, kernel_size=(3,), stride=(1,), padding=same)
+            (1): BatchNorm1d(300, 0.006% Params, 81.0 KMac, 0.010% MACs, 150, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (2): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+            (3): LeakyReLU(0, 0.000% Params, 40.5 KMac, 0.005% MACs, negative_slope=0.01)
+          )
+        )
+        (layer_dropout_1): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+      )
+    )
+    (layer_right_norm): LayerNorm(300, 0.006% Params, 40.5 KMac, 0.005% MACs, (150,), eps=1e-06, elementwise_affine=True)
+    (layer_right_cnn_0): Conv1d(4.82 k, 0.098% Params, 1.3 MMac, 0.157% MACs, 150, 16, kernel_size=(2,), stride=(1,))
+    (layer_right_cnn_1): Conv1d(9.62 k, 0.196% Params, 2.57 MMac, 0.311% MACs, 150, 16, kernel_size=(4,), stride=(1,))
+    (layer_right_dropout): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.5, inplace=False)
+    (layer_leakyrelu): LeakyReLU(0, 0.000% Params, 44.16 KMac, 0.005% MACs, negative_slope=0.01)
+    (layer_output): Linear(28.9 k, 0.588% Params, 28.9 KMac, 0.004% MACs, in_features=288, out_features=100, bias=True)
+  )
+  (location_head): Sequential(
+    3.4 k, 0.069% Params, 3.43 KMac, 0.000% MACs, 
+    (0): Linear(3.23 k, 0.066% Params, 3.23 KMac, 0.000% MACs, in_features=100, out_features=32, bias=True)
+    (1): LeakyReLU(0, 0.000% Params, 32.0 Mac, 0.000% MACs, negative_slope=0.01)
+    (2): Linear(165, 0.003% Params, 165.0 Mac, 0.000% MACs, in_features=32, out_features=5, bias=True)
+  )
+  (sigmoid): Sigmoid(0, 0.000% Params, 0.0 Mac, 0.000% MACs, )
+)
+Parameters: 4916695 - FLOPs: 1650357578.0
+Repeat 0
+Epoch 0/20 - 5.561993s - Loss 1.117892 - Test Loss 0.630884
+LOCATION: - Total Error Test 1.521277 - PPP Test 22.872340 - Acc Test 0.695745 - Precision 0.704852 - Recall 0.667464 - F1 Score 0.673822
+Epoch 1/20 - 4.943976s - Loss 0.523143 - Test Loss 0.549192
+LOCATION: - Total Error Test 1.765957 - PPP Test 23.404255 - Acc Test 0.646809 - Precision 0.768292 - Recall 0.652895 - F1 Score 0.611054
+Epoch 2/20 - 4.915773s - Loss 0.442478 - Test Loss 0.536219
+LOCATION: - Total Error Test 1.808511 - PPP Test 23.936170 - Acc Test 0.638298 - Precision 0.770606 - Recall 0.651036 - F1 Score 0.607220
+Epoch 3/20 - 4.815066s - Loss 0.465199 - Test Loss 0.503254
+LOCATION: - Total Error Test 1.234043 - PPP Test 21.808511 - Acc Test 0.753191 - Precision 0.864054 - Recall 0.625128 - F1 Score 0.700264
+Epoch 4/20 - 4.828808s - Loss 0.472275 - Test Loss 0.473949
+LOCATION: - Total Error Test 1.122340 - PPP Test 18.085106 - Acc Test 0.775532 - Precision 0.792272 - Recall 0.741762 - F1 Score 0.765496
+Epoch 5/20 - 4.769450s - Loss 0.548586 - Test Loss 0.465960
+LOCATION: - Total Error Test 1.101064 - PPP Test 18.085106 - Acc Test 0.779787 - Precision 0.792838 - Recall 0.752497 - F1 Score 0.771410
+Epoch 6/20 - 4.831839s - Loss 0.469727 - Test Loss 0.457903
+LOCATION: - Total Error Test 1.106383 - PPP Test 17.553191 - Acc Test 0.778723 - Precision 0.797228 - Recall 0.741607 - F1 Score 0.767954
+Epoch 7/20 - 4.776253s - Loss 0.468356 - Test Loss 0.453141
+LOCATION: - Total Error Test 1.085106 - PPP Test 18.085106 - Acc Test 0.782979 - Precision 0.800720 - Recall 0.747996 - F1 Score 0.772972
+Epoch 8/20 - 4.850105s - Loss 0.519340 - Test Loss 0.450737
+LOCATION: - Total Error Test 1.079787 - PPP Test 18.085106 - Acc Test 0.784043 - Precision 0.804352 - Recall 0.745956 - F1 Score 0.773438
+Epoch 9/20 - 4.779496s - Loss 0.371420 - Test Loss 0.444417
+LOCATION: - Total Error Test 1.053191 - PPP Test 19.148936 - Acc Test 0.789362 - Precision 0.806043 - Recall 0.756334 - F1 Score 0.780003
+Epoch 10/20 - 4.849200s - Loss 0.405972 - Test Loss 0.441165
+LOCATION: - Total Error Test 1.053191 - PPP Test 19.148936 - Acc Test 0.789362 - Precision 0.806365 - Recall 0.756785 - F1 Score 0.780184
+Epoch 11/20 - 4.803399s - Loss 0.479148 - Test Loss 0.437668
+LOCATION: - Total Error Test 1.010638 - PPP Test 19.680851 - Acc Test 0.797872 - Precision 0.812003 - Recall 0.769378 - F1 Score 0.789722
+Epoch 12/20 - 4.881284s - Loss 0.431170 - Test Loss 0.434909
+LOCATION: - Total Error Test 1.031915 - PPP Test 18.617021 - Acc Test 0.793617 - Precision 0.809198 - Recall 0.763378 - F1 Score 0.785005
+Epoch 13/20 - 4.809880s - Loss 0.318636 - Test Loss 0.432969
+LOCATION: - Total Error Test 1.037234 - PPP Test 19.148936 - Acc Test 0.792553 - Precision 0.810319 - Recall 0.758800 - F1 Score 0.783033
+Epoch 14/20 - 4.852241s - Loss 0.410205 - Test Loss 0.430826
+LOCATION: - Total Error Test 0.994681 - PPP Test 20.744681 - Acc Test 0.801064 - Precision 0.822678 - Recall 0.765210 - F1 Score 0.791926
+Epoch 15/20 - 4.800019s - Loss 0.497257 - Test Loss 0.427788
+LOCATION: - Total Error Test 1.015957 - PPP Test 19.680851 - Acc Test 0.796809 - Precision 0.810570 - Recall 0.769621 - F1 Score 0.788954
+Epoch 16/20 - 4.838268s - Loss 0.401513 - Test Loss 0.427385
+LOCATION: - Total Error Test 1.042553 - PPP Test 18.617021 - Acc Test 0.791489 - Precision 0.808426 - Recall 0.758843 - F1 Score 0.782226
+Epoch 17/20 - 4.778734s - Loss 0.323903 - Test Loss 0.426703
+LOCATION: - Total Error Test 1.026596 - PPP Test 19.148936 - Acc Test 0.794681 - Precision 0.809907 - Recall 0.765529 - F1 Score 0.786286
+Epoch 18/20 - 4.824278s - Loss 0.361644 - Test Loss 0.424987
+LOCATION: - Total Error Test 0.994681 - PPP Test 18.617021 - Acc Test 0.801064 - Precision 0.814227 - Recall 0.776371 - F1 Score 0.794158
+Epoch 19/20 - 4.776601s - Loss 0.479066 - Test Loss 0.423535
+LOCATION: - Total Error Test 1.000000 - PPP Test 21.276596 - Acc Test 0.800000 - Precision 0.810148 - Recall 0.778244 - F1 Score 0.793171
+Epoch that the model was saved 2
+Best location metrics - PPP: 23.936170, Total Error: 1.808511
+Traceback (most recent call last):
+  File "/cluster/raid/home/jajo/AMAR/scripts/run_main.py", line 279, in <module>
+    run()
+  File "/cluster/raid/home/jajo/AMAR/scripts/run_main.py", line 246, in run
+    result = run_model(data_train_x, data_train_y,
+  File "/cluster/raid/home/jajo/AMAR/src/models/multi_senseX.py", line 1114, in run_multi_senseX
+    dict_layer_acc = performance_metrics(data_test_y, predict_test_y, var_mode="multi_head")
+  File "/cluster/raid/home/jajo/AMAR/src/utils.py", line 482, in performance_metrics
+    layer_pred_sum = layer_pred_one_hot.sum(axis=1)
+  File "/cluster/raid/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/numpy/core/_methods.py", line 48, in _sum
+    return umr_sum(a, axis, dtype, out, keepdims, initial, where)
+numpy.AxisError: axis 1 is out of bounds for array of dimension 1
+[1;34mwandb[0m:
+[1;34mwandb[0m: You can sync this run to the cloud by running:
+[1;34mwandb[0m: [1mwandb sync /cluster/raid/home/jajo/AMAR/wandb/offline-run-20260930_145734-u80ejhk0[0m
+[1;34mwandb[0m: Find logs at: [1;35mwandb/offline-run-20260930_145734-u80ejhk0/logs[0m

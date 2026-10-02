@@ -255,7 +255,6 @@ def count_error(y_pred, y_true):
     error_count = np.abs(count_num_people_y_pred - count_num_people_y) # finding error count in each sample
     return error_count
 
-
 def threshold_round(x, threshold=0.3):
     """
     Custom rounding function that uses a threshold.
@@ -450,8 +449,6 @@ def performance_metrics_joint(y_true_act, y_pred_act, y_true_loc, y_pred_loc):
     loc_metrics = calculate_scores(y_true_loc, last_loc_pred)
 
     return act_metrics, loc_metrics
-
-
 
 def performance_metrics(y_true, y_pred, var_mode="joint_multihead", var_threshold=0.5):
     """
@@ -942,3 +939,12 @@ def log_random_attention_weights_final(model, y_pred, y_actual, epoch, num_sampl
             f'average_attention_weights/count_{i}_layer_{last_layer_idx}': wandb.Image(plt.gcf()),
         }, step=epoch)
         plt.close('all')
+
+
+def select_device():
+    """Select CUDA, then MPS (Apple Silicon), then CPU."""
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
