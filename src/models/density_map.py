@@ -2,11 +2,17 @@
 [file]          density_map.py
 [description]   Room-agnostic group counting from WiFi CSI via a spatial density map.
 
-                The model predicts a density map over the normalized room frame defined by
-                preset["layouts"] (from the WiMANS environment layouts). The integral of the map is
-                the number of people, and its peaks are the (approximate) locations of the people.
-                Because the frame is shared across rooms, "where" means the same physical spot in
-                every room, which is what makes counting transferable.
+                Every person in WiMANS stands at one of the room's 5 known locations, so the model
+                predicts a bounded occupancy probability per location and renders the density map as
+                a mixture of fixed unit-mass Gaussian kernels placed at those locations (in the
+                shared normalized frame defined by preset["layouts"]).
+
+                This keeps the density map well-conditioned:
+                  - occupancy is a bounded per-location sigmoid, so it cannot saturate/collapse the
+                    way an unbounded softplus count head does;
+                  - the count is the integral of the map (sum of occupancies), so count and "where"
+                    are consistent by construction;
+                  - there is no 1024-way softmax over the grid and no MSE on tiny density values.
 """
 #
 ##
@@ -46,49 +52,73 @@ def get_cosine_schedule_with_warmup(optimizer, num_warmup_steps, num_training_st
     return LambdaLR(optimizer, lr_lambda)
 
 
+def build_kernels(var_layout, var_grid_size, var_sigma):
+    """
+    [description]
+    : build the fixed unit-mass Gaussian kernel of each location, in the sorted order of the layout.
+    [return]
+    : kernels: numpy array (num_locations, grid_size, grid_size)
+    : names: list of the location keys, in the same order as the kernels
+    """
+    #
+    var_names = sorted(var_layout)
+    var_axis = (np.arange(var_grid_size) + 0.5) / var_grid_size
+    var_yy, var_xx = np.meshgrid(var_axis, var_axis, indexing = "ij")  # rows -> y, cols -> x
+    #
+    var_kernels = []
+    for var_name in var_names:
+        var_cx, var_cy = var_layout[var_name]
+        var_blob = np.exp(-((var_xx - var_cx) ** 2 + (var_yy - var_cy) ** 2) / (2 * var_sigma ** 2))
+        var_kernels.append(var_blob / var_blob.sum())
+    #
+    return np.asarray(var_kernels, dtype = np.float32), var_names
+
+
 class DensityMapNet(torch.nn.Module):
     """
     [description]
-    : CSI backbone + two heads: a scalar count head and a spatial head that produces a distribution
-      over the grid. The density map is the distribution scaled by the count, so its integral is
-      exactly the predicted number of people and its peaks are the predicted locations.
+    : CSI backbone + a bounded occupancy head over the room's locations. The density map is the
+      occupancy-weighted mixture of the fixed location kernels, so its integral is the predicted
+      number of people and its peaks are the predicted locations.
     """
     #
     ##
     def __init__(self,
                  var_x_shape,
+                 var_layout,
                  embedding_dim=100,
                  grid_size=32,
-                 hidden_dim=256):
+                 hidden_dim=256,
+                 sigma=0.06):
 
         super().__init__()
         self.backbone = THAT(var_x_shape, [embedding_dim])
         self.grid_size = grid_size
-
-        self.count_head = torch.nn.Sequential(
+        #
+        var_kernels, self.location_names = build_kernels(var_layout, grid_size, sigma)
+        self.register_buffer("kernels", torch.from_numpy(var_kernels))
+        #
+        self.occupancy_head = torch.nn.Sequential(
             torch.nn.Linear(embedding_dim, hidden_dim),
             torch.nn.LeakyReLU(),
-            torch.nn.Linear(hidden_dim, 1),
-        )
-        self.spatial_head = torch.nn.Sequential(
-            torch.nn.Linear(embedding_dim, hidden_dim),
-            torch.nn.LeakyReLU(),
-            torch.nn.Linear(hidden_dim, grid_size * grid_size),
+            torch.nn.Linear(hidden_dim, len(self.location_names)),
         )
 
     def forward(self, x):
-        z = self.backbone(x)
+        """
+        [return]
+        : density: (batch, grid, grid) occupancy-weighted mixture of the location kernels
+        : count: (batch,) integral of the density map
+        : occupancy_logits: (batch, num_locations) raw occupancy logits
+        """
+        var_features = self.backbone(x)
+        var_occupancy_logits = self.occupancy_head(var_features)
+        var_occupancy = torch.sigmoid(var_occupancy_logits)
         #
-        ## count: (batch,) non-negative
-        var_count = F.softplus(self.count_head(z)).squeeze(-1)
+        var_density = torch.einsum("bl,lhw->bhw", var_occupancy, self.kernels)
+        var_count = var_occupancy.sum(-1)
         #
-        ## spatial distribution: (batch, grid, grid), sums to 1
-        var_spatial = F.softmax(self.spatial_head(z), dim=-1).view(-1, self.grid_size, self.grid_size)
-        #
-        ## density: integrates to the predicted count
-        var_density = var_spatial * var_count.view(-1, 1, 1)
-        #
-        return var_density, var_count
+        return var_density, var_count, var_occupancy_logits
 
 
 #
@@ -155,6 +185,48 @@ def count_metrics(var_true_count, var_pred_count, var_num_classes=6):
     }
 
 
+def predict_counts(var_occupancy, var_threshold=0.5):
+    """
+    [description]
+    : binarize the per-location occupancy at a threshold and count the occupied locations. This is
+      the decision rule behind the reported count: a location is occupied when its sigmoid output
+      clears the threshold.
+    [parameter]
+    : var_occupancy: numpy array (N, num_locations) of occupancy probabilities
+    : var_threshold: float, occupancy decision threshold
+    [return]
+    : numpy array (N,) of integer predicted counts
+    """
+    return (np.asarray(var_occupancy) > var_threshold).sum(axis=1)
+
+
+def calibrate_threshold(var_occupancy, var_true_count, var_grid=np.linspace(0.05, 0.95, 91)):
+    """
+    [description]
+    : pick the occupancy threshold that maximizes exact-count accuracy on a held-out split. The 0.5
+      default is optimal only when the sigmoid outputs are calibrated; sweeping one scalar is a
+      cheap post-hoc correction for the mismatch between the count metric and the per-location
+      probabilities.
+    [parameter]
+    : var_occupancy: numpy array (N, num_locations) of occupancy probabilities
+    : var_true_count: numpy array (N,) of true counts
+    : var_grid: iterable of candidate thresholds
+    [return]
+    : (threshold, accuracy) at the best threshold
+    """
+    var_true_count = np.asarray(var_true_count).astype(int)
+    var_best_threshold, var_best_accuracy = 0.5, -1.0
+    for var_threshold in var_grid:
+        var_accuracy = float(np.mean(predict_counts(var_occupancy, var_threshold) == var_true_count))
+        ## ties go to the threshold closest to the neutral 0.5, so a small validation split cannot
+        ## drag the decision boundary to an extreme
+        if (var_accuracy > var_best_accuracy
+                or (var_accuracy == var_best_accuracy
+                    and abs(var_threshold - 0.5) < abs(var_best_threshold - 0.5))):
+            var_best_threshold, var_best_accuracy = float(var_threshold), var_accuracy
+    return var_best_threshold, var_best_accuracy
+
+
 def localization_metrics(var_true_density, var_pred_density, var_threshold_frac=0.25, var_hit_radius=0.1):
     """
     [description]
@@ -198,13 +270,6 @@ def visualize_density_map(data_true_density,
     : plot the ground-truth and predicted density maps for a spread of test samples (one row per
       sample, ground truth on the left, prediction on the right). Detected locations are circled.
       The title of each panel reports the count, i.e. the integral of the map.
-    [parameter]
-    : data_true_density: numpy array, ground-truth maps of shape (N, grid, grid)
-    : data_pred_density: numpy array, predicted maps of the same shape
-    : save_dir: str, directory the figure is written to
-    : var_num_samples: int, number of samples to show
-    : var_threshold_frac: float, peak threshold as a fraction of the map maximum
-    : var_tag: str, label used in the title and file name (typically the environment)
     [return]
     : out_path: str, path of the saved figure
     """
@@ -258,47 +323,64 @@ def train_density(model,
                   var_batch_size: int,
                   var_epochs: int,
                   device,
-                  var_count_loss_weight: float = 1.0,
                   patience: int = 150):
     """
     [description]
-    : train the density-map model. Loss = MSE between predicted and target density maps plus an L1
-      term on the count (the integral). Model selection is by count MAE, then exact-count accuracy.
+    : train the density-map model. The objective is the per-location occupancy binary cross-entropy;
+      the count is the sum of the occupancies and follows from the same loss. The occupancy threshold
+      is calibrated on the validation split each epoch, so model selection tracks the exact-count
+      accuracy that is actually reported. The per-epoch validation metric is noisy on a small split,
+      so it is smoothed (EMA) before selecting the checkpoint.
+    : data_train_set / data_valid_set: TensorDataset of (CSI, occupancy) with occupancy (num_locations,)
+      holding 0/1 entries.
     """
     #
     var_train_loader = torch.utils.data.DataLoader(data_train_set, var_batch_size, shuffle=True, pin_memory=True)
     var_valid_loader = torch.utils.data.DataLoader(data_valid_set, len(data_valid_set))
     #
+    var_best_score = -np.inf
     var_best_mae = np.inf
-    var_best_accuracy = 0.0
     var_best_weight = None
     var_epoch_saved = 0
     var_counter = 0
+    ## EMA-smoothed selection scores (0.3 => ~3-epoch memory).
+    var_ema_accuracy = None
+    var_ema_mae = None
+    var_ema_decay = 0.3
     #
     var_scheduler = get_cosine_schedule_with_warmup(
         optimizer,
         num_warmup_steps=preset["nn"]["scheduler"]["num_warmup_epochs"] * len(var_train_loader),
-        num_training_steps=preset["nn"]["epoch"] * len(var_train_loader),
+        num_training_steps=var_epochs * len(var_train_loader),
         min_lr_ratio=preset["nn"]["scheduler"]["min_lr_ratio"],
     )
 
     def apply_augmentation(var_x):
-        var_x = var_x + torch.randn_like(var_x) * 0.1
+        ## The encoder's LayerNorm removes a constant input scale, so the previous +0.1 noise was
+        ## negligible against amplitudes around 60 and the gain was largely cancelled. Scale the
+        ## noise to the signal and add a small temporal shift; keep the gain and channel dropout.
+        var_x = var_x + torch.randn_like(var_x) * (0.05 * var_x.detach().std())
         var_scale = torch.rand(var_x.size(0), 1, device=var_x.device) * 0.2 + 0.9
         var_x = var_x * var_scale.unsqueeze(-1)
+        var_shift = int(torch.randint(-var_x.size(1) // 20, var_x.size(1) // 20 + 1, (1,)).item())
+        if var_shift != 0:
+            var_x = torch.roll(var_x, var_shift, dims=1)
+            if var_shift > 0:
+                var_x[:, :var_shift] = 0
+            else:
+                var_x[:, var_shift:] = 0
         var_x = var_x * torch.bernoulli(torch.ones_like(var_x) * 0.96)
         return var_x
 
     for var_epoch in range(var_epochs):
         var_time_e0 = time.time()
         model.train()
-        for var_x, var_y in var_train_loader:
+        for var_x, var_occupancy in var_train_loader:
             var_x = apply_augmentation(var_x.to(device))
-            var_y = var_y.to(device)
+            var_occupancy = var_occupancy.to(device)
             #
-            var_density, var_count = model(var_x)
-            var_loss = (F.mse_loss(var_density, var_y)
-                        + var_count_loss_weight * F.l1_loss(var_count, var_y.sum(dim=(1, 2))))
+            _, _, var_occupancy_logits = model(var_x)
+            var_loss = F.binary_cross_entropy_with_logits(var_occupancy_logits, var_occupancy)
             #
             optimizer.zero_grad()
             var_loss.backward()
@@ -308,11 +390,20 @@ def train_density(model,
         model.eval()
         with torch.no_grad():
             var_valid_x, var_valid_y = next(iter(var_valid_loader))
-            var_pred_density, _ = model(var_valid_x.to(device))
-            var_pred_density = var_pred_density.cpu().numpy()
+            _, _, var_valid_logits = model(var_valid_x.to(device))
+            var_valid_occupancy = torch.sigmoid(var_valid_logits).cpu().numpy()
             var_valid_y = var_valid_y.numpy()
         #
-        var_metrics = count_metrics(var_valid_y.sum(axis=(1, 2)).round(), var_pred_density.sum(axis=(1, 2)).round())
+        var_true_count = var_valid_y.sum(axis=1).round()
+        var_threshold, _ = calibrate_threshold(var_valid_occupancy, var_true_count)
+        var_metrics = count_metrics(var_true_count, predict_counts(var_valid_occupancy, var_threshold))
+        #
+        ## smooth the selection scores before comparing epochs
+        if var_ema_accuracy is None:
+            var_ema_accuracy, var_ema_mae = var_metrics["accuracy"], var_metrics["mae"]
+        else:
+            var_ema_accuracy = var_ema_decay * var_metrics["accuracy"] + (1 - var_ema_decay) * var_ema_accuracy
+            var_ema_mae = var_ema_decay * var_metrics["mae"] + (1 - var_ema_decay) * var_ema_mae
         #
         wandb.log({
             "epoch": var_epoch,
@@ -321,18 +412,22 @@ def train_density(model,
             "valid_mae": var_metrics["mae"],
             "valid_occupancy_accuracy": var_metrics["occupancy_accuracy"],
             "valid_occupancy_f1": var_metrics["occupancy_f1"],
+            "valid_occupancy_threshold": var_threshold,
+            "valid_accuracy_smoothed": var_ema_accuracy,
+            "valid_mae_smoothed": var_ema_mae,
             "learning_rate": optimizer.param_groups[0]["lr"],
         })
         #
         print(f"Epoch {var_epoch}/{var_epochs} - %.3fs" % (time.time() - var_time_e0),
               "- Loss %.6f" % var_loss.cpu(),
               "- Valid Acc %.4f" % var_metrics["accuracy"],
-              "- Valid MAE %.4f" % var_metrics["mae"])
+              "- Valid MAE %.4f" % var_metrics["mae"],
+              "- Thr %.2f" % var_threshold)
         #
-        if (var_metrics["mae"] < var_best_mae
-                or (var_metrics["mae"] == var_best_mae and var_metrics["accuracy"] > var_best_accuracy)):
-            var_best_mae = var_metrics["mae"]
-            var_best_accuracy = var_metrics["accuracy"]
+        if (var_ema_accuracy > var_best_score
+                or (var_ema_accuracy == var_best_score and var_ema_mae < var_best_mae)):
+            var_best_score = var_ema_accuracy
+            var_best_mae = var_ema_mae
             var_best_weight = copy.deepcopy(model.state_dict())
             var_epoch_saved = var_epoch
             var_counter = 0
@@ -347,7 +442,7 @@ def train_density(model,
         var_best_weight = copy.deepcopy(model.state_dict())
     #
     print(f"Epoch that the model was saved {var_epoch_saved}")
-    print(f"Best count MAE: {var_best_mae:.6f}, exact-count accuracy: {var_best_accuracy:.6f}")
+    print(f"Best smoothed exact-count accuracy: {var_best_score:.6f}, smoothed count MAE: {var_best_mae:.6f}")
     #
     return var_best_weight
 
@@ -369,19 +464,18 @@ def run_density_map(data_train_x,
       follows the same call convention as run_AMAR_WO_RVQ:
           run_model(data_train_x, data_train_y, data_test_x, data_test_y,
                     var_repeat, var_task, var_env, save_path)
-      Counting and approximate localization are both read off the predicted density map.
+      Counting is read off the per-location occupancy with a validation-calibrated threshold; the
+      approximate localization is read off the predicted density map.
     [parameter]
     : data_train_x: numpy array, CSI amplitude to train model
-    : data_train_y: numpy array, density targets of shape (N, grid_size, grid_size)
+    : data_train_y: numpy array, occupancy targets of shape (N, num_locations) with 0/1 entries
     : data_test_x: numpy array, CSI amplitude to test model
-    : data_test_y: numpy array, density targets, same shape as data_train_y
+    : data_test_y: numpy array, occupancy targets, same shape as data_train_y
     : var_repeat: int, number of repeated experiments
     : var_task: str, task name kept for interface compatibility (the model is always counting)
-    : var_env: str, environment name used for the run name
-    : save_path: str, directory kept for symmetry with the other runners (no figures written)
-    [return]
-    : result: dict, averaged count and localization metrics with SE (group-count shape for
-      format_result)
+    : var_env: str, environment name used for the run name and to pick the location kernels
+    : save_path: str, directory for the visualization
+    : return: dict, averaged count and localization metrics with SE
     """
     #
     ##
@@ -396,6 +490,8 @@ def run_density_map(data_train_x,
         device = torch.device("cpu")
     print(f"Using device: {device}")
 
+    var_layout = preset["layouts"][var_env]
+
     #
     ## ============================================ Preprocess ============================================
     #
@@ -406,7 +502,7 @@ def run_density_map(data_train_x,
     data_test_x = data_test_x.reshape(data_test_x.shape[0], data_test_x.shape[1], -1)
     #
     var_x_shape = data_train_x[0].shape
-    var_grid_size = data_train_y.shape[-1]
+    var_grid_size = preset["density"]["grid_size"]
     #
     data_train_set = TensorDataset(torch.from_numpy(data_train_x), torch.from_numpy(data_train_y))
     data_valid_set = TensorDataset(torch.from_numpy(data_valid_x), torch.from_numpy(data_valid_y))
@@ -420,8 +516,8 @@ def run_density_map(data_train_x,
     result_loc_error, result_loc_detection = [], []
     result_per_class = []
     #
-    var_macs, var_params = get_model_complexity_info(DensityMapNet(var_x_shape, grid_size=var_grid_size),
-                                                     var_x_shape, as_strings=False)
+    var_macs, var_params = get_model_complexity_info(
+        DensityMapNet(var_x_shape, var_layout, grid_size=var_grid_size), var_x_shape, as_strings=False)
     print("Parameters:", var_params, "- FLOPs:", var_macs * 2)
 
     for var_r in range(var_repeat):
@@ -433,7 +529,8 @@ def run_density_map(data_train_x,
         #
         torch.random.manual_seed(var_r + 39)
         #
-        model_density = DensityMapNet(var_x_shape, embedding_dim=100, grid_size=var_grid_size).to(device)
+        model_density = DensityMapNet(var_x_shape, var_layout,
+                                      embedding_dim=100, grid_size=var_grid_size).to(device)
         optimizer = torch.optim.Adam(model_density.parameters(),
                                      lr=preset["nn"]["lr"],
                                      weight_decay=preset["nn"]["weight_decay"])
@@ -445,8 +542,7 @@ def run_density_map(data_train_x,
                                         data_valid_set=data_valid_set,
                                         var_batch_size=preset["nn"]["batch_size"],
                                         var_epochs=preset["nn"]["epoch"],
-                                        device=device,
-                                        var_count_loss_weight=preset["density"]["count_loss_weight"])
+                                        device=device)
         var_time_1 = time.time()
 
         ##
@@ -456,19 +552,33 @@ def run_density_map(data_train_x,
         model_density.eval()
         test_loader = torch.utils.data.DataLoader(data_test_set,
                                                   batch_size=preset["nn"]["batch_size"], shuffle=False)
-        pred_density = []
+        pred_density, pred_occupancy = [], []
         with torch.no_grad():
             for var_x, _ in test_loader:
-                var_density, _ = model_density(var_x.to(device))
+                var_density, _, var_logits = model_density(var_x.to(device))
                 pred_density.append(var_density.cpu())
+                pred_occupancy.append(torch.sigmoid(var_logits).cpu())
         pred_density = torch.cat(pred_density, dim=0).numpy()
+        pred_occupancy = torch.cat(pred_occupancy, dim=0).numpy()
         var_time_2 = time.time()
+        #
+        ## Calibrate the occupancy threshold on the validation split with the selected checkpoint, so
+        ## the test count uses the same decision rule that selected the epoch.
+        with torch.no_grad():
+            _, _, var_valid_logits = model_density(torch.from_numpy(data_valid_x).to(device))
+            var_valid_occupancy = torch.sigmoid(var_valid_logits).cpu().numpy()
+        var_threshold, _ = calibrate_threshold(var_valid_occupancy, data_valid_y.sum(axis=1).round())
+        #
+        ## render the ground-truth density from the occupancy targets with the same kernels
+        with torch.no_grad():
+            var_kernels = model_density.kernels
+            true_density = torch.einsum("bl,lhw->bhw", torch.from_numpy(data_test_y), var_kernels).numpy()
         #
         ## -------------------------------------- Evaluate ----------------------------------------
         #
-        var_count_metrics = count_metrics(data_test_y.sum(axis=(1, 2)).round(),
-                                          pred_density.sum(axis=(1, 2)).round())
-        var_loc_metrics = localization_metrics(data_test_y, pred_density,
+        var_count_metrics = count_metrics(data_test_y.sum(axis=1).round(),
+                                          predict_counts(pred_occupancy, var_threshold))
+        var_loc_metrics = localization_metrics(true_density, pred_density,
                                                var_threshold_frac=preset["density"]["peak_threshold"])
         #
         wandb.log({
@@ -479,18 +589,19 @@ def run_density_map(data_train_x,
             "mae": var_count_metrics["mae"],
             "occupancy_accuracy": var_count_metrics["occupancy_accuracy"],
             "occupancy_f1": var_count_metrics["occupancy_f1"],
+            "occupancy_threshold": var_threshold,
             "loc_error": var_loc_metrics["loc_error"],
             "loc_detection": var_loc_metrics["loc_detection"],
         }, step=var_r + 100000)
         #
-        print("  COUNT: Acc %.4f - MAE %.4f - Occupancy Acc %.4f - Occupancy F1 %.4f"
+        print("  COUNT: Acc %.4f - MAE %.4f - Occupancy Acc %.4f - Occupancy F1 %.4f - Thr %.2f"
               % (var_count_metrics["accuracy"], var_count_metrics["mae"],
-                 var_count_metrics["occupancy_accuracy"], var_count_metrics["occupancy_f1"]))
+                 var_count_metrics["occupancy_accuracy"], var_count_metrics["occupancy_f1"], var_threshold))
         print("  WHERE: mean distance %.4f - detection %.4f"
               % (var_loc_metrics["loc_error"], var_loc_metrics["loc_detection"]))
         #
         if var_r == var_repeat - 1:
-            var_fig_path = visualize_density_map(data_test_y, pred_density, save_path,
+            var_fig_path = visualize_density_map(true_density, pred_density, save_path,
                                                  var_threshold_frac=preset["density"]["peak_threshold"],
                                                  var_tag=var_env)
             print(f"  Figure saved to {var_fig_path}")
@@ -504,7 +615,7 @@ def run_density_map(data_train_x,
         result_per_class.append(var_count_metrics["per_class_accuracy"])
         #
         if var_r != var_repeat - 1:
-            del model_density, optimizer, test_loader, pred_density
+            del model_density, optimizer, test_loader, pred_density, pred_occupancy, true_density
             torch.cuda.empty_cache()
             gc.collect()
 

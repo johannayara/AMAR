@@ -13,7 +13,7 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from src.models import *
-from src.data.load_data import load_data_x, load_data_y, encode_data_y, encode_density_y
+from src.data.load_data import load_data_x, load_data_y, encode_data_y, encode_occupancy_y
 from src.utils import *
 from configs.preset import preset
 
@@ -44,9 +44,9 @@ def master_splitter(preset, var_task, var_model, var_users, var_env = "empty_roo
 
 
     if var_model == "density_map":
-        ## Density-map group counting: target is a spatial map in the shared room frame, so var_task
-        ## does not select a label set.
-        y = encode_density_y(data_pd_y, var_env)
+        ## Density-map group counting: the model predicts per-location occupancy and renders the map
+        ## from the room's location kernels, so var_task does not select a label set.
+        y = encode_occupancy_y(data_pd_y, var_env)
 
     else:
         y = encode_data_y(data_pd_y, var_task)

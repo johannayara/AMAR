@@ -219,32 +219,27 @@ def encode_count(data_pd_y):
 
 #
 ##
-def encode_density_y(data_pd_y,
-                     var_environment,
-                     var_grid_size = None,
-                     var_sigma = None):
+def encode_occupancy_y(data_pd_y,
+                       var_environment):
     """
     [description]
-    : encode the ground-truth density map for group counting. Each occupied location of a sample is
-      turned into a unit-mass Gaussian placed at that location's normalized room coordinate, and the
-      blobs are summed. The integral of the map therefore equals the number of people, and its peaks
-      are the (approximate) locations of the people. Because the coordinates come from the shared
-      WiMANS room layout, the map means the same physical thing in every room.
+    : encode the per-location occupancy used by the density-map model. Each person in WiMANS stands
+      at one of the room's locations, so a sample is described by which of the locations are
+      occupied. The occupancy is expressed in the shared, room-agnostic frame defined by
+      preset["layouts"], which is what the density-map model predicts and renders.
     [parameter]
     : data_pd_y: pandas dataframe, labels of different tasks
     : var_environment: string, room name used to look up the location coordinates
-    : var_grid_size: int, spatial resolution of the map 
-    : var_sigma: float, Gaussian width in normalized units
     [return]
-    : data_density_y: numpy array of shape (num_samples, grid_size, grid_size)
+    : data_occupancy_y: numpy array of shape (num_samples, num_locations) with 0/1 entries,
+      columns in the sorted order of the room's location keys
     """
     #
     ##
-    var_grid_size = var_grid_size or preset["density"]["grid_size"]
-    var_sigma = var_sigma or preset["density"]["sigma"]
     var_layout = preset["layouts"][var_environment]
+    var_names = sorted(var_layout)
     #
-    ## A coordinate outside [0,1] would place the blob off the grid and silently move the peak, so
+    ## A coordinate outside [0,1] would place the kernel off the grid and silently move the peak, so
     ## fail loudly instead. This catches e.g. coordinates left in cm after a layout redefinition.
     for var_letter, (var_cx, var_cy) in var_layout.items():
         if not (0.0 <= var_cx <= 1.0 and 0.0 <= var_cy <= 1.0):
@@ -252,24 +247,18 @@ def encode_density_y(data_pd_y,
                 f"layout coordinate for '{var_letter}' in '{var_environment}' is "
                 f"({var_cx}, {var_cy}), outside the normalized [0,1] density grid")
     #
-    var_axis = (np.arange(var_grid_size) + 0.5) / var_grid_size
-    var_yy, var_xx = np.meshgrid(var_axis, var_axis, indexing = "ij")  # rows -> y, cols -> x
-    #
     var_locations = data_pd_y[["user_1_location", "user_2_location",
                                "user_3_location", "user_4_location",
                                "user_5_location", "user_6_location"]].to_numpy(copy = True).astype(str)
     #
-    data_density_y = np.zeros((len(data_pd_y), var_grid_size, var_grid_size), dtype = np.float32)
+    data_occupancy_y = np.zeros((len(data_pd_y), len(var_names)), dtype = np.float32)
     #
     for var_idx, var_sample in enumerate(var_locations):
         for var_letter in var_sample:
-            if var_letter not in var_layout:
-                continue
-            var_cx, var_cy = var_layout[var_letter]
-            var_blob = np.exp(-((var_xx - var_cx) ** 2 + (var_yy - var_cy) ** 2) / (2 * var_sigma ** 2))
-            data_density_y[var_idx] += var_blob / var_blob.sum()
+            if var_letter in var_layout:
+                data_occupancy_y[var_idx, var_names.index(var_letter)] = 1.0
     #
-    return data_density_y
+    return data_occupancy_y
 
 #
 ##
