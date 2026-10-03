@@ -391,20 +391,28 @@ def count_class_sampling_weights(data_set):
       count-0 frames per room (99 of 1881), so a plain shuffle lets the model pay almost no price for
       never predicting an empty room. Inverse-frequency weighting fixes that without discarding any
       data, unlike undersampling the non-empty classes.
-    : data_set: TensorDataset of (CSI, occupancy), or a Subset of one.
+    : data_set: TensorDataset of (CSI, occupancy), or a Subset / ConcatDataset of one.
     : return: numpy array (N,) of non-negative sampling weights
     """
-    if isinstance(data_set, torch.utils.data.Subset):
-        var_targets = data_set.dataset.tensors[1][data_set.indices]
-    else:
-        var_targets = data_set.tensors[1]
-    #
-    var_count = var_targets.sum(axis=1).round().long().numpy()
+    var_count = _dataset_count_classes(data_set)
     var_num_classes = preset["nn"]["num_count_classes"]
     var_freq = np.bincount(var_count, minlength=var_num_classes).astype(np.float64)
     var_inverse = np.where(var_freq > 0, 1.0 / np.maximum(var_freq, 1.0), 0.0)
     #
     return var_inverse[var_count]
+
+
+def _dataset_count_classes(data_set):
+    """
+    [description]
+    : count class (0..5) of every sample in a TensorDataset, Subset or ConcatDataset of them.
+    : return: numpy array (N,) of ints
+    """
+    if isinstance(data_set, torch.utils.data.ConcatDataset):
+        return np.concatenate([_dataset_count_classes(var_part) for var_part in data_set.datasets])
+    if isinstance(data_set, torch.utils.data.Subset):
+        return _dataset_count_classes(data_set.dataset)[data_set.indices]
+    return data_set.tensors[1].sum(axis=1).round().long().numpy()
 
 
 def save_density_checkpoint(model, var_x_shape, var_env, save_path, var_tag="model"):
@@ -870,35 +878,39 @@ def run_density_map_cross_domain(train_sets_by_env,
     #
     ## ============================================ Preprocess ============================================
     #
-    var_train_x, var_train_y, var_train_room = [], [], []
+    ## Each training room keeps its CSI in place: torch.from_numpy shares the buffer and the 90/10
+    ## split is a Subset over indices, so a multi-room run costs no extra CSI memory beyond the rooms
+    ## themselves (concatenating the arrays would copy several GB per room and OOM the node).
+    var_train_datasets, var_valid_datasets = [], []
     var_valid_x, var_valid_y, var_valid_room = [], [], []
     for var_env_name in var_train_envs:
         var_x_env, var_y_env = train_sets_by_env[var_env_name]
         var_y_env = np.asarray(var_y_env, dtype=np.float32)
         var_x_env = np.asarray(var_x_env).reshape(var_x_env.shape[0], var_x_env.shape[1], -1)
-        var_x_tr, var_x_va, var_y_tr, var_y_va = train_test_split(
-            var_x_env, var_y_env, test_size=0.1, shuffle=True, random_state=39)
-        var_train_x.append(var_x_tr)
-        var_train_y.append(var_y_tr)
-        var_train_room.append(np.full(var_x_tr.shape[0], var_room_index[var_env_name], dtype=np.int64))
-        var_valid_x.append(var_x_va)
-        var_valid_y.append(var_y_va)
-        var_valid_room.append(np.full(var_x_va.shape[0], var_room_index[var_env_name], dtype=np.int64))
-    var_train_x = np.concatenate(var_train_x)
-    var_train_y = np.concatenate(var_train_y)
-    var_train_room = np.concatenate(var_train_room)
+        var_room_env = np.full(var_x_env.shape[0], var_room_index[var_env_name], dtype=np.int64)
+        var_dataset = TensorDataset(torch.from_numpy(var_x_env), torch.from_numpy(var_y_env),
+                                    torch.from_numpy(var_room_env))
+        #
+        var_perm = np.random.RandomState(39).permutation(len(var_dataset))
+        var_num_valid = max(1, int(round(0.1 * len(var_dataset))))
+        var_valid_idx = np.sort(var_perm[:var_num_valid])
+        var_train_idx = np.sort(var_perm[var_num_valid:])
+        var_train_datasets.append(torch.utils.data.Subset(var_dataset, var_train_idx.tolist()))
+        var_valid_datasets.append(torch.utils.data.Subset(var_dataset, var_valid_idx.tolist()))
+        ## only the 10% validation slice is copied; it anchors selection and the threshold
+        var_valid_x.append(var_x_env[var_valid_idx])
+        var_valid_y.append(var_y_env[var_valid_idx])
+        var_valid_room.append(var_room_env[var_valid_idx])
+    #
+    data_train_set = torch.utils.data.ConcatDataset(var_train_datasets)
+    data_valid_set = torch.utils.data.ConcatDataset(var_valid_datasets)
     var_valid_x = np.concatenate(var_valid_x)
     var_valid_y = np.concatenate(var_valid_y)
     var_valid_room = np.concatenate(var_valid_room)
     #
-    var_x_shape = var_train_x[0].shape
-    data_train_set = TensorDataset(torch.from_numpy(var_train_x), torch.from_numpy(var_train_y),
-                                   torch.from_numpy(var_train_room))
-    data_valid_set = TensorDataset(torch.from_numpy(var_valid_x), torch.from_numpy(var_valid_y),
-                                   torch.from_numpy(var_valid_room))
-    #
-    print(f"Training rooms: {var_train_envs} ({var_train_x.shape[0]} train / "
-          f"{var_valid_x.shape[0]} valid) | Test rooms: {list(test_sets_by_env)}")
+    var_x_shape = tuple(var_train_datasets[0].dataset.tensors[0].shape[1:])
+    print(f"Training rooms: {var_train_envs} ({len(data_train_set)} train / "
+          f"{len(data_valid_set)} valid) | Test rooms: {list(test_sets_by_env)}")
     #
     var_macs, var_params = get_model_complexity_info(
         DensityMapNet(var_x_shape, var_layout, grid_size=var_grid_size), var_x_shape, as_strings=False)
