@@ -146,7 +146,7 @@ preset = {
         ## 31%. Keep every empty (count-0) frame and cap each non-empty class in the *training*
         ## split; validation/test keep the natural prior.
         "undersample_nonempty": True,
-        "undersample_cap": None,  # None => the empty-class count (balanced); e.g. 297 for a milder cap
+        "undersample_cap": 297,  # None => the empty-class count (balanced); e.g. 297 for a milder cap
     },
 }
 

@@ -10,7 +10,11 @@ set -euo pipefail
 
 source /software/anaconda3/etc/profile.d/conda.sh
 conda activate AMAR
+env=empty_room
+mkdir -p "./output/cd/density_map/${env}/"
 start=$(date +%s)
-bash -c 'WANDB_MODE=offline python scripts/run_cross_domain.py --model AMAR_WO_RVQ --task location --repeat 3 --env meeting_room' > "./output/cd/AMAR_WO_RVQ_meeting_room_single.txt" 2>&1
+
+export WANDB_MODE=offline 
+python scripts/run_cross_domain.py --model density_map --task location --repeat 5 --env "$env"> "./output/cd/density_map/${env}/test_1_cd.txt" 2>&1
 end=$(date +%s)
 echo "Total runtime: $((end - start)) seconds"
