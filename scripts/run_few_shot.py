@@ -1,6 +1,6 @@
 """
 [file]          run_few_shot.py
-[description]   Few-shot knowledge distillation runner for AMAR_WO_RVQ.
+[description]   Few-shot knowledge distillation runner for AMAR_WO_RVQ and density_map.
 
                 Trains on a single environment (--env) and tests on every other environment listed
                 in preset["data"]["environment"]. The teacher is trained on the full training
@@ -17,7 +17,7 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from src.models import *
-from src.data.load_data import load_data_x, load_data_y, encode_data_y
+from src.data.load_data import load_data_x, load_data_y, encode_data_y, encode_occupancy_y
 from src.utils import *
 from configs.preset import preset
 
@@ -43,9 +43,14 @@ def master_splitter(preset, var_task, var_model, var_users, var_env="empty_room"
                             var_num_users=var_users)
     var_label_list = data_pd_y["label"].to_list()
     data_train_x = load_data_x(preset["path"]["data_x"], var_label_list)
-    data_train_y = encode_data_y(data_pd_y, var_task)
-    if var_model in ("AMAR_WO_RVQ", "AMAR"):
-        data_train_y = reduce_dataset(data_train_y, var_task, preset["nn"]["num_obj_queries"])
+    if var_model == "density_map":
+        ## Density-map group counting predicts per-location occupancy, so the label is the room's
+        ## occupancy vector rather than a task encoding.
+        data_train_y = encode_occupancy_y(data_pd_y, var_env)
+    else:
+        data_train_y = encode_data_y(data_pd_y, var_task)
+        if var_model in ("AMAR_WO_RVQ", "AMAR"):
+            data_train_y = reduce_dataset(data_train_y, var_task, preset["nn"]["num_obj_queries"])
 
     test_sets_by_env = {}
     other_envs = [e for e in preset["data"]["environment"] if e != var_env]
@@ -56,9 +61,12 @@ def master_splitter(preset, var_task, var_model, var_users, var_env="empty_room"
                                 var_num_users=var_users)
         var_label_list = data_pd_y["label"].to_list()
         X_test = load_data_x(preset["path"]["data_x"], var_label_list)
-        y_test = encode_data_y(data_pd_y, var_task)
-        if var_model in ("AMAR_WO_RVQ", "AMAR"):
-            y_test = reduce_dataset(y_test, var_task, preset["nn"]["num_obj_queries"])
+        if var_model == "density_map":
+            y_test = encode_occupancy_y(data_pd_y, e)
+        else:
+            y_test = encode_data_y(data_pd_y, var_task)
+            if var_model in ("AMAR_WO_RVQ", "AMAR"):
+                y_test = reduce_dataset(y_test, var_task, preset["nn"]["num_obj_queries"])
         test_sets_by_env[e] = (X_test, y_test)
         del X_test, y_test
         gc.collect()
@@ -105,12 +113,27 @@ def format_result(var_model, var_task, result, var_few_shot_ratio, var_kd_weight
                            if isinstance(result[k], dict) and "avg_accuracy" in result[k]):
         stats = result[env_name]
         lines.append(f"\n{env_name.upper()}:")
-        for metric, label in (("precision", "Precision"), ("recall", "Recall"),
-                              ("PPP", "Perfect Prediction %"), ("f1_score", "F1 Score"),
-                              ("accuracy", "Accuracy"), ("total_error", "Total Error")):
-            if f"avg_{metric}" in stats:
-                lines.append(f"  Avg {label}: {stats[f'avg_{metric}']:.4f} "
-                             f"± {stats[f'se_{metric}']:.4f} (SE)")
+        if "avg_mae" in stats:
+            ## density-map group-count metrics
+            lines.append(f"  Avg Exact-count Accuracy: {stats['avg_accuracy']:.4f} "
+                         f"± {stats['se_accuracy']:.4f} (SE)")
+            lines.append(f"  Avg Count MAE: {stats['avg_mae']:.4f} ± {stats['se_mae']:.4f} (SE)")
+            lines.append(f"  Avg Occupancy Accuracy: {stats['avg_occupancy_accuracy']:.4f} "
+                         f"± {stats['se_occupancy_accuracy']:.4f} (SE)")
+            lines.append(f"  Avg Occupancy F1: {stats['avg_occupancy_f1']:.4f} "
+                         f"± {stats['se_occupancy_f1']:.4f} (SE)")
+            if "avg_loc_error" in stats:
+                lines.append(f"  Avg Loc Error: {stats['avg_loc_error']:.4f} "
+                             f"± {stats['se_loc_error']:.4f} (SE)")
+                lines.append(f"  Avg Loc Detection: {stats['avg_loc_detection']:.4f} "
+                             f"± {stats['se_loc_detection']:.4f} (SE)")
+        else:
+            for metric, label in (("precision", "Precision"), ("recall", "Recall"),
+                                  ("PPP", "Perfect Prediction %"), ("f1_score", "F1 Score"),
+                                  ("accuracy", "Accuracy"), ("total_error", "Total Error")):
+                if f"avg_{metric}" in stats:
+                    lines.append(f"  Avg {label}: {stats[f'avg_{metric}']:.4f} "
+                                 f"± {stats[f'se_{metric}']:.4f} (SE)")
     return "\n".join(lines)
 
 
@@ -147,7 +170,8 @@ def save_result(var_model, var_task, var_repeat, result):
 def run():
     """
     [description]
-    : run few-shot knowledge distillation for AMAR_WO_RVQ (train on one env, test on the others)
+    : run few-shot knowledge distillation (train on one env, test on the others). Dispatches to
+      run_density_map_few_shot for the density_map model and run_AMAR_WO_RVQ_few_shot otherwise.
     """
     SEED = 103  # Ensuring the results are reproducible
     random.seed(SEED)
@@ -167,18 +191,33 @@ def run():
     var_repeat = var_args.repeat
     var_users = [u.strip() for u in var_args.users.split(',')]
     var_env = var_args.env
+    var_teacher_epochs = var_args.teacher_epochs
+    if var_teacher_epochs is None:
+        var_teacher_epochs = var_args.epochs
 
     # Ensuring there is no data leakage while doing splits.
     data_train_x, data_train_y, test_sets_by_env = master_splitter(
         preset, var_task, var_model, var_users, var_env)
 
-        save_path = Path(f'./visualizations/few_shot/{var_env}/{var_task}/1')
-        while save_path.is_dir():
-            new_name = str((int(save_path.name) + 1))
-            save_path = save_path.parent / new_name
+    save_path = Path(f'./visualizations/few_shot/{var_env}/{var_task}/1')
+    while save_path.is_dir():
+        new_name = str((int(save_path.name) + 1))
+        save_path = save_path.parent / new_name
 
-        #
-        ## run few-shot distillation
+    #
+    ## run few-shot distillation
+    if var_model == "density_map":
+        result = run_density_map_few_shot(
+            data_train_x, data_train_y,
+            test_sets_by_env,
+            var_few_shot_ratio=var_args.few_shot_ratio,
+            var_kd_weight=var_args.kd_weight,
+            var_kd_temperature=var_args.kd_temperature,
+            var_teacher_epochs=var_teacher_epochs,
+            var_student_epochs=var_args.epochs,
+            var_compile=not var_args.no_compile,
+            var_repeat=var_repeat, var_task=var_task, var_env=var_env, save_path=save_path)
+    else:
         result = run_AMAR_WO_RVQ_few_shot(
             data_train_x, data_train_y,
             test_sets_by_env,
@@ -190,29 +229,29 @@ def run():
             var_compile=not var_args.no_compile,
             var_repeat=var_repeat, var_task=var_task, var_env=var_env, save_path=save_path)
 
-        #
-        ##
-        result["model"] = var_model
-        result["task"] = var_task
-        result["repeat"] = var_repeat
-        result["data"] = preset["data"]
-        result["nn"] = preset["nn"]
-        result["few_shot_ratio"] = var_args.few_shot_ratio
-        result["kd_weight"] = var_args.kd_weight
-        result["kd_temperature"] = var_args.kd_temperature
-        result["train_env"] = var_env
-        result["student_epochs"] = var_args.epochs
-        result["teacher_epochs"] = var_teacher_epochs
+    #
+    ##
+    result["model"] = var_model
+    result["task"] = var_task
+    result["repeat"] = var_repeat
+    result["data"] = preset["data"]
+    result["nn"] = preset["nn"]
+    result["few_shot_ratio"] = var_args.few_shot_ratio
+    result["kd_weight"] = var_args.kd_weight
+    result["kd_temperature"] = var_args.kd_temperature
+    result["train_env"] = var_env
+    result["student_epochs"] = var_args.epochs
+    result["teacher_epochs"] = var_teacher_epochs
 
-        formatted = format_result(var_model, var_task, result, var_args.few_shot_ratio, var_args.kd_weight, var_env)
-        out_path = save_result(var_model, var_task, var_repeat, result)
+    formatted = format_result(var_model, var_task, result, var_args.few_shot_ratio, var_args.kd_weight, var_env)
+    out_path = save_result(var_model, var_task, var_repeat, result)
 
-        print(formatted)
-        print(f"\nResults saved to: {out_path}")
+    print(formatted)
+    print(f"\nResults saved to: {out_path}")
 
-        # Release the multi-GB per-task arrays before the next task
-        del data_train_x, data_train_y, test_sets_by_env
-        gc.collect()
+    # Release the multi-GB per-task arrays before the next task
+    del data_train_x, data_train_y, test_sets_by_env
+    gc.collect()
 
 
 if __name__ == "__main__":

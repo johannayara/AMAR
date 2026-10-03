@@ -277,3 +277,43 @@ class JointDistillationLoss(nn.Module):
         ) * (temperature ** 2)
 
         return self.activity_weight * activity_kd + self.location_weight * location_kd
+
+
+class OccupancyDistillationLoss(nn.Module):
+    """
+    Distillation between a frozen teacher and a trainable student density-map model.
+
+    The density-map model is not a set predictor: it emits one bounded occupancy logit per room
+    location, so there is no query permutation to resolve and the soft targets are matched
+    element-wise, exactly like the supervised occupancy loss. The teacher's occupancy probability is
+    the temperature-scaled soft target and the student is trained with a Bernoulli cross-entropy in
+    logit space; the T^2 factor keeps the gradient magnitude comparable to the supervised term when
+    the temperature changes.
+
+    Accepts either the raw occupancy logits or the density-map forward tuple
+    (density, count, occupancy_logits); the logits are the last element.
+
+    Args:
+        temperature: soft-target temperature applied in logit space
+    """
+
+    def __init__(self, temperature=1.0):
+        super().__init__()
+        self.temperature = temperature
+
+    @staticmethod
+    def _logits(outputs):
+        if isinstance(outputs, (tuple, list)):
+            return outputs[-1]
+        return outputs
+
+    def forward(self, student_outputs, teacher_outputs):
+        student_logits = self._logits(student_outputs)
+        teacher_logits = self._logits(teacher_outputs).detach()
+
+        temperature = self.temperature
+        teacher_prob = torch.sigmoid(teacher_logits / temperature)
+
+        return F.binary_cross_entropy_with_logits(
+            student_logits / temperature, teacher_prob
+        ) * (temperature ** 2)

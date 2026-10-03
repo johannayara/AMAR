@@ -607,15 +607,23 @@ def threshold_round(x, threshold=0.3):
 
 
 def visualize_model_performance(y_pred, y_true, save_dir="./visualizations",
-                                 var_mode="multi_head", class_names=("a", "b", "c", "d", "e")):
+                                 var_mode="multi_head", class_names=("a", "b", "c", "d", "e"),
+                                 var_threshold=0.5):
     """
     Creates and saves various visualizations of model performance
     y_pred: numpy array [batch_size, 10] (predicted counts)
     y_true: numpy array [batch_size, 10] (true counts)
+    var_threshold: binarization threshold for var_mode="occupancy" (the density-map count rule)
     """
 
     if var_mode == "count_classification_withConstrain":
         pass
+    elif var_mode == "occupancy":
+        ## density-map group counting: y_pred holds per-location occupancy probabilities and y_true
+        ## the 0/1 occupancy targets. Binarize at the calibrated count threshold so the per-location
+        ## confusion matrices and MAE reflect the same decision rule as the reported count.
+        y_pred = (np.asarray(y_pred) > var_threshold).astype(float)
+        y_true = np.asarray(y_true).astype(float)
     elif var_mode == "multi_head":
         y_pred = y_pred[-1]
         batch_size, num_heads, num_classes = y_pred.shape
