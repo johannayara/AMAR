@@ -122,11 +122,6 @@ def format_result(var_model, var_task, result, var_few_shot_ratio, var_kd_weight
                          f"± {stats['se_occupancy_accuracy']:.4f} (SE)")
             lines.append(f"  Avg Occupancy F1: {stats['avg_occupancy_f1']:.4f} "
                          f"± {stats['se_occupancy_f1']:.4f} (SE)")
-            if "avg_loc_error" in stats:
-                lines.append(f"  Avg Loc Error: {stats['avg_loc_error']:.4f} "
-                             f"± {stats['se_loc_error']:.4f} (SE)")
-                lines.append(f"  Avg Loc Detection: {stats['avg_loc_detection']:.4f} "
-                             f"± {stats['se_loc_detection']:.4f} (SE)")
         else:
             for metric, label in (("precision", "Precision"), ("recall", "Recall"),
                                   ("PPP", "Perfect Prediction %"), ("f1_score", "F1 Score"),

@@ -107,7 +107,7 @@ def format_result(var_model, var_task, result):
         for env_key, env_results in per_env.items():
             lines.append(f"\n{env_key}:")
             if 'avg_mae' in env_results:
-                ## density-map group-count metrics + localization
+                ## density-map group-count metrics
                 lines.append("  GROUP-COUNT METRICS:")
                 lines.append(f"  Exact-count Accuracy: {env_results['avg_accuracy']:.4f} ± {env_results['se_accuracy']:.4f} (SE)")
                 lines.append(f"  Count MAE: {env_results['avg_mae']:.4f} ± {env_results['se_mae']:.4f} (SE)")
@@ -117,10 +117,6 @@ def format_result(var_model, var_task, result):
                 if per_class:
                     lines.append("  Per-count Accuracy: "
                                  + ", ".join(f"{k}:{v:.3f}" for k, v in per_class.items()))
-                if 'avg_loc_error' in env_results:
-                    lines.append("  LOCALIZATION (normalized room units):")
-                    lines.append(f"  Mean Distance to Nearest Predicted Peak: {env_results['avg_loc_error']:.4f} ± {env_results['se_loc_error']:.4f} (SE)")
-                    lines.append(f"  Detection (within 0.1): {env_results['avg_loc_detection']:.4f} ± {env_results['se_loc_detection']:.4f} (SE)")
             else:
                 for avg_key, se_key, label in metric_specs:
                     if avg_key in env_results:

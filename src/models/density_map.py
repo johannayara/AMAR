@@ -177,13 +177,14 @@ def count_metrics(var_true_count, var_pred_count,
                   var_threshold=0.5, var_num_classes=6):
     """
     [description]
-    : group-count metrics: exact-count accuracy, count MAE, room-level presence accuracy/F1,
-      per-location occupancy accuracy/F1 and per-count accuracy.
+    : group-count metrics: exact-count accuracy, count MAE, per-location occupancy accuracy/F1 and
+      per-count accuracy.
     : var_true_occupancy / var_pred_occupancy: optional (N, num_locations) occupancy targets and
       predicted probabilities. When supplied, the occupancy metrics are computed over every
       (sample, location) cell with var_pred_occupancy binarized at var_threshold. This is the metric
-      that actually exposes a cross-room domain gap: room-level presence is easy (almost every WiMANS
-      frame contains someone), so it hides the per-location errors.
+      that actually exposes a cross-room domain gap. Room-level presence ("is anyone in the room") is
+      deliberately not reported: 94.7% of WiMANS frames contain someone, so always answering "yes"
+      already scores 0.947 accuracy / 0.973 F1 and the metric hides every per-location error.
     : var_threshold: occupancy decision threshold used to binarize var_pred_occupancy.
     """
     #
@@ -193,12 +194,6 @@ def count_metrics(var_true_count, var_pred_count,
     var_exact = float(np.mean(var_true_count == var_pred_count))
     var_mae = float(np.mean(np.abs(var_true_count - var_pred_count)))
     #
-    ## room-level presence: is anyone in the room at all
-    var_true_presence = var_true_count > 0
-    var_pred_presence = var_pred_count > 0
-    var_presence_acc = float(np.mean(var_true_presence == var_pred_presence))
-    var_presence_f1 = _binary_f1(var_true_presence, var_pred_presence)
-    #
     ## per-location occupancy: which of the room's locations are occupied
     if var_true_occupancy is not None and var_pred_occupancy is not None:
         var_true_occ = np.asarray(var_true_occupancy) > 0.5
@@ -206,7 +201,7 @@ def count_metrics(var_true_count, var_pred_count,
         var_occ_acc = float(np.mean(var_true_occ == var_pred_occ))
         var_occ_f1 = _binary_f1(var_true_occ, var_pred_occ)
     else:
-        var_occ_acc, var_occ_f1 = var_presence_acc, var_presence_f1
+        var_occ_acc, var_occ_f1 = float("nan"), float("nan")
     #
     var_per_class = {}
     for var_class in range(var_num_classes):
@@ -218,8 +213,6 @@ def count_metrics(var_true_count, var_pred_count,
         "mae": var_mae,
         "occupancy_accuracy": var_occ_acc,
         "occupancy_f1": var_occ_f1,
-        "presence_accuracy": var_presence_acc,
-        "presence_f1": var_presence_f1,
         "per_class_accuracy": var_per_class,
     }
 
@@ -297,38 +290,6 @@ def calibrate_threshold_prior(var_occupancy, var_reference_count, var_grid=np.li
             var_best_threshold, var_best_distance = float(var_threshold), var_distance
     #
     return var_best_threshold, var_best_distance
-
-
-def localization_metrics(var_true_density, var_pred_density, var_threshold_frac=0.25, var_hit_radius=0.1):
-    """
-    [description]
-    : localization quality of the density map: distance from every true location (peak of the
-      ground-truth map) to the nearest predicted peak, and the fraction of true locations that have
-      a predicted peak within var_hit_radius (in normalized room units).
-    """
-    #
-    var_distances = []
-    var_hits = 0
-    var_total = 0
-    #
-    for var_idx in range(len(var_true_density)):
-        var_true_peaks = _extract_peaks(var_true_density[var_idx], var_threshold_frac)
-        var_pred_peaks = _extract_peaks(var_pred_density[var_idx], var_threshold_frac)
-        #
-        for var_true_peak in var_true_peaks:
-            var_total += 1
-            if len(var_pred_peaks) == 0:
-                var_distances.append(1.0)
-                continue
-            var_dist = np.sqrt(((var_pred_peaks - var_true_peak) ** 2).sum(axis=1)).min()
-            var_distances.append(float(var_dist))
-            if var_dist <= var_hit_radius:
-                var_hits += 1
-    #
-    return {
-        "loc_error": float(np.mean(var_distances)) if var_distances else 0.0,
-        "loc_detection": float(var_hits / var_total) if var_total else 0.0,
-    }
 
 
 def visualize_density_map(data_true_density,
@@ -609,8 +570,6 @@ def train_density(model,
             "valid_mae": var_metrics["mae"],
             "valid_occupancy_accuracy": var_metrics["occupancy_accuracy"],
             "valid_occupancy_f1": var_metrics["occupancy_f1"],
-            "valid_presence_accuracy": var_metrics["presence_accuracy"],
-            "valid_presence_f1": var_metrics["presence_f1"],
             "valid_occupancy_threshold": var_threshold,
             "valid_accuracy_smoothed": var_ema_accuracy,
             "valid_mae_smoothed": var_ema_mae,
@@ -663,8 +622,7 @@ def run_density_map(data_train_x,
       follows the same call convention as run_AMAR_WO_RVQ:
           run_model(data_train_x, data_train_y, data_test_x, data_test_y,
                     var_repeat, var_task, var_env, save_path)
-      Counting is read off the per-location occupancy with a validation-calibrated threshold; the
-      approximate localization is read off the predicted density map.
+      Counting is read off the per-location occupancy with a validation-calibrated threshold.
     [parameter]
     : data_train_x: numpy array, CSI amplitude to train model
     : data_train_y: numpy array, occupancy targets of shape (N, num_locations) with 0/1 entries
@@ -674,7 +632,7 @@ def run_density_map(data_train_x,
     : var_task: str, task name kept for interface compatibility (the model is always counting)
     : var_env: str, environment name used for the run name and to pick the location kernels
     : save_path: str, directory for the visualization
-    : return: dict, averaged count and localization metrics with SE
+    : return: dict, averaged count and per-location occupancy metrics with SE
     """
     #
     ##
@@ -721,7 +679,6 @@ def run_density_map(data_train_x,
     ## ========================================= Train & Evaluate =========================================
     #
     result_accuracy, result_mae, result_occ_accuracy, result_occ_f1 = [], [], [], []
-    result_loc_error, result_loc_detection = [], []
     result_per_class = []
     #
     var_macs, var_params = get_model_complexity_info(
@@ -789,8 +746,6 @@ def run_density_map(data_train_x,
         var_count_metrics = count_metrics(data_test_y.sum(axis=1).round(),
                                           predict_counts(pred_occupancy, var_threshold),
                                           data_test_y, pred_occupancy, var_threshold)
-        var_loc_metrics = localization_metrics(true_density, pred_density,
-                                               var_threshold_frac=preset["density"]["peak_threshold"])
         #
         wandb.log({
             "repeat": var_r,
@@ -801,15 +756,11 @@ def run_density_map(data_train_x,
             "occupancy_accuracy": var_count_metrics["occupancy_accuracy"],
             "occupancy_f1": var_count_metrics["occupancy_f1"],
             "occupancy_threshold": var_threshold,
-            "loc_error": var_loc_metrics["loc_error"],
-            "loc_detection": var_loc_metrics["loc_detection"],
         }, step=var_r + 100000)
         #
         print("  COUNT: Acc %.4f - MAE %.4f - Occupancy Acc %.4f - Occupancy F1 %.4f - Thr %.2f"
               % (var_count_metrics["accuracy"], var_count_metrics["mae"],
                  var_count_metrics["occupancy_accuracy"], var_count_metrics["occupancy_f1"], var_threshold))
-        print("  WHERE: mean distance %.4f - detection %.4f"
-              % (var_loc_metrics["loc_error"], var_loc_metrics["loc_detection"]))
         #
         if var_r == var_repeat - 1:
             var_fig_path = visualize_density_map(true_density, pred_density, save_path,
@@ -824,8 +775,6 @@ def run_density_map(data_train_x,
         result_mae.append(var_count_metrics["mae"])
         result_occ_accuracy.append(var_count_metrics["occupancy_accuracy"])
         result_occ_f1.append(var_count_metrics["occupancy_f1"])
-        result_loc_error.append(var_loc_metrics["loc_error"])
-        result_loc_detection.append(var_loc_metrics["loc_detection"])
         result_per_class.append(var_count_metrics["per_class_accuracy"])
         #
         if var_r != var_repeat - 1:
@@ -845,8 +794,7 @@ def run_density_map(data_train_x,
 
     results = {}
     for var_name, var_values in (("accuracy", result_accuracy), ("mae", result_mae),
-                                 ("occupancy_accuracy", result_occ_accuracy), ("occupancy_f1", result_occ_f1),
-                                 ("loc_error", result_loc_error), ("loc_detection", result_loc_detection)):
+                                 ("occupancy_accuracy", result_occ_accuracy), ("occupancy_f1", result_occ_f1)):
         var_mean, var_se = mean_se(var_values)
         results[f"avg_{var_name}"] = var_mean
         results[f"se_{var_name}"] = var_se
@@ -856,7 +804,7 @@ def run_density_map(data_train_x,
     }
     #
     wandb.log({f"avg_{var_name}": results[f"avg_{var_name}"] for var_name in
-               ("accuracy", "mae", "occupancy_accuracy", "occupancy_f1", "loc_error", "loc_detection")})
+               ("accuracy", "mae", "occupancy_accuracy", "occupancy_f1")})
     wandb.finish()
     #
     return results
@@ -891,7 +839,7 @@ def run_density_map_cross_domain(data_x_train,
     : var_task: str, task name kept for interface compatibility (the model is always counting)
     : var_env: str, training room name (also selects the training-room kernels)
     : save_path: str, directory for the per-room visualizations
-    : return: dict, env name -> averaged count and localization metrics with SE
+    : return: dict, env name -> averaged count and per-location occupancy metrics with SE
     """
     #
     ##
@@ -1024,10 +972,8 @@ def run_density_map_cross_domain(data_x_train,
             var_count_metrics = count_metrics(var_y_env.sum(axis=1).round(),
                                               predict_counts(var_occupancy, var_env_threshold),
                                               var_y_env, var_occupancy, var_env_threshold)
-            var_loc_metrics = localization_metrics(
-                true_density, pred_density, var_threshold_frac=preset["density"]["peak_threshold"])
             #
-            var_rep = {**var_count_metrics, **var_loc_metrics, "threshold": var_env_threshold}
+            var_rep = {**var_count_metrics, "threshold": var_env_threshold}
             env_rep_metrics.setdefault(var_env_name, []).append(var_rep)
             env_last_density[var_env_name] = (true_density, pred_density)
             env_last_occupancy[var_env_name] = (var_occupancy, var_env_threshold, var_y_env)
@@ -1037,18 +983,13 @@ def run_density_map_cross_domain(data_x_train,
                 f"test_results_per_env/{var_env_name}/mae": var_count_metrics["mae"],
                 f"test_results_per_env/{var_env_name}/occupancy_accuracy": var_count_metrics["occupancy_accuracy"],
                 f"test_results_per_env/{var_env_name}/occupancy_f1": var_count_metrics["occupancy_f1"],
-                f"test_results_per_env/{var_env_name}/presence_accuracy": var_count_metrics["presence_accuracy"],
-                f"test_results_per_env/{var_env_name}/presence_f1": var_count_metrics["presence_f1"],
                 f"test_results_per_env/{var_env_name}/threshold": var_env_threshold,
-                f"test_results_per_env/{var_env_name}/loc_error": var_loc_metrics["loc_error"],
-                f"test_results_per_env/{var_env_name}/loc_detection": var_loc_metrics["loc_detection"],
             }, step=var_r + 100000)
             #
             print(f"  [{var_env_name}] COUNT Acc {var_count_metrics['accuracy']:.4f} - "
                   f"MAE {var_count_metrics['mae']:.4f} - "
-                  f"Occ F1 {var_count_metrics['occupancy_f1']:.4f} | "
-                  f"WHERE err {var_loc_metrics['loc_error']:.4f} - "
-                  f"det {var_loc_metrics['loc_detection']:.4f} (Thr {var_env_threshold:.2f})")
+                  f"Occ Acc {var_count_metrics['occupancy_accuracy']:.4f} - "
+                  f"Occ F1 {var_count_metrics['occupancy_f1']:.4f} (Thr {var_env_threshold:.2f})")
         #
         if var_r != var_repeat - 1:
             del model_density, optimizer
@@ -1059,8 +1000,7 @@ def run_density_map_cross_domain(data_x_train,
     ## -------------------------------------- Aggregate per room ----------------------------------------
     #
     var_num_classes = preset["nn"]["num_count_classes"]
-    var_metric_names = ("accuracy", "mae", "occupancy_accuracy", "occupancy_f1",
-                        "loc_error", "loc_detection")
+    var_metric_names = ("accuracy", "mae", "occupancy_accuracy", "occupancy_f1")
     results = {}
     for var_env_name, var_rep_list in env_rep_metrics.items():
         var_env_result = {}
@@ -1091,9 +1031,8 @@ def run_density_map_cross_domain(data_x_train,
         print(f"\n[{var_env_name}] avg over {var_repeat} repeats: "
               f"Accuracy {var_env_result['avg_accuracy']:.4f} ± {var_env_result['se_accuracy']:.4f} | "
               f"MAE {var_env_result['avg_mae']:.4f} ± {var_env_result['se_mae']:.4f} | "
-              f"Occ F1 {var_env_result['avg_occupancy_f1']:.4f} ± {var_env_result['se_occupancy_f1']:.4f} | "
-              f"Loc err {var_env_result['avg_loc_error']:.4f} ± {var_env_result['se_loc_error']:.4f} | "
-              f"Det {var_env_result['avg_loc_detection']:.4f} ± {var_env_result['se_loc_detection']:.4f}")
+              f"Occ Acc {var_env_result['avg_occupancy_accuracy']:.4f} ± {var_env_result['se_occupancy_accuracy']:.4f} | "
+              f"Occ F1 {var_env_result['avg_occupancy_f1']:.4f} ± {var_env_result['se_occupancy_f1']:.4f}")
     #
     wandb.finish()
     #
@@ -1141,7 +1080,7 @@ def run_density_map_few_shot(data_train_x,
     : var_repeat: int, number of repeated experiments
     : var_env: str or list, training environment name(s) used for the run name and the teacher layout
     : save_path: str, directory for visualizations (one sub-directory per test environment)
-    : return: dict, per-environment averaged count and localization metrics with SE
+    : return: dict, per-environment averaged count and per-location occupancy metrics with SE
     """
     #
     device = select_device()
@@ -1306,10 +1245,8 @@ def run_density_map_few_shot(data_train_x,
             var_count_metrics = count_metrics(var_y_env.sum(axis=1).round(),
                                               predict_counts(var_occupancy, var_env_threshold),
                                               var_y_env, var_occupancy, var_env_threshold)
-            var_loc_metrics = localization_metrics(
-                true_density, pred_density, var_threshold_frac=preset["density"]["peak_threshold"])
             #
-            var_rep = {**var_count_metrics, **var_loc_metrics, "threshold": var_env_threshold,
+            var_rep = {**var_count_metrics, "threshold": var_env_threshold,
                        "teacher_train_time": teacher_time_1 - teacher_time_0,
                        "student_train_time": student_time_1 - student_time_0}
             env_rep_metrics.setdefault(var_env_name, []).append(var_rep)
@@ -1321,20 +1258,15 @@ def run_density_map_few_shot(data_train_x,
                 f"test_results_per_env/{var_env_name}/mae": var_count_metrics["mae"],
                 f"test_results_per_env/{var_env_name}/occupancy_accuracy": var_count_metrics["occupancy_accuracy"],
                 f"test_results_per_env/{var_env_name}/occupancy_f1": var_count_metrics["occupancy_f1"],
-                f"test_results_per_env/{var_env_name}/presence_accuracy": var_count_metrics["presence_accuracy"],
-                f"test_results_per_env/{var_env_name}/presence_f1": var_count_metrics["presence_f1"],
                 f"test_results_per_env/{var_env_name}/threshold": var_env_threshold,
-                f"test_results_per_env/{var_env_name}/loc_error": var_loc_metrics["loc_error"],
-                f"test_results_per_env/{var_env_name}/loc_detection": var_loc_metrics["loc_detection"],
                 f"test_results_per_env/{var_env_name}/teacher_train_time": teacher_time_1 - teacher_time_0,
                 f"test_results_per_env/{var_env_name}/student_train_time": student_time_1 - student_time_0,
             }, step=var_r + 100000)
             #
             print(f"  [{var_env_name}] COUNT Acc {var_count_metrics['accuracy']:.4f} - "
                   f"MAE {var_count_metrics['mae']:.4f} - "
-                  f"Occ F1 {var_count_metrics['occupancy_f1']:.4f} | "
-                  f"WHERE err {var_loc_metrics['loc_error']:.4f} - "
-                  f"det {var_loc_metrics['loc_detection']:.4f} (Thr {var_env_threshold:.2f})")
+                  f"Occ Acc {var_count_metrics['occupancy_accuracy']:.4f} - "
+                  f"Occ F1 {var_count_metrics['occupancy_f1']:.4f} (Thr {var_env_threshold:.2f})")
         #
         del teacher_optimizer, student_optimizer, kd_loss
         del teacher_best_weight, student_best_weight, env_loader, var_occupancy
@@ -1346,8 +1278,7 @@ def run_density_map_few_shot(data_train_x,
     ## -------------------------------------- Aggregate per room ----------------------------------------
     #
     var_num_classes = preset["nn"]["num_count_classes"]
-    var_metric_names = ("accuracy", "mae", "occupancy_accuracy", "occupancy_f1",
-                        "loc_error", "loc_detection")
+    var_metric_names = ("accuracy", "mae", "occupancy_accuracy", "occupancy_f1")
     results = {}
     for var_env_name, var_rep_list in env_rep_metrics.items():
         var_env_result = {}
@@ -1381,9 +1312,8 @@ def run_density_map_few_shot(data_train_x,
         print(f"\n[{var_env_name}] avg over {var_repeat} repeats: "
               f"Accuracy {var_env_result['avg_accuracy']:.4f} ± {var_env_result['se_accuracy']:.4f} | "
               f"MAE {var_env_result['avg_mae']:.4f} ± {var_env_result['se_mae']:.4f} | "
-              f"Occ F1 {var_env_result['avg_occupancy_f1']:.4f} ± {var_env_result['se_occupancy_f1']:.4f} | "
-              f"Loc err {var_env_result['avg_loc_error']:.4f} ± {var_env_result['se_loc_error']:.4f} | "
-              f"Det {var_env_result['avg_loc_detection']:.4f} ± {var_env_result['se_loc_detection']:.4f}")
+              f"Occ Acc {var_env_result['avg_occupancy_accuracy']:.4f} ± {var_env_result['se_occupancy_accuracy']:.4f} | "
+              f"Occ F1 {var_env_result['avg_occupancy_f1']:.4f} ± {var_env_result['se_occupancy_f1']:.4f}")
     #
     wandb.finish()
     #

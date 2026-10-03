@@ -174,10 +174,6 @@ def format_result(var_model, var_task, result):
                 if per_class:
                     formatted = ", ".join(f"{k}:{v:.3f}" for k, v in per_class.items())
                     lines.append(f"  Per-count Accuracy: {formatted}")
-                if 'avg_loc_error' in result:
-                    lines.append("  LOCALIZATION (normalized room units):")
-                    lines.append(f"  Mean Distance to Nearest Predicted Peak: {result['avg_loc_error']:.4f} ± {result['se_loc_error']:.4f} (SE)")
-                    lines.append(f"  Detection (within 0.1): {result['avg_loc_detection']:.4f} ± {result['se_loc_detection']:.4f} (SE)")
 
     return "\n".join(lines)
 
