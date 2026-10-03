@@ -534,7 +534,7 @@ def train_density(model,
             #
             ## each sample is rendered with its own room's kernels when the batch mixes rooms
             if len(var_batch) > 2:
-                var_kernels = var_kernel_bank[var_batch[2].to(device)]
+                var_kernels = var_kernel_bank[var_batch[2].to(var_kernel_bank.device)]
             else:
                 var_kernels = model.kernels
             #
@@ -566,7 +566,7 @@ def train_density(model,
                 _, _, var_valid_teacher_logits = teacher(var_valid_x.to(device))
                 var_valid_kd_value = float(kd_loss(var_valid_logits, var_valid_teacher_logits).detach())
             if len(var_valid_batch) > 2:
-                var_valid_kernels = var_kernel_bank[var_valid_batch[2].to(device)]
+                var_valid_kernels = var_kernel_bank[var_valid_batch[2].to(var_kernel_bank.device)]
             else:
                 var_valid_kernels = model.kernels
             var_valid_occupancy = sample_location_occupancy(
@@ -872,7 +872,7 @@ def run_density_map_cross_domain(train_sets_by_env,
     ## room's kernels, which is what lets several rooms share one model
     var_kernel_bank = torch.stack([
         torch.from_numpy(build_kernels(preset["layouts"][var_env_name], var_grid_size, var_sigma)[0])
-        for var_env_name in var_train_envs])
+        for var_env_name in var_train_envs]).to(device)
     var_room_index = {var_env_name: var_idx for var_idx, var_env_name in enumerate(var_train_envs)}
 
     #
@@ -952,7 +952,7 @@ def run_density_map_cross_domain(train_sets_by_env,
             var_valid_density, _, _ = model_density(torch.from_numpy(var_valid_x).to(device))
             var_valid_occupancy = sample_location_occupancy(
                 var_valid_density,
-                var_kernel_bank[torch.from_numpy(var_valid_room).to(device)]).cpu().numpy()
+                var_kernel_bank[torch.from_numpy(var_valid_room).to(var_kernel_bank.device)]).cpu().numpy()
         var_threshold, _ = calibrate_threshold(var_valid_occupancy, var_valid_y.sum(axis=1).round())
         #
         ## -------------------------------------- Test per room ----------------------------------------
