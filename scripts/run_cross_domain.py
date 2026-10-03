@@ -78,6 +78,9 @@ def parse_args():
     var_args.add_argument("--repeat", default = preset["repeat"], type = int)
     var_args.add_argument("--users", default="0, 1,2,3,4,5", type=str, help="Comma-separated list of user IDs")
     var_args.add_argument("--env", default="empty_room", type=str, help="room name")
+    var_args.add_argument("--epochs", default=None, type=int,
+                          help="Override preset['nn']['epoch']. The cosine LR schedule is tied to "
+                               "this value, so it must match the actual training length.")
     #
     return var_args.parse_args()
 
@@ -208,6 +211,8 @@ def run():
     var_repeat = var_args.repeat
     var_users = [u.strip() for u in var_args.users.split(',')]
     var_env = var_args.env
+    if var_args.epochs is not None:
+        preset["nn"]["epoch"] = var_args.epochs
 
     # Ensuring there is no data leakage while doing splits.
     data_x_train, data_y_train, test_sets_by_env = master_splitter(preset, var_task, var_model, var_users, var_env)
@@ -230,6 +235,8 @@ def run():
     "model": var_model,
     "task": var_task,
     "repeat": var_repeat,
+    "env": var_env,
+    "epochs": preset["nn"]["epoch"],
     "data": preset["data"],
     "nn": preset["nn"],
     }

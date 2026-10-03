@@ -121,14 +121,6 @@ class DensityMapNet(torch.nn.Module):
         #
         return var_density, var_count, var_occupancy_logits
 
-    def forward_features(self, x):
-        """
-        [description]
-        : backbone feature vector (batch, embedding_dim). Exposed so the training loop can reuse one
-          backbone pass for both the occupancy loss and the cross-domain feature-alignment loss.
-        """
-        return self.backbone(x)
-
 
 #
 ## ---------------------------------------------------------------------------------------------- ##
@@ -181,10 +173,10 @@ def count_metrics(var_true_count, var_pred_count,
       per-count accuracy.
     : var_true_occupancy / var_pred_occupancy: optional (N, num_locations) occupancy targets and
       predicted probabilities. When supplied, the occupancy metrics are computed over every
-      (sample, location) cell with var_pred_occupancy binarized at var_threshold. This is the metric
-      that actually exposes a cross-room domain gap. Room-level presence ("is anyone in the room") is
-      deliberately not reported: 94.7% of WiMANS frames contain someone, so always answering "yes"
-      already scores 0.947 accuracy / 0.973 F1 and the metric hides every per-location error.
+      (sample, location) cell with var_pred_occupancy binarized at var_threshold. Room-level presence
+      ("is anyone in the room") is deliberately not reported: 94.7% of WiMANS frames contain someone,
+      so always answering "yes" already scores 0.947 accuracy / 0.973 F1 and the metric hides every
+      per-location error.
     : var_threshold: occupancy decision threshold used to binarize var_pred_occupancy.
     """
     #
@@ -259,39 +251,6 @@ def calibrate_threshold(var_occupancy, var_true_count, var_grid=np.linspace(0.05
     return var_best_threshold, var_best_accuracy
 
 
-def calibrate_threshold_prior(var_occupancy, var_reference_count, var_grid=np.linspace(0.05, 0.95, 91)):
-    """
-    [description]
-    : label-free threshold calibration for a new room. The count marginal is identical in every
-      WiMANS room by construction (the annotation has the same number of empty/single/crowded
-      frames per room), so the domain gap shows up as a shift of the predicted count distribution
-      rather than of the count prior itself. Pick the threshold whose predicted count CDF is closest
-      (mean absolute distance) to the reference count CDF. No target-room labels are used.
-    : var_occupancy: numpy array (N, num_locations) of occupancy probabilities for the target room
-    : var_reference_count: numpy array (N,) of reference counts, e.g. the training room's validation
-      counts
-    : var_grid: iterable of candidate thresholds
-    : return: (threshold, mean absolute CDF distance) at the best threshold
-    """
-    #
-    var_reference_count = np.asarray(var_reference_count).astype(int)
-    var_max_count = int(var_reference_count.max()) if len(var_reference_count) else 0
-    var_levels = np.arange(0, var_max_count + 2)
-    var_reference_cdf = np.array([(var_reference_count <= var_level).mean() for var_level in var_levels])
-    #
-    var_best_threshold, var_best_distance = 0.5, np.inf
-    for var_threshold in var_grid:
-        var_pred_count = predict_counts(var_occupancy, var_threshold)
-        var_pred_cdf = np.array([(var_pred_count <= var_level).mean() for var_level in var_levels])
-        var_distance = float(np.abs(var_pred_cdf - var_reference_cdf).mean())
-        if (var_distance < var_best_distance
-                or (var_distance == var_best_distance
-                    and abs(var_threshold - 0.5) < abs(var_best_threshold - 0.5))):
-            var_best_threshold, var_best_distance = float(var_threshold), var_distance
-    #
-    return var_best_threshold, var_best_distance
-
-
 def visualize_density_map(data_true_density,
                           data_pred_density,
                           save_dir,
@@ -349,61 +308,28 @@ def visualize_density_map(data_true_density,
 ## --------------------------------------------- training --------------------------------------- ##
 #
 ##
-def coral_loss(var_source_features, var_target_features):
+def count_class_sampling_weights(data_set):
     """
     [description]
-    : Deep-CORAL domain-alignment loss: squared Frobenius distance between the second-order statistics
-      (covariances) of the source and target feature batches, plus the squared distance between their
-      means. The backbone is trained from scratch on a single room, so its features are tuned to that
-      room's frequency response; aligning the target feature statistics to the source pulls a room the
-      model never saw into the source feature space, which is what lets the source-trained occupancy
-      head transfer. It is unsupervised: only unlabeled target CSI is used.
-    : var_source_features / var_target_features: (batch, embedding_dim) backbone features
-    : return: scalar loss
+    : per-sample sampling weight that equalizes the count classes (0..num_count_classes-1), so the
+      rare empty-room (count-0) frames are drawn as often as every other class. WiMANS has only 5.3%
+      count-0 frames per room (99 of 1881), so a plain shuffle lets the model pay almost no price for
+      never predicting an empty room. Inverse-frequency weighting fixes that without discarding any
+      data, unlike undersampling the non-empty classes.
+    : data_set: TensorDataset of (CSI, occupancy), or a Subset of one.
+    : return: numpy array (N,) of non-negative sampling weights
     """
+    if isinstance(data_set, torch.utils.data.Subset):
+        var_targets = data_set.dataset.tensors[1][data_set.indices]
+    else:
+        var_targets = data_set.tensors[1]
     #
-    var_dim = var_source_features.size(1)
-    var_source_centered = var_source_features - var_source_features.mean(0, keepdim=True)
-    var_target_centered = var_target_features - var_target_features.mean(0, keepdim=True)
-    var_source_cov = var_source_centered.t() @ var_source_centered / max(1, var_source_centered.size(0) - 1)
-    var_target_cov = var_target_centered.t() @ var_target_centered / max(1, var_target_centered.size(0) - 1)
+    var_count = var_targets.sum(axis=1).round().long().numpy()
+    var_num_classes = preset["nn"]["num_count_classes"]
+    var_freq = np.bincount(var_count, minlength=var_num_classes).astype(np.float64)
+    var_inverse = np.where(var_freq > 0, 1.0 / np.maximum(var_freq, 1.0), 0.0)
     #
-    var_cov_term = ((var_source_cov - var_target_cov) ** 2).sum() / (4.0 * var_dim * var_dim)
-    var_mean_term = ((var_source_features.mean(0) - var_target_features.mean(0)) ** 2).mean()
-    #
-    return var_cov_term + var_mean_term
-
-
-def undersample_indices(var_count, var_cap=None, var_seed=39):
-    """
-    [description]
-    : training indices that keep the empty class (count 0) in full and cap every non-empty count class
-      at var_cap samples. WiMANS is imbalanced in the direction that inflates exact-count accuracy:
-      the empty class is the smallest (5.3%) and count-1 is the largest (31.6%), so always predicting
-      "1" already scores 31%. Capping the non-empty classes at the empty-class count removes that
-      trivial majority without touching the (hard, minority) empty class. Deterministic via var_seed,
-      so every repeat trains on the same subset.
-    : var_count: numpy array (N,) of integer counts
-    : var_cap: per-class cap for the non-empty classes; None or <= 0 => the empty-class count
-    : return: sorted numpy array of kept indices
-    """
-    var_count = np.asarray(var_count).astype(int)
-    if var_cap is None or var_cap <= 0:
-        var_cap = int((var_count == 0).sum())
-    if var_cap <= 0:
-        return np.arange(len(var_count))
-    #
-    var_rng = np.random.RandomState(var_seed)
-    var_keep = [np.flatnonzero(var_count == 0)]  # the empty class is never undersampled
-    for var_class in np.unique(var_count):
-        if var_class == 0:
-            continue
-        var_idx = np.flatnonzero(var_count == var_class)
-        if len(var_idx) > var_cap:
-            var_idx = var_rng.choice(var_idx, size=var_cap, replace=False)
-        var_keep.append(var_idx)
-    #
-    return np.sort(np.concatenate(var_keep))
+    return var_inverse[var_count]
 
 
 def train_density(model,
@@ -414,38 +340,40 @@ def train_density(model,
                   var_epochs: int,
                   device,
                   patience: int = 150,
-                  target_loader=None,
-                  var_coral_weight: float = 0.0,
                   teacher=None,
                   kd_loss=None,
                   kd_weight: float = 0.0):
     """
     [description]
     : train the density-map model. The objective is the per-location occupancy binary cross-entropy;
-      the count is the sum of the occupancies and follows from the same loss. When a target_loader is
-      given, an unsupervised CORAL feature-alignment term against the unlabeled target room(s) is
-      added with weight var_coral_weight, which is what makes the model transfer across rooms. When a
-      frozen teacher and a kd_loss are given, the teacher's occupancy logits are distilled into the
-      student with weight kd_weight (few-shot knowledge distillation). The occupancy threshold is
-      calibrated on the validation split each epoch, so model selection tracks the exact-count
+      the count is the sum of the occupancies and follows from the same loss. The occupancy threshold
+      is calibrated on the validation split each epoch, so model selection tracks the exact-count
       accuracy that is actually reported. The per-epoch validation metric is noisy on a small split,
-      so it is smoothed (EMA) before selecting the checkpoint.
+      so it is smoothed (EMA) before selecting the checkpoint. When
+      preset["density"]["balance_empty_class"] is set, the training batches are drawn with
+      class-balanced weights so the under-represented empty-room frames are seen as often as every
+      other count class. When a frozen teacher and a kd_loss are given, the teacher's occupancy
+      logits are distilled into the student with weight kd_weight (few-shot knowledge distillation).
     : data_train_set / data_valid_set: TensorDataset of (CSI, occupancy) with occupancy (num_locations,)
       holding 0/1 entries.
-    : target_loader: optional DataLoader of unlabeled target-room CSI, sampled once per source batch
-      for the CORAL term.
-    : var_coral_weight: weight of the CORAL term; 0 disables domain alignment.
     : teacher: optional frozen DensityMapNet whose occupancy logits supervise the student.
     : kd_loss: optional distillation criterion taking (student_outputs, teacher_outputs).
     : kd_weight: weight of the distillation term.
     """
     #
-    var_train_loader = torch.utils.data.DataLoader(data_train_set, var_batch_size, shuffle=True, pin_memory=True)
+    if preset["density"].get("balance_empty_class", False):
+        ## Draw every count class equally often: the empty-room frames are only 5.3% of WiMANS, so
+        ## without this the model rarely pays for never predicting an empty room.
+        var_sample_weights = count_class_sampling_weights(data_train_set)
+        var_sampler = torch.utils.data.WeightedRandomSampler(
+            torch.as_tensor(var_sample_weights, dtype=torch.double),
+            num_samples=len(data_train_set), replacement=True)
+        var_train_loader = torch.utils.data.DataLoader(
+            data_train_set, var_batch_size, sampler=var_sampler, pin_memory=True)
+    else:
+        var_train_loader = torch.utils.data.DataLoader(
+            data_train_set, var_batch_size, shuffle=True, pin_memory=True)
     var_valid_loader = torch.utils.data.DataLoader(data_valid_set, len(data_valid_set))
-    #
-    var_target_iter = (iter(target_loader)
-                       if (target_loader is not None and var_coral_weight > 0.0) else None)
-    var_coral_value = 0.0
     #
     var_use_distillation = teacher is not None and kd_loss is not None and kd_weight > 0.0
     var_kd_value = 0.0
@@ -474,19 +402,6 @@ def train_density(model,
         var_x = var_x + torch.randn_like(var_x) * (0.05 * var_x.detach().std())
         var_scale = torch.rand(var_x.size(0), 1, device=var_x.device) * 0.2 + 0.9
         var_x = var_x * var_scale.unsqueeze(-1)
-        ## Per-subcarrier gain jitter: an independent multiplicative profile over the subcarrier axis
-        ## per sample. The room-specific frequency response is the dominant covariate shift between
-        ## rooms, so training the backbone on perturbed responses stops it from keying on the source
-        ## room's exact response.
-        var_gain = 1.0 + 0.15 * torch.randn(var_x.size(0), 1, var_x.size(2), device=var_x.device)
-        var_x = var_x * var_gain
-        ## Frequency masking: zero a short contiguous subcarrier band per sample, emulating the
-        ## different multipath nulls of another room.
-        var_band = max(1, var_x.size(2) // 10)
-        var_start = torch.randint(0, var_x.size(2) - var_band + 1, (var_x.size(0),), device=var_x.device)
-        var_axis = torch.arange(var_x.size(2), device=var_x.device).unsqueeze(0)
-        var_mask = (var_axis >= var_start.unsqueeze(1)) & (var_axis < (var_start + var_band).unsqueeze(1))
-        var_x = var_x.masked_fill(var_mask.unsqueeze(1), 0.0)
         var_shift = int(torch.randint(-var_x.size(1) // 20, var_x.size(1) // 20 + 1, (1,)).item())
         if var_shift != 0:
             var_x = torch.roll(var_x, var_shift, dims=1)
@@ -504,29 +419,14 @@ def train_density(model,
             var_x = apply_augmentation(var_x.to(device))
             var_occupancy = var_occupancy.to(device)
             #
-            ## one backbone pass, reused by the occupancy loss and the CORAL term
-            var_features = model.forward_features(var_x)
-            var_occupancy_logits = model.occupancy_head(var_features)
+            _, _, var_occupancy_logits = model(var_x)
             var_loss = F.binary_cross_entropy_with_logits(var_occupancy_logits, var_occupancy)
-            #
-            ## unsupervised alignment against the unlabeled target room(s)
-            var_coral_value = 0.0
-            if var_target_iter is not None:
-                try:
-                    (var_target_x,) = next(var_target_iter)
-                except StopIteration:
-                    var_target_iter = iter(target_loader)
-                    (var_target_x,) = next(var_target_iter)
-                var_target_features = model.forward_features(apply_augmentation(var_target_x.to(device)))
-                var_coral = coral_loss(var_features, var_target_features)
-                var_coral_value = float(var_coral.detach())
-                var_loss = var_loss + var_coral_weight * var_coral
             #
             ## few-shot distillation: the frozen teacher supervises the student's occupancy logits
             var_kd_value = 0.0
             if var_use_distillation:
                 with torch.no_grad():
-                    var_teacher_logits = teacher.occupancy_head(teacher.forward_features(var_x))
+                    _, _, var_teacher_logits = teacher(var_x)
                 var_kd = kd_loss(var_occupancy_logits, var_teacher_logits)
                 var_kd_value = float(var_kd.detach())
                 var_loss = var_loss + kd_weight * var_kd
@@ -542,8 +442,7 @@ def train_density(model,
             _, _, var_valid_logits = model(var_valid_x.to(device))
             var_valid_kd_value = 0.0
             if var_use_distillation:
-                var_valid_teacher_logits = teacher.occupancy_head(
-                    teacher.forward_features(var_valid_x.to(device)))
+                _, _, var_valid_teacher_logits = teacher(var_valid_x.to(device))
                 var_valid_kd_value = float(kd_loss(var_valid_logits, var_valid_teacher_logits).detach())
             var_valid_occupancy = torch.sigmoid(var_valid_logits).cpu().numpy()
             var_valid_y = var_valid_y.numpy()
@@ -563,7 +462,6 @@ def train_density(model,
         wandb.log({
             "epoch": var_epoch,
             "train_loss": var_loss.item(),
-            "train_coral": var_coral_value,
             "train_kd": var_kd_value,
             "valid_kd": var_valid_kd_value,
             "valid_accuracy": var_metrics["accuracy"],
@@ -664,15 +562,6 @@ def run_density_map(data_train_x,
     data_train_set = TensorDataset(torch.from_numpy(data_train_x), torch.from_numpy(data_train_y))
     data_valid_set = TensorDataset(torch.from_numpy(data_valid_x), torch.from_numpy(data_valid_y))
     data_test_set = TensorDataset(torch.from_numpy(data_test_x), torch.from_numpy(data_test_y))
-    #
-    ## Rebalance the training split only; the validation/test splits keep the natural count prior. A
-    ## torch Subset holds references into the existing tensors, so no second copy of the CSI is made.
-    if preset["density"].get("undersample_nonempty", False):
-        var_train_count = data_train_y.sum(axis=1).round().astype(int)
-        var_keep = undersample_indices(var_train_count, preset["density"].get("undersample_cap"))
-        data_train_set = torch.utils.data.Subset(data_train_set, var_keep.tolist())
-        print("Train class counts after undersampling:",
-              np.bincount(var_train_count[var_keep], minlength=6))
 
     #
     ##
@@ -825,12 +714,9 @@ def run_density_map_cross_domain(data_x_train,
     : cross-domain run of the density-map group-counting model: train on var_env and evaluate on
       every other environment in test_sets_by_env. The occupancy head predicts the room's sorted
       location slots (a-e), which is the same index set in every room, so it transfers directly.
-      Each test room's density map is rendered with that room's own layout kernels.
-      The backbone is trained from scratch on one room, so its features are tuned to that room; a
-      plain source-only model collapses on the other rooms. Two label-free mechanisms close the gap:
-      an unsupervised CORAL feature-alignment term against the unlabeled target rooms (no target
-      labels), and a per-room occupancy threshold matched to the training room's count prior (the
-      count marginal is identical in every WiMANS room). No test-room labels are used anywhere.
+      Each test room's density map is rendered with that room's own layout kernels, and the
+      occupancy threshold is calibrated on the training room's validation split only (no test-room
+      labels are used), which is the honest cross-domain setting.
     [parameter]
     : data_x_train: numpy array, CSI amplitude to train model (train room)
     : data_y_train: numpy array, occupancy targets of shape (N, num_locations) for the train room
@@ -858,9 +744,8 @@ def run_density_map_cross_domain(data_x_train,
     #
     ## ============================================ Preprocess ============================================
     #
-    ## The validation split that anchors model selection and the count prior comes from the training
-    ## room. The test rooms contribute only unlabeled CSI (the CORAL term) and their own predicted
-    ## occupancy distribution (threshold matching); no test-room labels are ever used.
+    ## The validation split used for threshold calibration comes from the training room; the test
+    ## rooms are never touched during training or calibration.
     data_x_train, data_x_valid, data_y_train, data_y_valid = train_test_split(
         data_x_train, data_y_train, test_size=0.1, shuffle=True, random_state=39)
     data_x_valid = data_x_valid.reshape(data_x_valid.shape[0], data_x_valid.shape[1], -1)
@@ -869,31 +754,6 @@ def run_density_map_cross_domain(data_x_train,
     var_x_shape = data_x_train[0].shape
     data_train_set = TensorDataset(torch.from_numpy(data_x_train), torch.from_numpy(data_y_train))
     data_valid_set = TensorDataset(torch.from_numpy(data_x_valid), torch.from_numpy(data_y_valid))
-    #
-    ## Rebalance the training split only (validation keeps the natural count prior, which anchors
-    ## model selection and the prior-matching reference). A torch Subset holds references into the
-    ## existing tensors, so no second copy of the CSI is allocated.
-    if preset["density"].get("undersample_nonempty", False):
-        var_train_count = data_y_train.sum(axis=1).round().astype(int)
-        var_keep = undersample_indices(var_train_count, preset["density"].get("undersample_cap"))
-        data_train_set = torch.utils.data.Subset(data_train_set, var_keep.tolist())
-        print("Train class counts after undersampling:",
-              np.bincount(var_train_count[var_keep], minlength=6))
-    #
-    ## Unlabeled target-room CSI, used only by the unsupervised CORAL feature-alignment term. Built
-    ## once outside the repeat loop. Each room is wrapped in a zero-copy view (torch.from_numpy shares
-    ## the numpy buffer), and ConcatDataset only references the per-room datasets, so this adds no
-    ## second copy of the target data to memory.
-    var_coral_weight = preset["density"].get("coral_weight", 0.0)
-    if var_coral_weight > 0.0:
-        var_target_dataset = torch.utils.data.ConcatDataset([
-            TensorDataset(torch.from_numpy(var_x.reshape(var_x.shape[0], var_x.shape[1], -1)))
-            for var_x, _ in test_sets_by_env.values()
-        ])
-        var_target_loader = torch.utils.data.DataLoader(
-            var_target_dataset, batch_size=preset["nn"]["batch_size"], shuffle=True)
-    else:
-        var_target_loader = None
     #
     var_macs, var_params = get_model_complexity_info(
         DensityMapNet(var_x_shape, var_layout, grid_size=var_grid_size), var_x_shape, as_strings=False)
@@ -925,9 +785,7 @@ def run_density_map_cross_domain(data_x_train,
                                         data_valid_set=data_valid_set,
                                         var_batch_size=preset["nn"]["batch_size"],
                                         var_epochs=preset["nn"]["epoch"],
-                                        device=device,
-                                        target_loader=var_target_loader,
-                                        var_coral_weight=var_coral_weight)
+                                        device=device)
         model_density.load_state_dict(var_best_weight)
         model_density.eval()
         #
@@ -959,37 +817,27 @@ def run_density_map_cross_domain(data_x_train,
                                         torch.from_numpy(var_y_env), var_test_kernels).numpy()
             var_occupancy = var_occupancy.numpy()
             #
-            ## Label-free per-room threshold. The source-optimal threshold is biased on a new room
-            ## (the domain gap shifts every occupancy logit), so when prior_matching is enabled the
-            ## decision boundary is instead matched to the training room's count prior, which is the
-            ## same in every WiMANS room.
-            if preset["density"].get("prior_matching", False):
-                var_env_threshold, _ = calibrate_threshold_prior(
-                    var_occupancy, data_y_valid.sum(axis=1).round())
-            else:
-                var_env_threshold = var_threshold
-            #
             var_count_metrics = count_metrics(var_y_env.sum(axis=1).round(),
-                                              predict_counts(var_occupancy, var_env_threshold),
-                                              var_y_env, var_occupancy, var_env_threshold)
+                                              predict_counts(var_occupancy, var_threshold),
+                                              var_y_env, var_occupancy, var_threshold)
             #
-            var_rep = {**var_count_metrics, "threshold": var_env_threshold}
+            var_rep = {**var_count_metrics, "threshold": var_threshold}
             env_rep_metrics.setdefault(var_env_name, []).append(var_rep)
             env_last_density[var_env_name] = (true_density, pred_density)
-            env_last_occupancy[var_env_name] = (var_occupancy, var_env_threshold, var_y_env)
+            env_last_occupancy[var_env_name] = (var_occupancy, var_threshold, var_y_env)
             #
             wandb.log({
                 f"test_results_per_env/{var_env_name}/accuracy": var_count_metrics["accuracy"],
                 f"test_results_per_env/{var_env_name}/mae": var_count_metrics["mae"],
                 f"test_results_per_env/{var_env_name}/occupancy_accuracy": var_count_metrics["occupancy_accuracy"],
                 f"test_results_per_env/{var_env_name}/occupancy_f1": var_count_metrics["occupancy_f1"],
-                f"test_results_per_env/{var_env_name}/threshold": var_env_threshold,
+                f"test_results_per_env/{var_env_name}/threshold": var_threshold,
             }, step=var_r + 100000)
             #
             print(f"  [{var_env_name}] COUNT Acc {var_count_metrics['accuracy']:.4f} - "
                   f"MAE {var_count_metrics['mae']:.4f} - "
                   f"Occ Acc {var_count_metrics['occupancy_accuracy']:.4f} - "
-                  f"Occ F1 {var_count_metrics['occupancy_f1']:.4f} (Thr {var_env_threshold:.2f})")
+                  f"Occ F1 {var_count_metrics['occupancy_f1']:.4f} (Thr {var_threshold:.2f})")
         #
         if var_r != var_repeat - 1:
             del model_density, optimizer
@@ -1065,8 +913,8 @@ def run_density_map_few_shot(data_train_x,
       Because the density model is a per-location sigmoid predictor (not a set predictor), the soft
       targets are matched element-wise with a temperature-scaled Bernoulli cross-entropy: no
       Hungarian assignment is involved.
-      The protocol deliberately mirrors the AMAR few-shot runner (no rebalancing, same 39-seed split,
-      same validation slice), so the two models' few-shot numbers are directly comparable.
+      The protocol deliberately mirrors the AMAR few-shot runner (same 39-seed split, same validation
+      slice), so the two models' few-shot numbers are directly comparable.
     [parameter]
     : data_train_x: numpy array, CSI amplitude of the single training environment
     : data_train_y: numpy array, per-location occupancy targets (N, num_locations) with 0/1 entries
@@ -1205,7 +1053,8 @@ def run_density_map_few_shot(data_train_x,
         student.eval()
 
         #
-        ## occupancy threshold from the training room's validation split
+        ## occupancy threshold from the training room's validation split, reused for every test room
+        # (no test-room labels are used anywhere)
         #
         with torch.no_grad():
             _, _, var_valid_logits = student(torch.from_numpy(data_teacher_valid_x).to(device))
@@ -1235,30 +1084,23 @@ def run_density_map_few_shot(data_train_x,
                                         torch.from_numpy(var_y_env), var_test_kernels).numpy()
             var_occupancy = var_occupancy.numpy()
             #
-            ## Label-free per-room threshold, identical rule to the cross-domain runner.
-            if preset["density"].get("prior_matching", False):
-                var_env_threshold, _ = calibrate_threshold_prior(
-                    var_occupancy, data_teacher_valid_y.sum(axis=1).round())
-            else:
-                var_env_threshold = var_threshold
-            #
             var_count_metrics = count_metrics(var_y_env.sum(axis=1).round(),
-                                              predict_counts(var_occupancy, var_env_threshold),
-                                              var_y_env, var_occupancy, var_env_threshold)
+                                              predict_counts(var_occupancy, var_threshold),
+                                              var_y_env, var_occupancy, var_threshold)
             #
-            var_rep = {**var_count_metrics, "threshold": var_env_threshold,
+            var_rep = {**var_count_metrics, "threshold": var_threshold,
                        "teacher_train_time": teacher_time_1 - teacher_time_0,
                        "student_train_time": student_time_1 - student_time_0}
             env_rep_metrics.setdefault(var_env_name, []).append(var_rep)
             env_last_density[var_env_name] = (true_density, pred_density)
-            env_last_occupancy[var_env_name] = (var_occupancy, var_env_threshold, var_y_env)
+            env_last_occupancy[var_env_name] = (var_occupancy, var_threshold, var_y_env)
             #
             wandb.log({
                 f"test_results_per_env/{var_env_name}/accuracy": var_count_metrics["accuracy"],
                 f"test_results_per_env/{var_env_name}/mae": var_count_metrics["mae"],
                 f"test_results_per_env/{var_env_name}/occupancy_accuracy": var_count_metrics["occupancy_accuracy"],
                 f"test_results_per_env/{var_env_name}/occupancy_f1": var_count_metrics["occupancy_f1"],
-                f"test_results_per_env/{var_env_name}/threshold": var_env_threshold,
+                f"test_results_per_env/{var_env_name}/threshold": var_threshold,
                 f"test_results_per_env/{var_env_name}/teacher_train_time": teacher_time_1 - teacher_time_0,
                 f"test_results_per_env/{var_env_name}/student_train_time": student_time_1 - student_time_0,
             }, step=var_r + 100000)
@@ -1266,7 +1108,7 @@ def run_density_map_few_shot(data_train_x,
             print(f"  [{var_env_name}] COUNT Acc {var_count_metrics['accuracy']:.4f} - "
                   f"MAE {var_count_metrics['mae']:.4f} - "
                   f"Occ Acc {var_count_metrics['occupancy_accuracy']:.4f} - "
-                  f"Occ F1 {var_count_metrics['occupancy_f1']:.4f} (Thr {var_env_threshold:.2f})")
+                  f"Occ F1 {var_count_metrics['occupancy_f1']:.4f} (Thr {var_threshold:.2f})")
         #
         del teacher_optimizer, student_optimizer, kd_loss
         del teacher_best_weight, student_best_weight, env_loader, var_occupancy
