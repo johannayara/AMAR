@@ -136,6 +136,17 @@ preset = {
         "sigma": 0.06,
         "count_loss_weight": 1.0,
         "peak_threshold": 0.25,  # fraction of the map max used to extract predicted locations
+        ## Cross-domain: weight of the unsupervised CORAL feature-alignment loss against the
+        ## unlabeled target room(s). 0 disables domain adaptation (source-only baseline).
+        "coral_weight": 1.0,
+        ## Cross-domain: match each target room's predicted count distribution to the training
+        ## room's count prior (label-free) instead of reusing the source-calibrated threshold.
+        "prior_matching": True,
+        ## Class balance: WiMANS is imbalanced such that always predicting count-1 already scores
+        ## 31%. Keep every empty (count-0) frame and cap each non-empty class in the *training*
+        ## split; validation/test keep the natural prior.
+        "undersample_nonempty": True,
+        "undersample_cap": None,  # None => the empty-class count (balanced); e.g. 297 for a milder cap
     },
 }
 
