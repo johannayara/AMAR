@@ -68,7 +68,9 @@ def load_density_model(var_checkpoint_path, var_device):
               f"'{preset['data']['environment'][0]}' for the (unused at inference) kernels")
     var_model = DensityMapNet(tuple(var_checkpoint["x_shape"]), var_layout,
                               grid_size=var_checkpoint["grid_size"],
-                              sigma=var_checkpoint["sigma"]).to(var_device)
+                              sigma=var_checkpoint["sigma"],
+                              hidden_dim=var_checkpoint.get("decoder_hidden"),
+                              dropout=var_checkpoint.get("decoder_dropout")).to(var_device)
     var_model.load_state_dict(var_checkpoint["model_state_dict"])
     var_model.eval()
     return var_model, var_checkpoint

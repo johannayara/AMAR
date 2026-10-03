@@ -82,11 +82,11 @@ def peak_normalized_kernels(var_kernels):
     : rescale each unit-mass kernel to a peak of 1. The target density then holds an occupancy
       probability of ~1 at an occupied location, which is what the per-location readout and the
       threshold calibration expect (a unit-mass kernel peaks at only ~0.04 on a 32x32 grid).
-    : var_kernels: tensor (num_locations, grid, grid)
-    : return: tensor (num_locations, grid, grid)
+    : var_kernels: tensor (num_locations, grid, grid) or (batch, num_locations, grid, grid)
+    : return: same shape as var_kernels
     """
-    var_peak = var_kernels.flatten(1).max(1).values.clamp_min(1e-12).view(-1, 1, 1)
-    return var_kernels / var_peak
+    var_peak = var_kernels.flatten(-2).max(-1).values.clamp_min(1e-12)
+    return var_kernels / var_peak.unsqueeze(-1).unsqueeze(-1)
 
 
 def render_density_targets(var_occupancy, var_kernels):
@@ -96,10 +96,14 @@ def render_density_targets(var_occupancy, var_kernels):
       location contributes one peak-normalized kernel, so the map is a per-cell occupancy
       probability whose peaks are the occupied locations.
     : var_occupancy: tensor (batch, num_locations) with 0/1 entries
-    : var_kernels: tensor (num_locations, grid, grid) of unit-mass Gaussian kernels
+    : var_kernels: tensor (num_locations, grid, grid) of unit-mass Gaussian kernels, or a per-sample
+      tensor (batch, num_locations, grid, grid) when the batch mixes rooms
     : return: tensor (batch, grid, grid)
     """
-    return torch.einsum("bl,lhw->bhw", var_occupancy, peak_normalized_kernels(var_kernels))
+    var_peak_kernels = peak_normalized_kernels(var_kernels)
+    if var_peak_kernels.dim() == 3:
+        return torch.einsum("bl,lhw->bhw", var_occupancy, var_peak_kernels)
+    return torch.einsum("bl,blhw->bhw", var_occupancy, var_peak_kernels)
 
 
 def sample_location_occupancy(var_density, var_kernels):
@@ -109,11 +113,15 @@ def sample_location_occupancy(var_density, var_kernels):
       the location's kernel peak is the natural analogue of the per-location occupancy the previous
       formulation predicted directly, and it keeps the count and per-location metrics unchanged.
     : var_density: tensor (batch, grid, grid) predicted occupancy probabilities
-    : var_kernels: tensor (num_locations, grid, grid) of unit-mass Gaussian kernels
+    : var_kernels: tensor (num_locations, grid, grid) of unit-mass Gaussian kernels, or a per-sample
+      tensor (batch, num_locations, grid, grid) when the batch mixes rooms
     : return: tensor (batch, num_locations)
     """
-    var_peak_index = var_kernels.flatten(1).argmax(1)
-    return var_density.flatten(1)[:, var_peak_index]
+    var_density_flat = var_density.flatten(1)
+    if var_kernels.dim() == 3:
+        return var_density_flat[:, var_kernels.flatten(1).argmax(1)]
+    var_peak_index = var_kernels.flatten(2).argmax(2)
+    return var_density_flat.gather(1, var_peak_index)
 
 
 class DensityMapNet(torch.nn.Module):
@@ -123,6 +131,8 @@ class DensityMapNet(torch.nn.Module):
       grid x grid occupancy probability map over the shared normalized frame, so it can place mass at
       any coordinate rather than only on a room's known locations. The fixed location kernels are kept
       only as a buffer, to render training targets and to read per-location occupancy back off the map.
+      The decoder is deliberately small and regularised: a large decoder can satisfy the source-room
+      loss by emitting that room's marginal map and ignoring the input, which does not transfer.
     """
     #
     ##
@@ -131,27 +141,39 @@ class DensityMapNet(torch.nn.Module):
                  var_layout,
                  embedding_dim=100,
                  grid_size=32,
-                 hidden_dim=256,
-                 sigma=0.06):
+                 hidden_dim=None,
+                 sigma=0.06,
+                 dropout=None):
 
         super().__init__()
+        if hidden_dim is None:
+            hidden_dim = preset["density"].get("decoder_hidden", 64)
+        if dropout is None:
+            dropout = preset["density"].get("decoder_dropout", 0.1)
+        #
         self.backbone = THAT(var_x_shape, [embedding_dim])
         self.grid_size = grid_size
         self.hidden_dim = hidden_dim
+        self.dropout = dropout
         #
         var_kernels, self.location_names = build_kernels(var_layout, grid_size, sigma)
         self.register_buffer("kernels", torch.from_numpy(var_kernels))
         #
         ## Seed the map at 4x4 and upsample by 2 three times to 32x32; interpolate if grid_size differs.
-        self.decoder_fc = torch.nn.Linear(embedding_dim, hidden_dim * 4 * 4)
+        self.decoder_fc = torch.nn.Sequential(
+            torch.nn.Linear(embedding_dim, hidden_dim * 4 * 4),
+            torch.nn.LeakyReLU(),
+            torch.nn.Dropout(dropout),
+        )
         self.decoder_conv = torch.nn.Sequential(
-            torch.nn.ConvTranspose2d(hidden_dim, 128, kernel_size=4, stride=2, padding=1),
+            torch.nn.ConvTranspose2d(hidden_dim, 32, kernel_size=4, stride=2, padding=1),
             torch.nn.LeakyReLU(),
-            torch.nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1),
+            torch.nn.Dropout2d(dropout),
+            torch.nn.ConvTranspose2d(32, 16, kernel_size=4, stride=2, padding=1),
             torch.nn.LeakyReLU(),
-            torch.nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2, padding=1),
+            torch.nn.ConvTranspose2d(16, 16, kernel_size=4, stride=2, padding=1),
             torch.nn.LeakyReLU(),
-            torch.nn.Conv2d(32, 1, kernel_size=3, padding=1),
+            torch.nn.Conv2d(16, 1, kernel_size=3, padding=1),
         )
 
     def forward(self, x):
@@ -400,6 +422,8 @@ def save_density_checkpoint(model, var_x_shape, var_env, save_path, var_tag="mod
         "layout_name": var_env,
         "grid_size": model.grid_size,
         "sigma": preset["density"]["sigma"],
+        "decoder_hidden": model.hidden_dim,
+        "decoder_dropout": model.dropout,
         "location_names": list(model.location_names),
     }, var_out_path)
     print(f"  Checkpoint saved to {var_out_path}")
@@ -416,7 +440,8 @@ def train_density(model,
                   patience: int = 150,
                   teacher=None,
                   kd_loss=None,
-                  kd_weight: float = 0.0):
+                  kd_weight: float = 0.0,
+                  var_kernel_bank=None):
     """
     [description]
     : train the density-map model. The objective is the binary cross-entropy between the predicted
@@ -431,6 +456,10 @@ def train_density(model,
       (few-shot knowledge distillation).
     : data_train_set / data_valid_set: TensorDataset of (CSI, occupancy) with occupancy (num_locations,)
       holding 0/1 entries. The density target is rendered from the occupancy with the model's kernels.
+      When the set mixes several rooms it yields a third element, the room index, and var_kernel_bank
+      must be given so each sample is rendered and read out with its own room's kernels.
+    : var_kernel_bank: optional tensor (num_rooms, num_locations, grid, grid) of unit-mass kernels,
+      one entry per room index carried by the datasets.
     : teacher: optional frozen DensityMapNet whose density logits supervise the student.
     : kd_loss: optional distillation criterion taking (student_outputs, teacher_outputs).
     : kd_weight: weight of the distillation term.
@@ -490,12 +519,19 @@ def train_density(model,
     for var_epoch in range(var_epochs):
         var_time_e0 = time.time()
         model.train()
-        for var_x, var_occupancy in var_train_loader:
+        for var_batch in var_train_loader:
+            var_x, var_occupancy = var_batch[0], var_batch[1]
             var_x = apply_augmentation(var_x.to(device))
             var_occupancy = var_occupancy.to(device)
             #
+            ## each sample is rendered with its own room's kernels when the batch mixes rooms
+            if len(var_batch) > 2:
+                var_kernels = var_kernel_bank[var_batch[2].to(device)]
+            else:
+                var_kernels = model.kernels
+            #
             _, _, var_density_logits = model(var_x)
-            var_density_target = render_density_targets(var_occupancy, model.kernels)
+            var_density_target = render_density_targets(var_occupancy, var_kernels)
             var_loss = F.binary_cross_entropy_with_logits(var_density_logits, var_density_target)
             #
             ## few-shot distillation: the frozen teacher supervises the student's density logits
@@ -514,14 +550,19 @@ def train_density(model,
         #
         model.eval()
         with torch.no_grad():
-            var_valid_x, var_valid_y = next(iter(var_valid_loader))
+            var_valid_batch = next(iter(var_valid_loader))
+            var_valid_x, var_valid_y = var_valid_batch[0], var_valid_batch[1]
             var_valid_density, _, var_valid_logits = model(var_valid_x.to(device))
             var_valid_kd_value = 0.0
             if var_use_distillation:
                 _, _, var_valid_teacher_logits = teacher(var_valid_x.to(device))
                 var_valid_kd_value = float(kd_loss(var_valid_logits, var_valid_teacher_logits).detach())
+            if len(var_valid_batch) > 2:
+                var_valid_kernels = var_kernel_bank[var_valid_batch[2].to(device)]
+            else:
+                var_valid_kernels = model.kernels
             var_valid_occupancy = sample_location_occupancy(
-                var_valid_density, model.kernels).cpu().numpy()
+                var_valid_density, var_valid_kernels).cpu().numpy()
             var_valid_y = var_valid_y.numpy()
         #
         var_true_count = var_valid_y.sum(axis=1).round()
@@ -785,56 +826,79 @@ def run_density_map(data_train_x,
 ## ------------------------------------ cross-domain runner -------------------------------------- ##
 #
 ##
-def run_density_map_cross_domain(data_x_train,
-                                 data_y_train,
+def run_density_map_cross_domain(train_sets_by_env,
                                  test_sets_by_env,
-                                 var_repeat=10, var_task="count", var_env="empty_room",
+                                 var_repeat=10, var_task="count",
                                  save_path="./visualizations/temp"):
     """
     [description]
-    : cross-domain run of the density-map group-counting model: train on var_env and evaluate on
-      every other environment in test_sets_by_env. The occupancy head predicts the room's sorted
-      location slots (a-e), which is the same index set in every room, so it transfers directly.
-      Each test room's density map is rendered with that room's own layout kernels, and the
-      occupancy threshold is calibrated on the training room's validation split only (no test-room
-      labels are used), which is the honest cross-domain setting.
+    : cross-domain run of the density-map group-counting model. Trains on every room in
+      train_sets_by_env and evaluates on every room in test_sets_by_env. Pass a single training room
+      for the old one-room protocol, or two training rooms for leave-one-room-out (train on two, test
+      on the third), which is what stops the decoder from memorising one room's spatial layout.
+      Each training room contributes its own 90/10 split, so model selection and the occupancy
+      threshold are anchored on a validation split that covers every training room; the test rooms
+      contribute no labels at all.
     [parameter]
-    : data_x_train: numpy array, CSI amplitude to train model (train room)
-    : data_y_train: numpy array, occupancy targets of shape (N, num_locations) for the train room
-    : test_sets_by_env: dict, env name -> (CSI amplitude, occupancy targets) of that room
+    : train_sets_by_env: dict, env name -> (CSI amplitude, occupancy targets) of a training room
+    : test_sets_by_env: dict, env name -> (CSI amplitude, occupancy targets) of a held-out room
     : var_repeat: int, number of repeated experiments
     : var_task: str, task name kept for interface compatibility (the model is always counting)
-    : var_env: str, training room name (also selects the training-room kernels)
     : save_path: str, directory for the per-room visualizations
     : return: dict, env name -> averaged count and per-location occupancy metrics with SE
     """
     #
-    ##
-    data_y_train = np.asarray(data_y_train, dtype=np.float32)
+    device = select_device()
+    print(f"Using device: {device}")
+    #
     for var_env_name in list(test_sets_by_env):
         var_x_env, var_y_env = test_sets_by_env[var_env_name]
         test_sets_by_env[var_env_name] = (var_x_env, np.asarray(var_y_env, dtype=np.float32))
     #
-    device = select_device()
-    print(f"Using device: {device}")
-    #
-    var_layout = preset["layouts"][var_env]
+    var_train_envs = list(train_sets_by_env)
+    var_layout = preset["layouts"][var_train_envs[0]]
     var_grid_size = preset["density"]["grid_size"]
     var_sigma = preset["density"]["sigma"]
+    #
+    ## one unit-mass kernel bank per training room; each sample is rendered and read out with its own
+    ## room's kernels, which is what lets several rooms share one model
+    var_kernel_bank = torch.stack([
+        torch.from_numpy(build_kernels(preset["layouts"][var_env_name], var_grid_size, var_sigma)[0])
+        for var_env_name in var_train_envs])
+    var_room_index = {var_env_name: var_idx for var_idx, var_env_name in enumerate(var_train_envs)}
 
     #
     ## ============================================ Preprocess ============================================
     #
-    ## The validation split used for threshold calibration comes from the training room; the test
-    ## rooms are never touched during training or calibration.
-    data_x_train, data_x_valid, data_y_train, data_y_valid = train_test_split(
-        data_x_train, data_y_train, test_size=0.1, shuffle=True, random_state=39)
-    data_x_valid = data_x_valid.reshape(data_x_valid.shape[0], data_x_valid.shape[1], -1)
-    data_x_train = data_x_train.reshape(data_x_train.shape[0], data_x_train.shape[1], -1)
+    var_train_x, var_train_y, var_train_room = [], [], []
+    var_valid_x, var_valid_y, var_valid_room = [], [], []
+    for var_env_name in var_train_envs:
+        var_x_env, var_y_env = train_sets_by_env[var_env_name]
+        var_y_env = np.asarray(var_y_env, dtype=np.float32)
+        var_x_env = np.asarray(var_x_env).reshape(var_x_env.shape[0], var_x_env.shape[1], -1)
+        var_x_tr, var_x_va, var_y_tr, var_y_va = train_test_split(
+            var_x_env, var_y_env, test_size=0.1, shuffle=True, random_state=39)
+        var_train_x.append(var_x_tr)
+        var_train_y.append(var_y_tr)
+        var_train_room.append(np.full(var_x_tr.shape[0], var_room_index[var_env_name], dtype=np.int64))
+        var_valid_x.append(var_x_va)
+        var_valid_y.append(var_y_va)
+        var_valid_room.append(np.full(var_x_va.shape[0], var_room_index[var_env_name], dtype=np.int64))
+    var_train_x = np.concatenate(var_train_x)
+    var_train_y = np.concatenate(var_train_y)
+    var_train_room = np.concatenate(var_train_room)
+    var_valid_x = np.concatenate(var_valid_x)
+    var_valid_y = np.concatenate(var_valid_y)
+    var_valid_room = np.concatenate(var_valid_room)
     #
-    var_x_shape = data_x_train[0].shape
-    data_train_set = TensorDataset(torch.from_numpy(data_x_train), torch.from_numpy(data_y_train))
-    data_valid_set = TensorDataset(torch.from_numpy(data_x_valid), torch.from_numpy(data_y_valid))
+    var_x_shape = var_train_x[0].shape
+    data_train_set = TensorDataset(torch.from_numpy(var_train_x), torch.from_numpy(var_train_y),
+                                   torch.from_numpy(var_train_room))
+    data_valid_set = TensorDataset(torch.from_numpy(var_valid_x), torch.from_numpy(var_valid_y),
+                                   torch.from_numpy(var_valid_room))
+    #
+    print(f"Training rooms: {var_train_envs} ({var_train_x.shape[0]} train / "
+          f"{var_valid_x.shape[0]} valid) | Test rooms: {list(test_sets_by_env)}")
     #
     var_macs, var_params = get_model_complexity_info(
         DensityMapNet(var_x_shape, var_layout, grid_size=var_grid_size), var_x_shape, as_strings=False)
@@ -849,7 +913,7 @@ def run_density_map_cross_domain(data_x_train,
     #
     for var_r in range(var_repeat):
         print("Repeat", var_r)
-        name_run = f"DensityMapCD{var_r}_" + "_".join([var_env])
+        name_run = f"DensityMapCD{var_r}_" + "_".join(var_train_envs)
         wandb.init(project="density_map_cross_domain", name=name_run, config=preset, reinit=True)
         #
         torch.random.manual_seed(var_r + 39)
@@ -866,16 +930,18 @@ def run_density_map_cross_domain(data_x_train,
                                         data_valid_set=data_valid_set,
                                         var_batch_size=preset["nn"]["batch_size"],
                                         var_epochs=preset["nn"]["epoch"],
-                                        device=device)
+                                        device=device,
+                                        var_kernel_bank=var_kernel_bank)
         model_density.load_state_dict(var_best_weight)
         model_density.eval()
         #
-        ## occupancy threshold from the training room's validation split
+        ## occupancy threshold from the training rooms' validation split
         with torch.no_grad():
-            var_valid_density, _, _ = model_density(torch.from_numpy(data_x_valid).to(device))
+            var_valid_density, _, _ = model_density(torch.from_numpy(var_valid_x).to(device))
             var_valid_occupancy = sample_location_occupancy(
-                var_valid_density, model_density.kernels).cpu().numpy()
-        var_threshold, _ = calibrate_threshold(var_valid_occupancy, data_y_valid.sum(axis=1).round())
+                var_valid_density,
+                var_kernel_bank[torch.from_numpy(var_valid_room).to(device)]).cpu().numpy()
+        var_threshold, _ = calibrate_threshold(var_valid_occupancy, var_valid_y.sum(axis=1).round())
         #
         ## -------------------------------------- Test per room ----------------------------------------
         #
@@ -928,7 +994,7 @@ def run_density_map_cross_domain(data_x_train,
             gc.collect()
         else:
             ## keep the last repeat's weights so a live capture can be run through the model
-            save_density_checkpoint(model_density, var_x_shape, var_env, save_path)
+            save_density_checkpoint(model_density, var_x_shape, var_train_envs[0], save_path)
 
     #
     ## -------------------------------------- Aggregate per room ----------------------------------------

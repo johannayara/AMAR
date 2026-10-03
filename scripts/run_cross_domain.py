@@ -24,45 +24,46 @@ from pathlib import Path
 
 #
 ##
-def master_splitter(preset, var_task, var_model, var_users, var_env="empty_room"):
+def _load_room(preset, var_task, var_model, var_users, var_env):
+    """
+    [description]
+    : load one room's CSI amplitude and its labels for the given model.
+    """
     data_pd_y = load_data_y(preset["path"]["data_y"],
-                             var_environment=[var_env],
-                             var_wifi_band=preset["data"]["wifi_band"],
-                             var_num_users=var_users)
+                            var_environment=[var_env],
+                            var_wifi_band=preset["data"]["wifi_band"],
+                            var_num_users=var_users)
     var_label_list = data_pd_y["label"].to_list()
-    data_x_train = load_data_x(preset["path"]["data_x"], var_label_list)
-
+    var_x = load_data_x(preset["path"]["data_x"], var_label_list)
     if var_model == "density_map":
         ## Density-map group counting predicts per-location occupancy, so the label is the room's
         ## occupancy vector rather than a task encoding.
-        data_y_train = encode_occupancy_y(data_pd_y, var_env)
+        var_y = encode_occupancy_y(data_pd_y, var_env)
     else:
-        data_y_train = encode_data_y(data_pd_y, var_task)
-
+        var_y = encode_data_y(data_pd_y, var_task)
         if var_model in ("AMAR_WO_RVQ", "AMAR"):
-            data_y_train = reduce_dataset(data_y_train, var_task, preset["nn"]["num_obj_queries"])
+            var_y = reduce_dataset(var_y, var_task, preset["nn"]["num_obj_queries"])
+    return var_x, var_y
 
-    test_sets_by_env = {}
-    other_envs = [e for e in preset["data"]["environment"] if e != var_env]
-    for e in other_envs:
-        data_pd_y_test = load_data_y(preset["path"]["data_y"],
-                                      var_environment=[e],
-                                      var_wifi_band=preset["data"]["wifi_band"],
-                                      var_num_users=var_users)
-        var_label_list_test = data_pd_y_test["label"].to_list()
-        X_test_e = load_data_x(preset["path"]["data_x"], var_label_list_test)
 
-        if var_model == "density_map":
-            y_test_e = encode_occupancy_y(data_pd_y_test, e)
-        else:
-            y_test_e = encode_data_y(data_pd_y_test, var_task)
-
-            if var_model in ("AMAR_WO_RVQ", "AMAR"):
-                y_test_e = reduce_dataset(y_test_e, var_task, preset["nn"]["num_obj_queries"])
-
-        test_sets_by_env[e] = (X_test_e, y_test_e)
-
-    return data_x_train, data_y_train, test_sets_by_env
+def master_splitter(preset, var_task, var_model, var_users, var_train_envs):
+    """
+    [description]
+    : build the per-room training sets and the per-room test sets. Pass one training room for the
+      one-room protocol, or two for leave-one-room-out (train on two, test on the third). Every room
+      not in var_train_envs becomes a test room.
+    : return: train_sets_by_env, test_sets_by_env (dict {env_name: (X, y)})
+    """
+    var_all_envs = list(preset["data"]["environment"])
+    for var_env in var_train_envs:
+        if var_env not in var_all_envs:
+            raise ValueError(f"training room {var_env!r} is not in preset['data']['environment'] "
+                             f"{var_all_envs}")
+    train_sets_by_env = {var_env: _load_room(preset, var_task, var_model, var_users, var_env)
+                         for var_env in var_train_envs}
+    test_sets_by_env = {var_env: _load_room(preset, var_task, var_model, var_users, var_env)
+                        for var_env in var_all_envs if var_env not in var_train_envs}
+    return train_sets_by_env, test_sets_by_env
 
 def parse_args():
     """
@@ -77,7 +78,11 @@ def parse_args():
     var_args.add_argument("--task", default = preset["task"], type = str)
     var_args.add_argument("--repeat", default = preset["repeat"], type = int)
     var_args.add_argument("--users", default="0, 1,2,3,4,5", type=str, help="Comma-separated list of user IDs")
-    var_args.add_argument("--env", default="empty_room", type=str, help="room name")
+    var_args.add_argument("--env", default="empty_room", type=str, help="training room name")
+    var_args.add_argument("--train_envs", default=None, type=str,
+                          help="Comma-separated training rooms. Overrides --env. Pass two rooms for "
+                               "leave-one-room-out: train on those two and test on the remaining one. "
+                               "Every room not listed becomes a test room.")
     var_args.add_argument("--epochs", default=None, type=int,
                           help="Override preset['nn']['epoch']. The cosine LR schedule is tied to "
                                "this value, so it must match the actual training length.")
@@ -211,23 +216,31 @@ def run():
     var_repeat = var_args.repeat
     var_users = [u.strip() for u in var_args.users.split(',')]
     var_env = var_args.env
+    var_train_envs = ([e.strip() for e in var_args.train_envs.split(',')]
+                      if var_args.train_envs else [var_env])
     if var_args.epochs is not None:
         preset["nn"]["epoch"] = var_args.epochs
 
     # Ensuring there is no data leakage while doing splits.
-    data_x_train, data_y_train, test_sets_by_env = master_splitter(preset, var_task, var_model, var_users, var_env)
+    train_sets_by_env, test_sets_by_env = master_splitter(
+        preset, var_task, var_model, var_users, var_train_envs)
 
-    save_path=Path(f'./visualizations/cross_domain/{var_env}/1')
+    ## the run directory is named after the training rooms so one-room and leave-one-room-out runs
+    ## do not collide
+    save_path=Path(f'./visualizations/cross_domain/{"_".join(var_train_envs)}/1')
     while save_path.is_dir():
         new_name = str((int(save_path.name)+1))
         save_path = save_path.parent / new_name
     #
     ## run WiFi-based model
     if var_model == "density_map":
-        all_envs_results = run_density_map_cross_domain(data_x_train, data_y_train, test_sets_by_env,
-                                                        var_repeat, var_task, var_env, save_path)
+        all_envs_results = run_density_map_cross_domain(train_sets_by_env, test_sets_by_env,
+                                                        var_repeat, var_task, save_path)
     else:
-        all_envs_results = run_cross_domain(data_x_train, data_y_train, test_sets_by_env, var_repeat, var_task, var_env, save_path)
+        data_x_train = np.concatenate([var_x for var_x, _ in train_sets_by_env.values()])
+        data_y_train = np.concatenate([var_y for _, var_y in train_sets_by_env.values()])
+        all_envs_results = run_cross_domain(data_x_train, data_y_train, test_sets_by_env,
+                                            var_repeat, var_task, "_".join(var_train_envs), save_path)
     #
     ##
     result = {
@@ -235,7 +248,7 @@ def run():
     "model": var_model,
     "task": var_task,
     "repeat": var_repeat,
-    "env": var_env,
+    "train_envs": var_train_envs,
     "epochs": preset["nn"]["epoch"],
     "data": preset["data"],
     "nn": preset["nn"],

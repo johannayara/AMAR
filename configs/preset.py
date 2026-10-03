@@ -142,6 +142,11 @@ preset = {
         ## likely) so the empty-room frames are seen as often as the crowded ones. No data is
         ## discarded, unlike undersampling the majority classes.
         "balance_empty_class": True,
+        ## Density head size. A large decoder can satisfy the source-room loss by emitting that
+        ## room's marginal map and ignoring the input, which does not transfer to another room, so the
+        ## decoder is kept small and regularised.
+        "decoder_hidden": 64,
+        "decoder_dropout": 0.1,
     },
 }
 
