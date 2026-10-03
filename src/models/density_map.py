@@ -33,6 +33,7 @@ from torch.utils.data import TensorDataset
 from ptflops import get_model_complexity_info
 
 from src.models.bce_that import THAT
+from src.models.losses.supervised_loss import OccupancyDistillationLoss
 from configs.preset import preset
 from src.utils import *
 import wandb
@@ -453,21 +454,29 @@ def train_density(model,
                   device,
                   patience: int = 150,
                   target_loader=None,
-                  var_coral_weight: float = 0.0):
+                  var_coral_weight: float = 0.0,
+                  teacher=None,
+                  kd_loss=None,
+                  kd_weight: float = 0.0):
     """
     [description]
     : train the density-map model. The objective is the per-location occupancy binary cross-entropy;
       the count is the sum of the occupancies and follows from the same loss. When a target_loader is
       given, an unsupervised CORAL feature-alignment term against the unlabeled target room(s) is
-      added with weight var_coral_weight, which is what makes the model transfer across rooms. The
-      occupancy threshold is calibrated on the validation split each epoch, so model selection tracks
-      the exact-count accuracy that is actually reported. The per-epoch validation metric is noisy on
-      a small split, so it is smoothed (EMA) before selecting the checkpoint.
+      added with weight var_coral_weight, which is what makes the model transfer across rooms. When a
+      frozen teacher and a kd_loss are given, the teacher's occupancy logits are distilled into the
+      student with weight kd_weight (few-shot knowledge distillation). The occupancy threshold is
+      calibrated on the validation split each epoch, so model selection tracks the exact-count
+      accuracy that is actually reported. The per-epoch validation metric is noisy on a small split,
+      so it is smoothed (EMA) before selecting the checkpoint.
     : data_train_set / data_valid_set: TensorDataset of (CSI, occupancy) with occupancy (num_locations,)
       holding 0/1 entries.
     : target_loader: optional DataLoader of unlabeled target-room CSI, sampled once per source batch
       for the CORAL term.
     : var_coral_weight: weight of the CORAL term; 0 disables domain alignment.
+    : teacher: optional frozen DensityMapNet whose occupancy logits supervise the student.
+    : kd_loss: optional distillation criterion taking (student_outputs, teacher_outputs).
+    : kd_weight: weight of the distillation term.
     """
     #
     var_train_loader = torch.utils.data.DataLoader(data_train_set, var_batch_size, shuffle=True, pin_memory=True)
@@ -476,6 +485,9 @@ def train_density(model,
     var_target_iter = (iter(target_loader)
                        if (target_loader is not None and var_coral_weight > 0.0) else None)
     var_coral_value = 0.0
+    #
+    var_use_distillation = teacher is not None and kd_loss is not None and kd_weight > 0.0
+    var_kd_value = 0.0
     #
     var_best_score = -np.inf
     var_best_mae = np.inf
@@ -540,14 +552,23 @@ def train_density(model,
             var_coral_value = 0.0
             if var_target_iter is not None:
                 try:
-                    var_target_x = next(var_target_iter)
+                    (var_target_x,) = next(var_target_iter)
                 except StopIteration:
                     var_target_iter = iter(target_loader)
-                    var_target_x = next(var_target_iter)
+                    (var_target_x,) = next(var_target_iter)
                 var_target_features = model.forward_features(apply_augmentation(var_target_x.to(device)))
                 var_coral = coral_loss(var_features, var_target_features)
                 var_coral_value = float(var_coral.detach())
                 var_loss = var_loss + var_coral_weight * var_coral
+            #
+            ## few-shot distillation: the frozen teacher supervises the student's occupancy logits
+            var_kd_value = 0.0
+            if var_use_distillation:
+                with torch.no_grad():
+                    var_teacher_logits = teacher.occupancy_head(teacher.forward_features(var_x))
+                var_kd = kd_loss(var_occupancy_logits, var_teacher_logits)
+                var_kd_value = float(var_kd.detach())
+                var_loss = var_loss + kd_weight * var_kd
             #
             optimizer.zero_grad()
             var_loss.backward()
@@ -558,6 +579,11 @@ def train_density(model,
         with torch.no_grad():
             var_valid_x, var_valid_y = next(iter(var_valid_loader))
             _, _, var_valid_logits = model(var_valid_x.to(device))
+            var_valid_kd_value = 0.0
+            if var_use_distillation:
+                var_valid_teacher_logits = teacher.occupancy_head(
+                    teacher.forward_features(var_valid_x.to(device)))
+                var_valid_kd_value = float(kd_loss(var_valid_logits, var_valid_teacher_logits).detach())
             var_valid_occupancy = torch.sigmoid(var_valid_logits).cpu().numpy()
             var_valid_y = var_valid_y.numpy()
         #
@@ -577,6 +603,8 @@ def train_density(model,
             "epoch": var_epoch,
             "train_loss": var_loss.item(),
             "train_coral": var_coral_value,
+            "train_kd": var_kd_value,
+            "valid_kd": var_valid_kd_value,
             "valid_accuracy": var_metrics["accuracy"],
             "valid_mae": var_metrics["mae"],
             "valid_occupancy_accuracy": var_metrics["occupancy_accuracy"],
@@ -787,6 +815,9 @@ def run_density_map(data_train_x,
             var_fig_path = visualize_density_map(true_density, pred_density, save_path,
                                                  var_threshold_frac=preset["density"]["peak_threshold"],
                                                  var_tag=var_env)
+            ## the standard per-location performance figures, on the binarized occupancy
+            visualize_model_performance(pred_occupancy, data_test_y, save_dir=save_path,
+                                        var_mode="occupancy", var_threshold=var_threshold)
             print(f"  Figure saved to {var_fig_path}")
         #
         result_accuracy.append(var_count_metrics["accuracy"])
@@ -925,6 +956,7 @@ def run_density_map_cross_domain(data_x_train,
     #
     env_rep_metrics = {}
     env_last_density = {}
+    env_last_occupancy = {}
     #
     for var_r in range(var_repeat):
         print("Repeat", var_r)
@@ -998,6 +1030,7 @@ def run_density_map_cross_domain(data_x_train,
             var_rep = {**var_count_metrics, **var_loc_metrics, "threshold": var_env_threshold}
             env_rep_metrics.setdefault(var_env_name, []).append(var_rep)
             env_last_density[var_env_name] = (true_density, pred_density)
+            env_last_occupancy[var_env_name] = (var_occupancy, var_env_threshold, var_y_env)
             #
             wandb.log({
                 f"test_results_per_env/{var_env_name}/accuracy": var_count_metrics["accuracy"],
@@ -1049,6 +1082,301 @@ def run_density_map_cross_domain(data_x_train,
                               os.path.join(save_path, var_env_name),
                               var_threshold_frac=preset["density"]["peak_threshold"],
                               var_tag=var_env_name)
+        ## the standard per-location performance figures, on the binarized occupancy of the last repeat
+        var_occupancy_last, var_threshold_last, var_y_last = env_last_occupancy[var_env_name]
+        visualize_model_performance(var_occupancy_last, var_y_last,
+                                    save_dir=os.path.join(save_path, var_env_name),
+                                    var_mode="occupancy", var_threshold=var_threshold_last)
+        #
+        print(f"\n[{var_env_name}] avg over {var_repeat} repeats: "
+              f"Accuracy {var_env_result['avg_accuracy']:.4f} ± {var_env_result['se_accuracy']:.4f} | "
+              f"MAE {var_env_result['avg_mae']:.4f} ± {var_env_result['se_mae']:.4f} | "
+              f"Occ F1 {var_env_result['avg_occupancy_f1']:.4f} ± {var_env_result['se_occupancy_f1']:.4f} | "
+              f"Loc err {var_env_result['avg_loc_error']:.4f} ± {var_env_result['se_loc_error']:.4f} | "
+              f"Det {var_env_result['avg_loc_detection']:.4f} ± {var_env_result['se_loc_detection']:.4f}")
+    #
+    wandb.finish()
+    #
+    return results
+
+
+#
+## ---------------------------------------------------------------------------------------------- ##
+## ------------------------------------ few-shot runner ------------------------------------------ ##
+#
+##
+def run_density_map_few_shot(data_train_x,
+                             data_train_y,
+                             test_sets_by_env,
+                             var_few_shot_ratio=0.05,
+                             var_kd_weight=1.0,
+                             var_kd_temperature=1.0,
+                             var_teacher_epochs=None,
+                             var_student_epochs=None,
+                             var_compile=True,
+                             var_repeat=10, var_task="count", var_env="empty_room",
+                             save_path="./visualizations/temp"):
+    """
+    [description]
+    : Few-shot knowledge distillation for the density-map group-counting model, mirroring
+      run_AMAR_WO_RVQ_few_shot. A teacher DensityMapNet is trained on the full training environment; a
+      student DensityMapNet is trained on a small fraction (var_few_shot_ratio) of that same
+      environment with the supervised occupancy loss plus kd_weight * OccupancyDistillationLoss
+      against the frozen teacher. Both are evaluated on every other environment in test_sets_by_env.
+      Because the density model is a per-location sigmoid predictor (not a set predictor), the soft
+      targets are matched element-wise with a temperature-scaled Bernoulli cross-entropy: no
+      Hungarian assignment is involved.
+      The protocol deliberately mirrors the AMAR few-shot runner (no rebalancing, same 39-seed split,
+      same validation slice), so the two models' few-shot numbers are directly comparable.
+    [parameter]
+    : data_train_x: numpy array, CSI amplitude of the single training environment
+    : data_train_y: numpy array, per-location occupancy targets (N, num_locations) with 0/1 entries
+    : test_sets_by_env: dict, {env_name: (X, y)} test sets of the other environments, y occupancy
+    : var_few_shot_ratio: float, fraction of the training environment used to train the student
+    : var_kd_weight: float, weight of the distillation term
+    : var_kd_temperature: float, temperature of the distillation soft targets
+    : var_teacher_epochs: int, teacher training epochs (defaults to preset["nn"]["epoch"])
+    : var_student_epochs: int, student training epochs (defaults to preset["nn"]["epoch"])
+    : var_compile: bool, torch.compile the backbones of both models
+    : var_repeat: int, number of repeated experiments
+    : var_env: str or list, training environment name(s) used for the run name and the teacher layout
+    : save_path: str, directory for visualizations (one sub-directory per test environment)
+    : return: dict, per-environment averaged count and localization metrics with SE
+    """
+    #
+    device = select_device()
+    print(f"Using device: {device}")
+
+    if var_teacher_epochs is None:
+        var_teacher_epochs = preset["nn"]["epoch"]
+    if var_student_epochs is None:
+        var_student_epochs = preset["nn"]["epoch"]
+    env_name = var_env if isinstance(var_env, str) else "_".join(var_env)
+
+    #
+    ## ============================================ Preprocess ============================================
+    #
+    data_train_y = np.asarray(data_train_y, dtype=np.float32)
+    for var_env_key in list(test_sets_by_env):
+        var_x_env, var_y_env = test_sets_by_env[var_env_key]
+        test_sets_by_env[var_env_key] = (var_x_env, np.asarray(var_y_env, dtype=np.float32))
+
+    var_layout = preset["layouts"][var_env]
+    var_grid_size = preset["density"]["grid_size"]
+    var_sigma = preset["density"]["sigma"]
+
+    data_train_x = data_train_x.reshape(data_train_x.shape[0], data_train_x.shape[1], -1)
+    var_x_shape = data_train_x[0].shape
+
+    num_train = data_train_x.shape[0]
+    num_few = max(1, int(round(var_few_shot_ratio * num_train)))
+    if num_few >= num_train - 1:
+        raise ValueError(
+            f"var_few_shot_ratio={var_few_shot_ratio} leaves no validation data "
+            f"({num_few}/{num_train} training-environment samples). Lower the ratio or provide more data."
+        )
+    shuffle_idx = np.random.RandomState(39).permutation(num_train)
+    few_idx = shuffle_idx[:num_few]
+    rest_idx = shuffle_idx[num_few:]
+    num_valid = max(1, int(round(0.1 * rest_idx.shape[0])))
+    valid_idx = rest_idx[:num_valid]
+    teacher_idx = rest_idx[num_valid:]
+
+    data_few_x, data_few_y = data_train_x[few_idx], data_train_y[few_idx]
+    data_teacher_valid_x, data_teacher_valid_y = data_train_x[valid_idx], data_train_y[valid_idx]
+    data_teacher_x, data_teacher_y = data_train_x[teacher_idx], data_train_y[teacher_idx]
+
+    teacher_train_set = TensorDataset(torch.from_numpy(data_teacher_x), torch.from_numpy(data_teacher_y))
+    teacher_valid_set = TensorDataset(torch.from_numpy(data_teacher_valid_x), torch.from_numpy(data_teacher_valid_y))
+    student_train_set = TensorDataset(torch.from_numpy(data_few_x), torch.from_numpy(data_few_y))
+    student_valid_set = TensorDataset(torch.from_numpy(data_teacher_valid_x), torch.from_numpy(data_teacher_valid_y))
+    print(f"Training environment [{env_name}] - teacher train {data_teacher_x.shape[0]} | "
+          f"student few-shot train {num_few}/{num_train} ({var_few_shot_ratio:.2%}) | "
+          f"student validation {data_teacher_valid_x.shape[0]}")
+    print(f"Test environments: {list(test_sets_by_env.keys())}")
+
+    #
+    ## ---------------------------------------- Complexity ----------------------------------------
+    #
+    var_macs, var_params = get_model_complexity_info(
+        DensityMapNet(var_x_shape, var_layout, grid_size=var_grid_size), var_x_shape, as_strings=False)
+    print("Parameters:", var_params, "- FLOPs:", var_macs * 2)
+
+    #
+    ## ========================================= Train & Evaluate =========================================
+    #
+    env_rep_metrics = {}
+    env_last_density = {}
+    env_last_occupancy = {}
+
+    for var_r in range(var_repeat):
+        print("Repeat", var_r)
+        name_run = f"DensityMapFewShot{var_r}_{env_name}_k{var_few_shot_ratio}"
+        wandb.init(project="density_map_few_shot", name=name_run, config=preset, reinit=True)
+        #
+        torch.random.manual_seed(var_r + 39)
+        #
+        ## ---------------------------------------- Teacher ----------------------------------------
+        #
+        teacher = DensityMapNet(var_x_shape, var_layout,
+                                embedding_dim=100, grid_size=var_grid_size).to(device)
+        if var_compile:
+            teacher.backbone = torch.compile(teacher.backbone)
+        teacher_optimizer = torch.optim.Adam(teacher.parameters(),
+                                             lr=preset["nn"]["lr"],
+                                             weight_decay=preset["nn"]["weight_decay"])
+        teacher_time_0 = time.time()
+        teacher_best_weight = train_density(model=teacher,
+                                            optimizer=teacher_optimizer,
+                                            data_train_set=teacher_train_set,
+                                            data_valid_set=teacher_valid_set,
+                                            var_batch_size=preset["nn"]["batch_size"],
+                                            var_epochs=var_teacher_epochs,
+                                            device=device)
+        teacher_time_1 = time.time()
+        teacher.load_state_dict(teacher_best_weight)
+        teacher.eval()
+        for param in teacher.parameters():
+            param.requires_grad = False
+
+        #
+        ## ---------------------------------------- Student ----------------------------------------
+        #
+        student = DensityMapNet(var_x_shape, var_layout,
+                                embedding_dim=100, grid_size=var_grid_size).to(device)
+        if var_compile:
+            student.backbone = torch.compile(student.backbone)
+        student_optimizer = torch.optim.Adam(student.parameters(),
+                                             lr=preset["nn"]["lr"],
+                                             weight_decay=preset["nn"]["weight_decay"])
+        kd_loss = OccupancyDistillationLoss(temperature=var_kd_temperature)
+        student_time_0 = time.time()
+        student_best_weight = train_density(model=student,
+                                            optimizer=student_optimizer,
+                                            data_train_set=student_train_set,
+                                            data_valid_set=student_valid_set,
+                                            var_batch_size=preset["nn"]["batch_size"],
+                                            var_epochs=var_student_epochs,
+                                            device=device,
+                                            teacher=teacher,
+                                            kd_loss=kd_loss,
+                                            kd_weight=var_kd_weight)
+        student_time_1 = time.time()
+        student.load_state_dict(student_best_weight)
+        student.eval()
+
+        #
+        ## occupancy threshold from the training room's validation split
+        #
+        with torch.no_grad():
+            _, _, var_valid_logits = student(torch.from_numpy(data_teacher_valid_x).to(device))
+            var_valid_occupancy = torch.sigmoid(var_valid_logits).cpu().numpy()
+        var_threshold, _ = calibrate_threshold(var_valid_occupancy, data_teacher_valid_y.sum(axis=1).round())
+
+        #
+        ## ---------------------------- Test on the other environments ----------------------------
+        #
+        for var_env_name, (var_x_env, var_y_env) in test_sets_by_env.items():
+            var_x_env = var_x_env.reshape(var_x_env.shape[0], var_x_env.shape[1], -1)
+            ## render the maps with the test room's own layout
+            var_test_kernels = torch.from_numpy(
+                build_kernels(preset["layouts"][var_env_name], var_grid_size, var_sigma)[0])
+            env_loader = torch.utils.data.DataLoader(
+                TensorDataset(torch.from_numpy(var_x_env)),
+                batch_size=preset["nn"]["batch_size"], shuffle=False)
+            var_occupancy = []
+            with torch.no_grad():
+                for (var_x,) in env_loader:
+                    _, _, var_logits = student(var_x.to(device))
+                    var_occupancy.append(torch.sigmoid(var_logits).cpu())
+            var_occupancy = torch.cat(var_occupancy, dim=0)
+            #
+            pred_density = torch.einsum("bl,lhw->bhw", var_occupancy, var_test_kernels).numpy()
+            true_density = torch.einsum("bl,lhw->bhw",
+                                        torch.from_numpy(var_y_env), var_test_kernels).numpy()
+            var_occupancy = var_occupancy.numpy()
+            #
+            ## Label-free per-room threshold, identical rule to the cross-domain runner.
+            if preset["density"].get("prior_matching", False):
+                var_env_threshold, _ = calibrate_threshold_prior(
+                    var_occupancy, data_teacher_valid_y.sum(axis=1).round())
+            else:
+                var_env_threshold = var_threshold
+            #
+            var_count_metrics = count_metrics(var_y_env.sum(axis=1).round(),
+                                              predict_counts(var_occupancy, var_env_threshold),
+                                              var_y_env, var_occupancy, var_env_threshold)
+            var_loc_metrics = localization_metrics(
+                true_density, pred_density, var_threshold_frac=preset["density"]["peak_threshold"])
+            #
+            var_rep = {**var_count_metrics, **var_loc_metrics, "threshold": var_env_threshold,
+                       "teacher_train_time": teacher_time_1 - teacher_time_0,
+                       "student_train_time": student_time_1 - student_time_0}
+            env_rep_metrics.setdefault(var_env_name, []).append(var_rep)
+            env_last_density[var_env_name] = (true_density, pred_density)
+            env_last_occupancy[var_env_name] = (var_occupancy, var_env_threshold, var_y_env)
+            #
+            wandb.log({
+                f"test_results_per_env/{var_env_name}/accuracy": var_count_metrics["accuracy"],
+                f"test_results_per_env/{var_env_name}/mae": var_count_metrics["mae"],
+                f"test_results_per_env/{var_env_name}/occupancy_accuracy": var_count_metrics["occupancy_accuracy"],
+                f"test_results_per_env/{var_env_name}/occupancy_f1": var_count_metrics["occupancy_f1"],
+                f"test_results_per_env/{var_env_name}/presence_accuracy": var_count_metrics["presence_accuracy"],
+                f"test_results_per_env/{var_env_name}/presence_f1": var_count_metrics["presence_f1"],
+                f"test_results_per_env/{var_env_name}/threshold": var_env_threshold,
+                f"test_results_per_env/{var_env_name}/loc_error": var_loc_metrics["loc_error"],
+                f"test_results_per_env/{var_env_name}/loc_detection": var_loc_metrics["loc_detection"],
+                f"test_results_per_env/{var_env_name}/teacher_train_time": teacher_time_1 - teacher_time_0,
+                f"test_results_per_env/{var_env_name}/student_train_time": student_time_1 - student_time_0,
+            }, step=var_r + 100000)
+            #
+            print(f"  [{var_env_name}] COUNT Acc {var_count_metrics['accuracy']:.4f} - "
+                  f"MAE {var_count_metrics['mae']:.4f} - "
+                  f"Occ F1 {var_count_metrics['occupancy_f1']:.4f} | "
+                  f"WHERE err {var_loc_metrics['loc_error']:.4f} - "
+                  f"det {var_loc_metrics['loc_detection']:.4f} (Thr {var_env_threshold:.2f})")
+        #
+        del teacher_optimizer, student_optimizer, kd_loss
+        del teacher_best_weight, student_best_weight, env_loader, var_occupancy
+        del student, teacher
+        torch.cuda.empty_cache()
+        gc.collect()
+
+    #
+    ## -------------------------------------- Aggregate per room ----------------------------------------
+    #
+    var_num_classes = preset["nn"]["num_count_classes"]
+    var_metric_names = ("accuracy", "mae", "occupancy_accuracy", "occupancy_f1",
+                        "loc_error", "loc_detection")
+    results = {}
+    for var_env_name, var_rep_list in env_rep_metrics.items():
+        var_env_result = {}
+        for var_name in var_metric_names:
+            var_arr = np.array([var_rep[var_name] for var_rep in var_rep_list])
+            var_env_result[f"avg_{var_name}"] = float(var_arr.mean())
+            var_std = float(var_arr.std(ddof=1)) if len(var_arr) > 1 else 0.0
+            var_env_result[f"std_{var_name}"] = var_std
+            var_env_result[f"se_{var_name}"] = var_std / np.sqrt(len(var_arr)) if len(var_arr) > 1 else 0.0
+        var_env_result["avg_threshold"] = float(np.mean([var_rep["threshold"] for var_rep in var_rep_list]))
+        var_env_result["avg_teacher_train_time"] = float(
+            np.mean([var_rep["teacher_train_time"] for var_rep in var_rep_list]))
+        var_env_result["avg_student_train_time"] = float(
+            np.mean([var_rep["student_train_time"] for var_rep in var_rep_list]))
+        var_env_result["per_class_accuracy"] = {
+            var_class: float(np.mean([var_rep["per_class_accuracy"][var_class] for var_rep in var_rep_list]))
+            for var_class in range(var_num_classes)
+        }
+        results[var_env_name] = var_env_result
+        #
+        var_true_density, var_pred_density = env_last_density[var_env_name]
+        visualize_density_map(var_true_density, var_pred_density,
+                              os.path.join(save_path, var_env_name),
+                              var_threshold_frac=preset["density"]["peak_threshold"],
+                              var_tag=var_env_name)
+        var_occupancy_last, var_threshold_last, var_y_last = env_last_occupancy[var_env_name]
+        visualize_model_performance(var_occupancy_last, var_y_last,
+                                    save_dir=os.path.join(save_path, var_env_name),
+                                    var_mode="occupancy", var_threshold=var_threshold_last)
         #
         print(f"\n[{var_env_name}] avg over {var_repeat} repeats: "
               f"Accuracy {var_env_result['avg_accuracy']:.4f} ± {var_env_result['se_accuracy']:.4f} | "
