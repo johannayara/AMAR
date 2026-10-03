@@ -283,15 +283,14 @@ class OccupancyDistillationLoss(nn.Module):
     """
     Distillation between a frozen teacher and a trainable student density-map model.
 
-    The density-map model is not a set predictor: it emits one bounded occupancy logit per room
-    location, so there is no query permutation to resolve and the soft targets are matched
-    element-wise, exactly like the supervised occupancy loss. The teacher's occupancy probability is
-    the temperature-scaled soft target and the student is trained with a Bernoulli cross-entropy in
-    logit space; the T^2 factor keeps the gradient magnitude comparable to the supervised term when
-    the temperature changes.
+    The density-map model has no query permutation: it emits one logit per grid cell of the spatial
+    density map, so the soft targets are matched element-wise, exactly like the supervised map loss.
+    The teacher's occupancy probability is the temperature-scaled soft target and the student is
+    trained with a Bernoulli cross-entropy in logit space; the T^2 factor keeps the gradient
+    magnitude comparable to the supervised term when the temperature changes.
 
-    Accepts either the raw occupancy logits or the density-map forward tuple
-    (density, count, occupancy_logits); the logits are the last element.
+    Accepts either the raw density logits or the density-map forward tuple
+    (density, count, density_logits); the logits are the last element.
 
     Args:
         temperature: soft-target temperature applied in logit space
