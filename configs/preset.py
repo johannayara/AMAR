@@ -34,13 +34,13 @@ preset = {
     #
     ## hyperparameters of models
     "nn": {
-        "lr": 1e-4,                                     # learning rate
+        "lr": 1e-3,                                     # learning rate
         "epoch": 100,                                 # number of epochs 
-        "batch_size":16,                              # batch size
+        "batch_size":32,                              # batch size
         "threshold": 0.5,                               # threshold to binarize sigmoid outputs
         "scheduler": {
             "type": "cosine_warmup",  # type of scheduler
-            "num_warmup_epochs": 3,  # number of warmup epochs
+            "num_warmup_epochs": 1,  # number of warmup epochs
             "min_lr_ratio": 0.1  # minimum learning rate ratio
         },
         # Loss function parameters
@@ -51,7 +51,7 @@ preset = {
             "class_imbalance_weight": 0.25
         },
         "cross_attention_temp": 1,
-        "weight_decay": 1e-4,
+        "weight_decay": 2e-4,
         "num_obj_queries": 6, #TODO: change this if more people
         "num_decoder_layers":6,
         "dim_FFN": 512,
@@ -133,7 +133,7 @@ preset = {
     ## placed on each occupied location when building the target.
     "density": {
         "grid_size": 32,
-        "sigma": 0.06,
+        "sigma": 0.08,
         "count_loss_weight": 1.0,
         "peak_threshold": 0.25,  # fraction of the map max used to extract predicted locations
         ## Absolute floor for peak extraction (e.g. the pcap-inference path, which has no validation
@@ -149,7 +149,7 @@ preset = {
         ## room's marginal map and ignoring the input, which does not transfer to another room, so the
         ## decoder is kept small and regularised.
         "decoder_hidden": 64,
-        "decoder_dropout": 0.1,
+        "decoder_dropout": 0.3,
         ## Occupancy decision threshold (stage 2 of the count decision). None => calibrate it on the
         ## validation split with the balanced objective (best for a final run, but optimistic when the
         ## same split is then scored). Set a fixed value (e.g. 0.5) for hyperparameter search, so a

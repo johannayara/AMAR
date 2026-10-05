@@ -1,0 +1,252 @@
+Using device: cuda
+DensityMapNet(
+  5.06 M, 99.946% Params, 833.86 MMac, 100.000% MACs, 
+  (backbone): THAT(
+    4.91 M, 97.009% Params, 825.18 MMac, 98.958% MACs, 
+    (layer_left_pooling): AvgPool1d(0, 0.000% Params, 810.0 KMac, 0.097% MACs, kernel_size=(20,), stride=(20,), padding=(0,))
+    (layer_left_gaussian): Gaussian_Position(0, 0.000% Params, 0.0 Mac, 0.000% MACs, )
+    (layer_left_encoder): ModuleList(
+      (0-3): 4 x Encoder(
+        952.29 k, 18.813% Params, 155.3 MMac, 18.624% MACs, 
+        (layer_norm_0): LayerNorm(540, 0.011% Params, 40.5 KMac, 0.005% MACs, (270,), eps=1e-06, elementwise_affine=True)
+        (layer_attention): MultiheadAttention(
+          292.68 k, 5.782% Params, 56.32 MMac, 6.754% MACs, 
+          (out_proj): NonDynamicallyQuantizableLinear(0, 0.000% Params, 0.0 Mac, 0.000% MACs, in_features=270, out_features=270, bias=True)
+        )
+        (layer_dropout_0): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+        (layer_norm_1): LayerNorm(540, 0.011% Params, 40.5 KMac, 0.005% MACs, (270,), eps=1e-06, elementwise_affine=True)
+        (layer_cnn): ModuleList(
+          (0): Sequential(
+            73.71 k, 1.456% Params, 11.1 MMac, 1.331% MACs, 
+            (0): SamePadConv1d(
+              73.17 k, 1.445% Params, 10.98 MMac, 1.316% MACs, 
+              (layer_conv): Conv1d(73.17 k, 1.445% Params, 10.98 MMac, 1.316% MACs, 270, 270, kernel_size=(1,), stride=(1,))
+            )
+            (1): BatchNorm1d(540, 0.011% Params, 81.0 KMac, 0.010% MACs, 270, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (2): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+            (3): LeakyReLU(0, 0.000% Params, 40.5 KMac, 0.005% MACs, negative_slope=0.01)
+          )
+          (1): Sequential(
+            219.51 k, 4.336% Params, 32.97 MMac, 3.954% MACs, 
+            (0): SamePadConv1d(
+              218.97 k, 4.326% Params, 32.85 MMac, 3.939% MACs, 
+              (layer_conv): Conv1d(218.97 k, 4.326% Params, 32.85 MMac, 3.939% MACs, 270, 270, kernel_size=(3,), stride=(1,))
+            )
+            (1): BatchNorm1d(540, 0.011% Params, 81.0 KMac, 0.010% MACs, 270, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (2): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+            (3): LeakyReLU(0, 0.000% Params, 40.5 KMac, 0.005% MACs, negative_slope=0.01)
+          )
+          (2): Sequential(
+            365.31 k, 7.217% Params, 54.84 MMac, 6.576% MACs, 
+            (0): SamePadConv1d(
+              364.77 k, 7.206% Params, 54.72 MMac, 6.562% MACs, 
+              (layer_conv): Conv1d(364.77 k, 7.206% Params, 54.72 MMac, 6.562% MACs, 270, 270, kernel_size=(5,), stride=(1,))
+            )
+            (1): BatchNorm1d(540, 0.011% Params, 81.0 KMac, 0.010% MACs, 270, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (2): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+            (3): LeakyReLU(0, 0.000% Params, 40.5 KMac, 0.005% MACs, negative_slope=0.01)
+          )
+        )
+        (layer_dropout_1): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+      )
+    )
+    (layer_left_norm): LayerNorm(540, 0.011% Params, 40.5 KMac, 0.005% MACs, (270,), eps=1e-06, elementwise_affine=True)
+    (layer_left_cnn_0): Conv1d(276.61 k, 5.464% Params, 39.55 MMac, 4.744% MACs, 270, 128, kernel_size=(8,), stride=(1,))
+    (layer_left_cnn_1): Conv1d(553.09 k, 10.926% Params, 74.67 MMac, 8.954% MACs, 270, 128, kernel_size=(16,), stride=(1,))
+    (layer_left_dropout): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.5, inplace=False)
+    (layer_right_pooling): AvgPool1d(0, 0.000% Params, 810.0 KMac, 0.097% MACs, kernel_size=(20,), stride=(20,), padding=(0,))
+    (layer_right_encoder): ModuleList(
+      (0): Encoder(
+        227.55 k, 4.495% Params, 84.12 MMac, 10.088% MACs, 
+        (layer_norm_0): LayerNorm(300, 0.006% Params, 40.5 KMac, 0.005% MACs, (150,), eps=1e-06, elementwise_affine=True)
+        (layer_attention): MultiheadAttention(
+          90.6 k, 1.790% Params, 47.1 MMac, 5.649% MACs, 
+          (out_proj): NonDynamicallyQuantizableLinear(0, 0.000% Params, 0.0 Mac, 0.000% MACs, in_features=150, out_features=150, bias=True)
+        )
+        (layer_dropout_0): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+        (layer_norm_1): LayerNorm(300, 0.006% Params, 40.5 KMac, 0.005% MACs, (150,), eps=1e-06, elementwise_affine=True)
+        (layer_cnn): ModuleList(
+          (0): Sequential(
+            22.95 k, 0.453% Params, 6.24 MMac, 0.748% MACs, 
+            (0): SamePadConv1d(
+              22.65 k, 0.447% Params, 6.12 MMac, 0.733% MACs, 
+              (layer_conv): Conv1d(22.65 k, 0.447% Params, 6.12 MMac, 0.733% MACs, 150, 150, kernel_size=(1,), stride=(1,))
+            )
+            (1): BatchNorm1d(300, 0.006% Params, 81.0 KMac, 0.010% MACs, 150, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (2): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+            (3): LeakyReLU(0, 0.000% Params, 40.5 KMac, 0.005% MACs, negative_slope=0.01)
+          )
+          (1): Sequential(
+            45.45 k, 0.898% Params, 12.31 MMac, 1.477% MACs, 
+            (0): SamePadConv1d(
+              45.15 k, 0.892% Params, 12.19 MMac, 1.462% MACs, 
+              (layer_conv): Conv1d(45.15 k, 0.892% Params, 12.19 MMac, 1.462% MACs, 150, 150, kernel_size=(2,), stride=(1,))
+            )
+            (1): BatchNorm1d(300, 0.006% Params, 81.0 KMac, 0.010% MACs, 150, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (2): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+            (3): LeakyReLU(0, 0.000% Params, 40.5 KMac, 0.005% MACs, negative_slope=0.01)
+          )
+          (2): Sequential(
+            67.95 k, 1.342% Params, 18.39 MMac, 2.205% MACs, 
+            (0): SamePadConv1d(
+              67.65 k, 1.336% Params, 18.27 MMac, 2.190% MACs, 
+              (layer_conv): Conv1d(67.65 k, 1.336% Params, 18.27 MMac, 2.190% MACs, 150, 150, kernel_size=(3,), stride=(1,))
+            )
+            (1): BatchNorm1d(300, 0.006% Params, 81.0 KMac, 0.010% MACs, 150, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (2): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+            (3): LeakyReLU(0, 0.000% Params, 40.5 KMac, 0.005% MACs, negative_slope=0.01)
+          )
+        )
+        (layer_dropout_1): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+      )
+    )
+    (layer_right_norm): LayerNorm(300, 0.006% Params, 40.5 KMac, 0.005% MACs, (150,), eps=1e-06, elementwise_affine=True)
+    (layer_right_cnn_0): Conv1d(4.82 k, 0.095% Params, 1.3 MMac, 0.155% MACs, 150, 16, kernel_size=(2,), stride=(1,))
+    (layer_right_cnn_1): Conv1d(9.62 k, 0.190% Params, 2.57 MMac, 0.308% MACs, 150, 16, kernel_size=(4,), stride=(1,))
+    (layer_right_dropout): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.5, inplace=False)
+    (layer_leakyrelu): LeakyReLU(0, 0.000% Params, 44.16 KMac, 0.005% MACs, negative_slope=0.01)
+    (layer_output): Linear(28.9 k, 0.571% Params, 28.9 KMac, 0.003% MACs, in_features=288, out_features=100, bias=True)
+  )
+  (decoder_fc): Sequential(
+    103.42 k, 2.043% Params, 104.45 KMac, 0.013% MACs, 
+    (0): Linear(103.42 k, 2.043% Params, 103.42 KMac, 0.012% MACs, in_features=100, out_features=1024, bias=True)
+    (1): LeakyReLU(0, 0.000% Params, 1.02 KMac, 0.000% MACs, negative_slope=0.01)
+    (2): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.3, inplace=False)
+  )
+  (decoder_conv): Sequential(
+    45.27 k, 0.894% Params, 8.58 MMac, 1.029% MACs, 
+    (0): ConvTranspose2d(32.8 k, 0.648% Params, 2.1 MMac, 0.252% MACs, 64, 32, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1))
+    (1): LeakyReLU(0, 0.000% Params, 2.05 KMac, 0.000% MACs, negative_slope=0.01)
+    (2): Dropout2d(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.3, inplace=False)
+    (3): ConvTranspose2d(8.21 k, 0.162% Params, 2.1 MMac, 0.252% MACs, 32, 16, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1))
+    (4): LeakyReLU(0, 0.000% Params, 4.1 KMac, 0.000% MACs, negative_slope=0.01)
+    (5): ConvTranspose2d(4.11 k, 0.081% Params, 4.21 MMac, 0.505% MACs, 16, 16, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1))
+    (6): LeakyReLU(0, 0.000% Params, 16.38 KMac, 0.002% MACs, negative_slope=0.01)
+    (7): Conv2d(145, 0.003% Params, 148.48 KMac, 0.018% MACs, 16, 1, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+  )
+)
+Parameters: 5061987 - FLOPs: 1667723904.0
+Repeat 0
+wandb: Using wandb-core as the SDK backend. Please refer to https://wandb.me/wandb-core for more information.
+wandb: Tracking run with wandb version 0.18.3
+wandb: W&B syncing is set to `offline` in this directory.  
+wandb: Run `wandb online` or set WANDB_MODE=online to enable cloud syncing.
+Epoch 0/25 - 6.128s - Loss 0.107155 - Valid Acc 0.0319 - Valid MAE 2.4574 - Thr 0.50
+Epoch 1/25 - 5.501s - Loss 0.141103 - Valid Acc 0.2500 - Valid MAE 0.8298 - Thr 0.50
+Epoch 2/25 - 5.553s - Loss 0.105826 - Valid Acc 0.1862 - Valid MAE 1.0426 - Thr 0.50
+Epoch 3/25 - 5.494s - Loss 0.145277 - Valid Acc 0.2128 - Valid MAE 0.9787 - Thr 0.50
+Epoch 4/25 - 5.504s - Loss 0.139731 - Valid Acc 0.2021 - Valid MAE 1.0160 - Thr 0.50
+Epoch 5/25 - 5.498s - Loss 0.133744 - Valid Acc 0.1809 - Valid MAE 1.0957 - Thr 0.50
+Epoch 6/25 - 5.544s - Loss 0.102016 - Valid Acc 0.1968 - Valid MAE 1.0426 - Thr 0.50
+Epoch 7/25 - 5.486s - Loss 0.105259 - Valid Acc 0.1915 - Valid MAE 1.0213 - Thr 0.50
+Epoch 8/25 - 5.458s - Loss 0.135938 - Valid Acc 0.1755 - Valid MAE 1.0585 - Thr 0.50
+Epoch 9/25 - 5.460s - Loss 0.132694 - Valid Acc 0.2234 - Valid MAE 0.9681 - Thr 0.50
+Epoch 10/25 - 5.497s - Loss 0.134940 - Valid Acc 0.2074 - Valid MAE 0.9681 - Thr 0.50
+Epoch 11/25 - 5.523s - Loss 0.128376 - Valid Acc 0.2819 - Valid MAE 0.8936 - Thr 0.50
+Epoch 12/25 - 5.548s - Loss 0.116666 - Valid Acc 0.1809 - Valid MAE 1.0798 - Thr 0.50
+Epoch 13/25 - 5.519s - Loss 0.108803 - Valid Acc 0.1915 - Valid MAE 1.0426 - Thr 0.50
+Epoch 14/25 - 5.539s - Loss 0.126511 - Valid Acc 0.2660 - Valid MAE 0.8723 - Thr 0.50
+Epoch 15/25 - 5.550s - Loss 0.126234 - Valid Acc 0.1968 - Valid MAE 1.0213 - Thr 0.50
+Epoch 16/25 - 5.571s - Loss 0.114445 - Valid Acc 0.1915 - Valid MAE 1.0372 - Thr 0.50
+Epoch 17/25 - 5.512s - Loss 0.115884 - Valid Acc 0.1968 - Valid MAE 0.9628 - Thr 0.50
+Epoch 18/25 - 5.531s - Loss 0.116763 - Valid Acc 0.2287 - Valid MAE 0.9149 - Thr 0.50
+Epoch 19/25 - 5.586s - Loss 0.150093 - Valid Acc 0.1915 - Valid MAE 0.9840 - Thr 0.50
+Epoch 20/25 - 5.459s - Loss 0.097741 - Valid Acc 0.2021 - Valid MAE 0.9787 - Thr 0.50
+Epoch 21/25 - 5.456s - Loss 0.123284 - Valid Acc 0.2553 - Valid MAE 0.9149 - Thr 0.50
+Epoch 22/25 - 5.489s - Loss 0.097282 - Valid Acc 0.2074 - Valid MAE 0.9628 - Thr 0.50
+Epoch 23/25 - 5.455s - Loss 0.132653 - Valid Acc 0.2447 - Valid MAE 0.8989 - Thr 0.50
+Epoch 24/25 - 5.487s - Loss 0.088556 - Valid Acc 0.2287 - Valid MAE 0.8883 - Thr 0.50
+Epoch that the model was saved 24
+Best smoothed exact-count accuracy: 0.225910, smoothed count MAE: 0.925155
+  COUNT: Acc 0.3175 - MAE 0.8360 - Occupancy Acc 0.8138 - Occupancy F1 0.8099 - Thr 0.50
+  [sample 165] true [] m | pred (9.69, 0.00), (0.00, 6.25), (0.00, 9.69), (9.69, 9.69) m
+  [sample 16] true (3.70, 2.65) m | pred (1.25, 2.50), (3.44, 2.50), (2.50, 4.38), (3.44, 5.94), (1.25, 6.25) m
+  [sample 95] true (3.70, 2.65), (2.55, 4.45) m | pred (1.25, 2.50), (3.44, 2.50), (2.50, 4.38), (3.44, 5.94), (1.25, 6.25) m
+  [sample 116] true (3.70, 2.65), (2.55, 4.45), (1.40, 6.25) m | pred (3.75, 2.50), (2.50, 4.38), (1.25, 6.25), (3.44, 6.25) m
+  [sample 108] true (3.70, 6.25), (2.55, 4.45), (1.40, 6.25), (1.40, 2.65) m | pred (1.25, 2.50), (3.44, 2.50), (2.50, 4.38), (1.25, 6.25), (3.44, 6.25) m
+  [sample 0] true (3.70, 6.25), (3.70, 2.65), (2.55, 4.45), (1.40, 6.25), (1.40, 2.65) m | pred (1.25, 2.50), (3.75, 2.50), (2.50, 4.38), (1.25, 6.25), (3.44, 6.25) m
+
+Visualizations saved at visualizations/density_map/empty_room/13
+
+Detailed Performance Analysis:
+Mean Error: 0.1862 ± 0.1470
+
+Class-wise Mean Absolute Error:
+Class a: 0.1852
+Class b: 0.1799
+Class c: 0.2434
+Class d: 0.2116
+Class e: 0.1111
+
+Perfect Predictions: 28.04%
+  Checkpoint saved to visualizations/density_map/empty_room/13/model.pth
+  Figure saved to visualizations/density_map/empty_room/13/density_map_empty_room.png
+wandb: - 0.000 MB of 0.000 MB uploadedwandb:                                                                                
+wandb: 
+wandb: Run history:
+wandb:                  accuracy ▁
+wandb:              avg_accuracy ▁
+wandb:                   avg_mae ▁
+wandb:    avg_occupancy_accuracy ▁
+wandb:          avg_occupancy_f1 ▁
+wandb:                     epoch ▁▁▂▂▂▂▃▃▃▄▄▄▅▅▅▅▆▆▆▇▇▇▇██
+wandb:             learning_rate ▃▅████▇▇▇▆▆▅▅▄▄▃▂▂▂▁▁▁▁▁▁
+wandb:                       mae ▁
+wandb:        occupancy_accuracy ▁
+wandb:              occupancy_f1 ▁
+wandb:       occupancy_threshold ▁
+wandb:                    repeat ▁
+wandb:                 test_time ▁
+wandb:                  train_kd ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:                train_loss ▃▇▃▇▇▆▃▃▆▆▆▆▄▃▅▅▄▄▄█▂▅▂▆▁
+wandb:                train_time ▁
+wandb:            valid_accuracy ▁▇▅▆▆▅▆▅▅▆▆█▅▅█▆▅▆▇▅▆▇▆▇▇
+wandb:   valid_accuracy_smoothed ▁▃▄▅▆▆▆▆▆▇▇█▇▇██▇▇▇▇▇████
+wandb:                  valid_kd ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:                 valid_mae █▁▂▂▂▂▂▂▂▂▂▁▂▂▁▂▂▂▁▂▂▁▂▁▁
+wandb:        valid_mae_smoothed █▆▄▄▃▃▂▂▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:  valid_occupancy_accuracy ▁▆▇█▇▇██▇█████▇██████████
+wandb:        valid_occupancy_f1 ▁▇███████████████████████
+wandb: valid_occupancy_threshold ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb: 
+wandb: Run summary:
+wandb:                  accuracy 0.31746
+wandb:              avg_accuracy 0.31746
+wandb:                   avg_mae 0.83598
+wandb:    avg_occupancy_accuracy 0.81376
+wandb:          avg_occupancy_f1 0.80994
+wandb:                     epoch 24
+wandb:             learning_rate 7e-05
+wandb:                       mae 0.83598
+wandb:        occupancy_accuracy 0.81376
+wandb:              occupancy_f1 0.80994
+wandb:       occupancy_threshold 0.5
+wandb:                    repeat 0
+wandb:                 test_time 0.35101
+wandb:                  train_kd 0
+wandb:                train_loss 0.08856
+wandb:                train_time 153.22651
+wandb:            valid_accuracy 0.22872
+wandb:   valid_accuracy_smoothed 0.22591
+wandb:                  valid_kd 0
+wandb:                 valid_mae 0.8883
+wandb:        valid_mae_smoothed 0.92516
+wandb:  valid_occupancy_accuracy 0.79894
+wandb:        valid_occupancy_f1 0.79208
+wandb: valid_occupancy_threshold 0.5
+wandb: 
+wandb: You can sync this run to the cloud by running:
+wandb: wandb sync /cluster/raid/home/jajo/AMAR/wandb/offline-run-20261005_131347-tmr0h7f1
+wandb: Find logs at: ./wandb/offline-run-20261005_131347-tmr0h7f1/logs
+Results saved to: output/sweep/density_map_empty_room/stage1_trial0011/json/result_density_map_location_empty_room_nall_r1_20261005_131626.json
+================================================================================
+EXPERIMENT RESULTS - Model: density_map, Task: location
+================================================================================
+SINGLE MODEL RESULTS:
+  GROUP-COUNT METRICS:
+  Exact-count Accuracy: 0.3175 ± 0.0000 (SE)
+  Count MAE: 0.8360 ± 0.0000 (SE)
+  Occupancy Accuracy: 0.8138 ± 0.0000 (SE)
+  Occupancy F1: 0.8099 ± 0.0000 (SE)
+  Per-count Accuracy: 0:1.000, 1:0.038, 2:0.172, 3:0.097, 4:0.100, 5:1.000
+Total time: 165.30380392074585 seconds
