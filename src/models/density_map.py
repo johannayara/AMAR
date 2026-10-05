@@ -705,7 +705,8 @@ def plot_training_curves(var_history, var_save_path, var_tag="training"):
     #
     ## (panel title, y label, [(history key, legend label, line style)])
     var_panels = [
-        ("train loss", "loss", [("train_loss", "train_loss", "-")]),
+        ("train loss (epoch mean)", "loss", [("train_loss", "train_loss", "-")]),
+        ("valid loss (fixed batch)", "loss", [("valid_loss", "valid_loss", "-")]),
         ("distillation term", "KD", [("train_kd", "train_kd", "-")]),
         ("valid exact-count accuracy", "accuracy",
          [("valid_accuracy", "raw", "-"), ("valid_accuracy_smoothed", "smoothed (EMA)", "--")]),
@@ -722,8 +723,9 @@ def plot_training_curves(var_history, var_save_path, var_tag="training"):
         ("learning rate", "lr", [("learning_rate", "lr", "-")]),
     ]
     var_epochs = var_history["epoch"]
-    var_fig, var_axes = plt.subplots(2, 5, figsize=(25, 8), squeeze=False)
-    for var_ax, (var_title, var_ylabel, var_series) in zip(var_axes.ravel(), var_panels):
+    var_fig, var_axes = plt.subplots(3, 4, figsize=(20, 12), squeeze=False)
+    var_flat_axes = var_axes.ravel()
+    for var_ax, (var_title, var_ylabel, var_series) in zip(var_flat_axes, var_panels):
         for var_key, var_label, var_style in var_series:
             var_ax.plot(var_epochs, var_history[var_key], var_style, label=var_label)
         var_ax.set_title(var_title)
@@ -731,6 +733,8 @@ def plot_training_curves(var_history, var_save_path, var_tag="training"):
         var_ax.set_ylabel(var_ylabel)
         var_ax.grid(alpha=0.3)
         var_ax.legend(fontsize=8)
+    for var_ax in var_flat_axes[len(var_panels):]:
+        var_ax.axis("off")
     var_fig.suptitle(f"{var_tag} - metrics evolution")
     var_fig.tight_layout(rect=[0, 0, 1, 0.95])
     var_png = os.path.join(str(var_save_path), f"{var_tag}_curves.png")
@@ -826,7 +830,7 @@ def train_density(model,
     #
     ## per-epoch history, rewritten to var_save_dir after every epoch so the run can be watched live
     var_history = {var_key: [] for var_key in (
-        "epoch", "train_loss", "train_kd", "valid_accuracy", "valid_accuracy_smoothed",
+        "epoch", "train_loss", "valid_loss", "train_kd", "valid_accuracy", "valid_accuracy_smoothed",
         "valid_balanced_accuracy", "valid_balanced_accuracy_smoothed",
         "valid_mae", "valid_mae_smoothed", "valid_occupancy_accuracy", "valid_occupancy_f1",
         "valid_occupancy_threshold", "valid_empty_threshold", "learning_rate")}
@@ -858,6 +862,9 @@ def train_density(model,
     for var_epoch in range(var_epochs):
         var_time_e0 = time.time()
         model.train()
+        ## accumulate the epoch-mean training loss: the last batch alone is far too noisy to read
+        var_train_loss_sum = 0.0
+        var_train_batches = 0
         for var_batch in var_train_loader:
             var_x, var_occupancy = var_batch[0], var_batch[1]
             var_x = apply_augmentation(var_x.to(device))
@@ -888,11 +895,14 @@ def train_density(model,
                     var_kd = kd_loss(var_density_map, var_teacher_map)
                 var_kd_value = float(var_kd.detach())
                 var_loss = var_loss + kd_weight * var_kd
+            var_train_loss_sum += float(var_loss.detach())
+            var_train_batches += 1
             #
             optimizer.zero_grad()
             var_loss.backward()
             optimizer.step()
             var_scheduler.step()
+        var_train_loss_mean = var_train_loss_sum / max(1, var_train_batches)
         #
         model.eval()
         with torch.no_grad():
@@ -914,6 +924,13 @@ def train_density(model,
             var_valid_occupancy = sample_location_occupancy(
                 var_valid_density, var_valid_kernels).cpu().numpy()
             var_valid_map_max = density_map_maxima(var_valid_density)
+            ## validation loss on the same fixed batch, so a clean decreasing curve exists
+            var_valid_target = render_density_targets(var_valid_y.to(device), var_valid_kernels)
+            if var_loss_mode == "dem":
+                var_valid_loss = float(F.smooth_l1_loss(var_valid_density, var_valid_target).detach())
+            else:
+                var_valid_loss = float(
+                    F.binary_cross_entropy_with_logits(var_valid_map, var_valid_target).detach())
             var_valid_y = var_valid_y.numpy()
         #
         var_true_count = var_valid_y.sum(axis=1).round()
@@ -938,7 +955,8 @@ def train_density(model,
         #
         wandb.log({
             "epoch": var_epoch,
-            "train_loss": var_loss.item(),
+            "train_loss": var_train_loss_mean,
+            "valid_loss": var_valid_loss,
             "train_kd": var_kd_value,
             "valid_kd": var_valid_kd_value,
             "valid_accuracy": var_metrics["accuracy"],
@@ -955,7 +973,8 @@ def train_density(model,
         })
         #
         print(f"Epoch {var_epoch}/{var_epochs} - %.3fs" % (time.time() - var_time_e0),
-              "- Loss %.6f" % var_loss.cpu(),
+              "- Loss %.6f" % var_train_loss_mean,
+              "- ValidLoss %.6f" % var_valid_loss,
               "- Valid Acc %.4f" % var_metrics["accuracy"],
               "- Valid Bal %.4f" % var_metrics["balanced_accuracy"],
               "- Valid MAE %.4f" % var_metrics["mae"],
@@ -964,7 +983,8 @@ def train_density(model,
         #
         ## append the epoch to the history and rewrite the curves, so the run can be watched live
         var_history["epoch"].append(var_epoch)
-        var_history["train_loss"].append(float(var_loss.detach()))
+        var_history["train_loss"].append(var_train_loss_mean)
+        var_history["valid_loss"].append(var_valid_loss)
         var_history["train_kd"].append(var_kd_value)
         var_history["valid_accuracy"].append(var_metrics["accuracy"])
         var_history["valid_accuracy_smoothed"].append(var_ema_accuracy)
