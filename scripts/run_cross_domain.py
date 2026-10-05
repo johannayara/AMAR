@@ -35,7 +35,7 @@ def _load_room(preset, var_task, var_model, var_users, var_env):
                             var_num_users=var_users)
     var_label_list = data_pd_y["label"].to_list()
     var_x = load_data_x(preset["path"]["data_x"], var_label_list)
-    if var_model == "density_map":
+    if var_model in ("density_map", "density_map_dem"):
         ## Density-map group counting predicts per-location occupancy, so the label is the room's
         ## occupancy vector rather than a task encoding.
         var_y = encode_occupancy_y(data_pd_y, var_env)
@@ -118,6 +118,9 @@ def format_result(var_model, var_task, result):
                 ## density-map group-count metrics
                 lines.append("  GROUP-COUNT METRICS:")
                 lines.append(f"  Exact-count Accuracy: {env_results['avg_accuracy']:.4f} ± {env_results['se_accuracy']:.4f} (SE)")
+                if 'avg_balanced_accuracy' in env_results:
+                    lines.append(f"  Balanced-count Accuracy: {env_results['avg_balanced_accuracy']:.4f} "
+                                 f"± {env_results['se_balanced_accuracy']:.4f} (SE)")
                 lines.append(f"  Count MAE: {env_results['avg_mae']:.4f} ± {env_results['se_mae']:.4f} (SE)")
                 lines.append(f"  Occupancy Accuracy: {env_results['avg_occupancy_accuracy']:.4f} ± {env_results['se_occupancy_accuracy']:.4f} (SE)")
                 lines.append(f"  Occupancy F1: {env_results['avg_occupancy_f1']:.4f} ± {env_results['se_occupancy_f1']:.4f} (SE)")
@@ -236,6 +239,9 @@ def run():
     if var_model == "density_map":
         all_envs_results = run_density_map_cross_domain(train_sets_by_env, test_sets_by_env,
                                                         var_repeat, var_task, save_path)
+    elif var_model == "density_map_dem":
+        all_envs_results = run_density_map_dem_cross_domain(train_sets_by_env, test_sets_by_env,
+                                                            var_repeat, var_task, save_path)
     else:
         data_x_train = np.concatenate([var_x for var_x, _ in train_sets_by_env.values()])
         data_y_train = np.concatenate([var_y for _, var_y in train_sets_by_env.values()])

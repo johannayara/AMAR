@@ -136,6 +136,9 @@ preset = {
         "sigma": 0.06,
         "count_loss_weight": 1.0,
         "peak_threshold": 0.25,  # fraction of the map max used to extract predicted locations
+        ## Absolute floor for peak extraction (e.g. the pcap-inference path, which has no validation
+        ## split to calibrate an empty gate on). A map whose maximum is below it yields no peaks.
+        "peak_abs_floor": 0.0,
         ## Class balance: WiMANS has only 5.3% empty-room (count-0) frames per room (99 of 1881),
         ## and they are identical across rooms, so a plain shuffle lets the model ignore the empty
         ## case. Draw the training batches with class-balanced weights (every count class equally
@@ -147,11 +150,19 @@ preset = {
         ## decoder is kept small and regularised.
         "decoder_hidden": 64,
         "decoder_dropout": 0.1,
-        ## Occupancy decision threshold for the reported count. None => calibrate it on the validation
-        ## split (best for a final run, but optimistic when the same split is then scored). Set a
-        ## fixed value (e.g. 0.5) for hyperparameter search, so a config cannot win by fitting the
-        ## threshold sweep rather than the model.
+        ## Occupancy decision threshold (stage 2 of the count decision). None => calibrate it on the
+        ## validation split with the balanced objective (best for a final run, but optimistic when the
+        ## same split is then scored). Set a fixed value (e.g. 0.5) for hyperparameter search, so a
+        ## config cannot win by fitting the threshold sweep rather than the model.
         "eval_threshold": None,
+        ## Two-stage count decision. Stage 1 is an empty gate: a sample whose density-map maximum is
+        ## below "empty_threshold" is predicted empty regardless of its per-location readouts. This
+        ## decouples "is the room empty" from "how many locations are occupied" and is what stops a
+        ## raised map floor under domain shift from turning every empty frame into a count >= 1.
+        ## "empty_threshold" None => calibrate the gate on the validation split; set False to disable
+        ## the gate entirely (single-threshold behaviour, calibrated on every frame).
+        "staged_count": True,
+        "empty_threshold": None,
     },
 }
 

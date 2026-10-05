@@ -43,7 +43,7 @@ def master_splitter(preset, var_task, var_model, var_users, var_env = "empty_roo
     X = load_data_x(preset["path"]["data_x"], var_label_list)
 
 
-    if var_model == "density_map":
+    if var_model in ("density_map", "density_map_dem"):
         ## Density-map group counting: the model predicts per-location occupancy and renders the map
         ## from the room's location kernels, so var_task does not select a label set.
         y = encode_occupancy_y(data_pd_y, var_env)
@@ -219,6 +219,9 @@ def format_result(var_model, var_task, result):
             if 'avg_mae' in result:
                 lines.append("  GROUP-COUNT METRICS:")
                 lines.append(f"  Exact-count Accuracy: {result['avg_accuracy']:.4f} ± {result['se_accuracy']:.4f} (SE)")
+                if 'avg_balanced_accuracy' in result:
+                    lines.append(f"  Balanced-count Accuracy: {result['avg_balanced_accuracy']:.4f} "
+                                 f"± {result['se_balanced_accuracy']:.4f} (SE)")
                 lines.append(f"  Count MAE: {result['avg_mae']:.4f} ± {result['se_mae']:.4f} (SE)")
                 lines.append(f"  Occupancy Accuracy: {result['avg_occupancy_accuracy']:.4f} ± {result['se_occupancy_accuracy']:.4f} (SE)")
                 lines.append(f"  Occupancy F1: {result['avg_occupancy_f1']:.4f} ± {result['se_occupancy_f1']:.4f} (SE)")
@@ -320,6 +323,8 @@ def run():
     elif var_model == "multi_senseX": run_model = run_multi_senseX
 
     elif var_model == "density_map": run_model = run_density_map
+
+    elif var_model == "density_map_dem": run_model = run_density_map_dem
 
     else:
         raise Exception("Not valid name for model")   

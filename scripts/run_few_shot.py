@@ -43,7 +43,7 @@ def master_splitter(preset, var_task, var_model, var_users, var_env="empty_room"
                             var_num_users=var_users)
     var_label_list = data_pd_y["label"].to_list()
     data_train_x = load_data_x(preset["path"]["data_x"], var_label_list)
-    if var_model == "density_map":
+    if var_model in ("density_map", "density_map_dem"):
         ## Density-map group counting predicts per-location occupancy, so the label is the room's
         ## occupancy vector rather than a task encoding.
         data_train_y = encode_occupancy_y(data_pd_y, var_env)
@@ -61,7 +61,7 @@ def master_splitter(preset, var_task, var_model, var_users, var_env="empty_room"
                                 var_num_users=var_users)
         var_label_list = data_pd_y["label"].to_list()
         X_test = load_data_x(preset["path"]["data_x"], var_label_list)
-        if var_model == "density_map":
+        if var_model in ("density_map", "density_map_dem"):
             y_test = encode_occupancy_y(data_pd_y, e)
         else:
             y_test = encode_data_y(data_pd_y, var_task)
@@ -117,6 +117,9 @@ def format_result(var_model, var_task, result, var_few_shot_ratio, var_kd_weight
             ## density-map group-count metrics
             lines.append(f"  Avg Exact-count Accuracy: {stats['avg_accuracy']:.4f} "
                          f"± {stats['se_accuracy']:.4f} (SE)")
+            if "avg_balanced_accuracy" in stats:
+                lines.append(f"  Avg Balanced-count Accuracy: {stats['avg_balanced_accuracy']:.4f} "
+                             f"± {stats['se_balanced_accuracy']:.4f} (SE)")
             lines.append(f"  Avg Count MAE: {stats['avg_mae']:.4f} ± {stats['se_mae']:.4f} (SE)")
             lines.append(f"  Avg Occupancy Accuracy: {stats['avg_occupancy_accuracy']:.4f} "
                          f"± {stats['se_occupancy_accuracy']:.4f} (SE)")
@@ -203,6 +206,17 @@ def run():
     ## run few-shot distillation
     if var_model == "density_map":
         result = run_density_map_few_shot(
+            data_train_x, data_train_y,
+            test_sets_by_env,
+            var_few_shot_ratio=var_args.few_shot_ratio,
+            var_kd_weight=var_args.kd_weight,
+            var_kd_temperature=var_args.kd_temperature,
+            var_teacher_epochs=var_teacher_epochs,
+            var_student_epochs=var_args.epochs,
+            var_compile=not var_args.no_compile,
+            var_repeat=var_repeat, var_task=var_task, var_env=var_env, save_path=save_path)
+    elif var_model == "density_map_dem":
+        result = run_density_map_dem_few_shot(
             data_train_x, data_train_y,
             test_sets_by_env,
             var_few_shot_ratio=var_args.few_shot_ratio,

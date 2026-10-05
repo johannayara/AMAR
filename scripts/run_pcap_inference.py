@@ -45,6 +45,10 @@ def parse_args():
     var_args.add_argument("--peak_threshold", default=preset["density"]["peak_threshold"], type=float,
                           help="a map local maximum counts as a person when it exceeds this fraction "
                                "of the map maximum")
+    var_args.add_argument("--peak_abs_floor", default=preset["density"].get("peak_abs_floor", 0.0),
+                          type=float,
+                          help="absolute floor: a map whose maximum is below it has no peaks, and no "
+                               "cell below it counts (guards against spurious peaks on a near-empty map)")
     var_args.add_argument("--scale", default=None, type=float,
                           help="optional multiplier applied to the captured amplitude")
     var_args.add_argument("--max_frames", default=None, type=int, help="cap on the number of CSI frames")
@@ -70,7 +74,8 @@ def load_density_model(var_checkpoint_path, var_device):
                               grid_size=var_checkpoint["grid_size"],
                               sigma=var_checkpoint["sigma"],
                               hidden_dim=var_checkpoint.get("decoder_hidden"),
-                              dropout=var_checkpoint.get("decoder_dropout")).to(var_device)
+                              dropout=var_checkpoint.get("decoder_dropout"),
+                              var_output_mode=var_checkpoint.get("output_mode", "probability")).to(var_device)
     var_model.load_state_dict(var_checkpoint["model_state_dict"])
     var_model.eval()
     return var_model, var_checkpoint
@@ -131,7 +136,7 @@ def run():
     var_density = var_density[0].cpu().numpy()
     #
     ## positions are the peaks of the map, in the shared TX-anchored normalized frame
-    var_peaks = _extract_peaks(var_density, var_args.peak_threshold)
+    var_peaks = _extract_peaks(var_density, var_args.peak_threshold, var_args.peak_abs_floor)
     #
     var_positions = []
     for var_peak in var_peaks:
@@ -154,6 +159,7 @@ def run():
         "num_people_estimate": len(var_peaks),
         "soft_map_mass": float(var_count.item()),
         "peak_threshold": var_args.peak_threshold,
+        "peak_abs_floor": var_args.peak_abs_floor,
         "extent_m": var_args.extent_m,
         "positions": var_positions,
         "capture": {k: var_meta[k] for k in

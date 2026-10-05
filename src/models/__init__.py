@@ -11,6 +11,8 @@ from .bce_that import run_bce_that
 from .AMAR_WO_RVQ import run_AMAR_WO_RVQ, run_cross_domain, run_t2t1, run_AMAR_WO_RVQ_few_shot
 from .multi_senseX import run_multi_senseX, run_multi_senseX_joint, run_multi_senseX_few_shot
 from .density_map import run_density_map, run_density_map_cross_domain, run_density_map_few_shot, DensityMapNet, visualize_density_map
+from .density_map_dem import (run_density_map_dem, run_density_map_dem_cross_domain,
+                              run_density_map_dem_few_shot, DensityMapDEMNet)
 from .AMAR import run_AMAR
 
 #
@@ -31,4 +33,8 @@ __all__ = ["run_bce_ablstm",
            "run_density_map_few_shot",
            "DensityMapNet",
            "visualize_density_map",
+           "run_density_map_dem",
+           "run_density_map_dem_cross_domain",
+           "run_density_map_dem_few_shot",
+           "DensityMapDEMNet",
            "run_AMAR"]
