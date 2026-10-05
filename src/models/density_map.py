@@ -436,6 +436,19 @@ def _finite_or_nan(var_value):
     return var_value if np.isfinite(var_value) else float("nan")
 
 
+def _ema_update(var_prev, var_value, var_decay):
+    """
+    [description]
+    : one EMA step. Returns var_prev unchanged when var_value is missing/non-finite, so a degenerate
+      per-epoch value (e.g. an empty-gate threshold of +-inf) cannot poison the whole smoothed curve.
+    """
+    if var_value is None or not np.isfinite(float(var_value)):
+        return var_prev if var_prev is not None else float("nan")
+    if var_prev is None:
+        return float(var_value)
+    return var_decay * float(var_value) + (1.0 - var_decay) * var_prev
+
+
 def calibrate_count_threshold(var_occupancy, var_true_count,
                               var_grid=np.linspace(0.05, 0.99, 95), var_nonempty_only=True):
     """
@@ -707,7 +720,8 @@ def plot_training_curves(var_history, var_save_path, var_tag="training"):
     var_panels = [
         ("train loss (epoch mean)", "loss", [("train_loss", "train_loss", "-")]),
         ("valid loss (fixed batch)", "loss", [("valid_loss", "valid_loss", "-")]),
-        ("distillation term", "KD", [("train_kd", "train_kd", "-")]),
+        ("distillation term", "KD",
+         [("train_kd", "train_kd", "-"), ("valid_kd", "valid_kd", "--")]),
         ("valid exact-count accuracy", "accuracy",
          [("valid_accuracy", "raw", "-"), ("valid_accuracy_smoothed", "smoothed (EMA)", "--")]),
         ("valid balanced accuracy (selection)", "balanced acc",
@@ -715,11 +729,17 @@ def plot_training_curves(var_history, var_save_path, var_tag="training"):
           ("valid_balanced_accuracy_smoothed", "smoothed (EMA)", "--")]),
         ("valid count MAE", "MAE",
          [("valid_mae", "raw", "-"), ("valid_mae_smoothed", "smoothed (EMA)", "--")]),
-        ("valid occupancy accuracy", "accuracy", [("valid_occupancy_accuracy", "occupancy_acc", "-")]),
-        ("valid occupancy F1", "F1", [("valid_occupancy_f1", "occupancy_f1", "-")]),
-        ("occupancy threshold", "threshold", [("valid_occupancy_threshold", "threshold", "-")]),
+        ("valid occupancy accuracy", "accuracy",
+         [("valid_occupancy_accuracy", "raw", "-"),
+          ("valid_occupancy_accuracy_smoothed", "smoothed (EMA)", "--")]),
+        ("valid occupancy F1", "F1",
+         [("valid_occupancy_f1", "raw", "-"), ("valid_occupancy_f1_smoothed", "smoothed (EMA)", "--")]),
+        ("occupancy threshold", "threshold",
+         [("valid_occupancy_threshold", "raw", "-"),
+          ("valid_occupancy_threshold_smoothed", "smoothed (EMA)", "--")]),
         ("empty-gate threshold", "map max threshold",
-         [("valid_empty_threshold", "empty_threshold", "-")]),
+         [("valid_empty_threshold", "raw", "-"),
+          ("valid_empty_threshold_smoothed", "smoothed (EMA)", "--")]),
         ("learning rate", "lr", [("learning_rate", "lr", "-")]),
     ]
     var_epochs = var_history["epoch"]
@@ -822,18 +842,27 @@ def train_density(model,
     var_best_weight = None
     var_epoch_saved = 0
     var_counter = 0
-    ## EMA-smoothed selection scores (0.3 => ~3-epoch memory).
+    ## EMA-smoothed series (0.3 => ~3-epoch memory): the raw per-epoch values are noisy on a small
+    ## validation split, so every logged curve also gets a smoothed counterpart
     var_ema_accuracy = None
     var_ema_mae = None
     var_ema_balanced = None
+    var_ema_occ_acc = None
+    var_ema_occ_f1 = None
+    var_ema_threshold = None
+    var_ema_empty_threshold = None
     var_ema_decay = 0.3
     #
     ## per-epoch history, rewritten to var_save_dir after every epoch so the run can be watched live
     var_history = {var_key: [] for var_key in (
-        "epoch", "train_loss", "valid_loss", "train_kd", "valid_accuracy", "valid_accuracy_smoothed",
+        "epoch", "train_loss", "valid_loss", "train_kd", "valid_kd",
+        "valid_accuracy", "valid_accuracy_smoothed",
         "valid_balanced_accuracy", "valid_balanced_accuracy_smoothed",
-        "valid_mae", "valid_mae_smoothed", "valid_occupancy_accuracy", "valid_occupancy_f1",
-        "valid_occupancy_threshold", "valid_empty_threshold", "learning_rate")}
+        "valid_mae", "valid_mae_smoothed",
+        "valid_occupancy_accuracy", "valid_occupancy_accuracy_smoothed",
+        "valid_occupancy_f1", "valid_occupancy_f1_smoothed",
+        "valid_occupancy_threshold", "valid_occupancy_threshold_smoothed",
+        "valid_empty_threshold", "valid_empty_threshold_smoothed", "learning_rate")}
     #
     var_scheduler = get_cosine_schedule_with_warmup(
         optimizer,
@@ -862,8 +891,9 @@ def train_density(model,
     for var_epoch in range(var_epochs):
         var_time_e0 = time.time()
         model.train()
-        ## accumulate the epoch-mean training loss: the last batch alone is far too noisy to read
+        ## accumulate the epoch-mean losses: the last batch alone is far too noisy to read
         var_train_loss_sum = 0.0
+        var_train_kd_sum = 0.0
         var_train_batches = 0
         for var_batch in var_train_loader:
             var_x, var_occupancy = var_batch[0], var_batch[1]
@@ -896,6 +926,7 @@ def train_density(model,
                 var_kd_value = float(var_kd.detach())
                 var_loss = var_loss + kd_weight * var_kd
             var_train_loss_sum += float(var_loss.detach())
+            var_train_kd_sum += var_kd_value
             var_train_batches += 1
             #
             optimizer.zero_grad()
@@ -903,6 +934,7 @@ def train_density(model,
             optimizer.step()
             var_scheduler.step()
         var_train_loss_mean = var_train_loss_sum / max(1, var_train_batches)
+        var_train_kd_mean = var_train_kd_sum / max(1, var_train_batches)
         #
         model.eval()
         with torch.no_grad():
@@ -941,23 +973,22 @@ def train_density(model,
             predict_counts_staged(var_valid_occupancy, var_valid_map_max, var_threshold, var_empty_threshold),
             var_valid_y, var_valid_occupancy, var_threshold)
         #
-        ## smooth the selection scores before comparing epochs; the checkpoint is selected on the
-        ## balanced accuracy so the rare empty class counts as much as the crowded ones
-        if var_ema_accuracy is None:
-            var_ema_accuracy, var_ema_mae = var_metrics["accuracy"], var_metrics["mae"]
-            var_ema_balanced = var_metrics["balanced_accuracy"]
-        else:
-            var_ema_accuracy = var_ema_decay * var_metrics["accuracy"] + (1 - var_ema_decay) * var_ema_accuracy
-            var_ema_mae = var_ema_decay * var_metrics["mae"] + (1 - var_ema_decay) * var_ema_mae
-            var_ema_balanced = (var_ema_decay * var_metrics["balanced_accuracy"]
-                                + (1 - var_ema_decay) * var_ema_balanced)
+        ## smooth every logged series before comparing epochs; the checkpoint is selected on the
+        ## smoothed balanced accuracy so the rare empty class counts as much as the crowded ones
         var_empty_threshold_log = _finite_or_nan(var_empty_threshold)
+        var_ema_accuracy = _ema_update(var_ema_accuracy, var_metrics["accuracy"], var_ema_decay)
+        var_ema_balanced = _ema_update(var_ema_balanced, var_metrics["balanced_accuracy"], var_ema_decay)
+        var_ema_mae = _ema_update(var_ema_mae, var_metrics["mae"], var_ema_decay)
+        var_ema_occ_acc = _ema_update(var_ema_occ_acc, var_metrics["occupancy_accuracy"], var_ema_decay)
+        var_ema_occ_f1 = _ema_update(var_ema_occ_f1, var_metrics["occupancy_f1"], var_ema_decay)
+        var_ema_threshold = _ema_update(var_ema_threshold, var_threshold, var_ema_decay)
+        var_ema_empty_threshold = _ema_update(var_ema_empty_threshold, var_empty_threshold_log, var_ema_decay)
         #
         wandb.log({
             "epoch": var_epoch,
             "train_loss": var_train_loss_mean,
             "valid_loss": var_valid_loss,
-            "train_kd": var_kd_value,
+            "train_kd": var_train_kd_mean,
             "valid_kd": var_valid_kd_value,
             "valid_accuracy": var_metrics["accuracy"],
             "valid_balanced_accuracy": var_metrics["balanced_accuracy"],
@@ -969,6 +1000,10 @@ def train_density(model,
             "valid_accuracy_smoothed": var_ema_accuracy,
             "valid_balanced_accuracy_smoothed": var_ema_balanced,
             "valid_mae_smoothed": var_ema_mae,
+            "valid_occupancy_accuracy_smoothed": var_ema_occ_acc,
+            "valid_occupancy_f1_smoothed": var_ema_occ_f1,
+            "valid_occupancy_threshold_smoothed": var_ema_threshold,
+            "valid_empty_threshold_smoothed": var_ema_empty_threshold,
             "learning_rate": optimizer.param_groups[0]["lr"],
         })
         #
@@ -985,7 +1020,8 @@ def train_density(model,
         var_history["epoch"].append(var_epoch)
         var_history["train_loss"].append(var_train_loss_mean)
         var_history["valid_loss"].append(var_valid_loss)
-        var_history["train_kd"].append(var_kd_value)
+        var_history["train_kd"].append(var_train_kd_mean)
+        var_history["valid_kd"].append(var_valid_kd_value)
         var_history["valid_accuracy"].append(var_metrics["accuracy"])
         var_history["valid_accuracy_smoothed"].append(var_ema_accuracy)
         var_history["valid_balanced_accuracy"].append(var_metrics["balanced_accuracy"])
@@ -993,9 +1029,13 @@ def train_density(model,
         var_history["valid_mae"].append(var_metrics["mae"])
         var_history["valid_mae_smoothed"].append(var_ema_mae)
         var_history["valid_occupancy_accuracy"].append(var_metrics["occupancy_accuracy"])
+        var_history["valid_occupancy_accuracy_smoothed"].append(var_ema_occ_acc)
         var_history["valid_occupancy_f1"].append(var_metrics["occupancy_f1"])
+        var_history["valid_occupancy_f1_smoothed"].append(var_ema_occ_f1)
         var_history["valid_occupancy_threshold"].append(var_threshold)
+        var_history["valid_occupancy_threshold_smoothed"].append(var_ema_threshold)
         var_history["valid_empty_threshold"].append(var_empty_threshold_log)
+        var_history["valid_empty_threshold_smoothed"].append(var_ema_empty_threshold)
         var_history["learning_rate"].append(optimizer.param_groups[0]["lr"])
         plot_training_curves(var_history, var_save_dir, var_tag)
         #

@@ -32,7 +32,10 @@ set -euo pipefail
 source /software/anaconda3/etc/profile.d/conda.sh
 conda activate AMAR
 
-train_envs=(meeting_room classroom)
+## NOTE: --train_envs expects a comma-separated *string*. A bash array passed as "$train_envs"
+## expands to its first element only ("meeting_room"), which silently ran the one-room protocol
+## instead of LOR. Keep this a string.
+train_envs="meeting_room,classroom"
 held_out="empty_room"
 
 mkdir -p "./output/cd/density_map/lor_${held_out}/"
