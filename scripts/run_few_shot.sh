@@ -16,6 +16,6 @@ start=$(date +%s)
 echo "Start: $(date)"
 export WANDB_MODE=offline
 python scripts/run_few_shot.py --model AMAR_WO_RVQ --task location --repeat 3 --env "${env}" \
-  --few_shot_ratio 0.01 --kd_weight 1.0 > "./output/few_shot/${env}/AMAR_WO_RVQ_fewshot.txt" 2>&1
+  --few_shot_ratio 0.01 --kd_weight 1.0 > "./output/few_shot/${env}/run_$(date +%Y%m%d_%H%M%S).log" 2>&1
 end=$(date +%s)
 echo "Total runtime: $((end - start)) seconds"

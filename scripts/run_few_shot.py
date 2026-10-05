@@ -135,34 +135,6 @@ def format_result(var_model, var_task, result, var_few_shot_ratio, var_kd_weight
     return "\n".join(lines)
 
 
-def save_result(var_model, var_task, var_repeat, result):
-    """
-    [description]
-    : save the full result dict to one JSON file per run
-    """
-    result["model"] = var_model
-    result["task"] = var_task
-    result["repeat"] = var_repeat
-    result["data"] = preset["data"]
-    result["nn"] = preset["nn"]
-    result["saved_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    save_dir = preset["path"].get("save_dir", "output")
-    os.makedirs(os.path.join(save_dir, "json"), exist_ok=True)
-
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    out_path = os.path.join(
-        save_dir,
-        "json",
-        f"result_{var_model}_fewshot_{var_task}_r{var_repeat}_{timestamp}.json",
-    )
-
-    with open(out_path, "w") as f:
-        json.dump(result, f, indent=4, cls=NumpyEncoder)
-
-    return out_path
-
-
 #
 ##
 def run():
@@ -253,10 +225,17 @@ def run():
     result["teacher_epochs"] = var_teacher_epochs
 
     formatted = format_result(var_model, var_task, result, var_args.few_shot_ratio, var_args.kd_weight, var_env)
-    out_path = save_result(var_model, var_task, var_repeat, result)
+    ## write the JSON and the human-readable report to auto-named files, so the per-teacher-room and
+    ## repeated runs never collide and never need renaming
+    var_stem = build_run_stem(var_model, var_task, f"train-{var_env}",
+                              f"test-{join_envs(other_envs)}", f"k{var_args.few_shot_ratio}",
+                              f"r{var_repeat}", f"e{var_args.epochs}", run_timestamp())
+    var_json_path, var_txt_path = save_run_outputs(
+        preset["path"].get("save_dir", "output"), "few_shot", var_stem, result, formatted)
 
     print(formatted)
-    print(f"\nResults saved to: {out_path}")
+    print(f"\nResults saved to: {var_json_path}")
+    print(f"Report saved to:  {var_txt_path}")
 
     # Release the multi-GB per-task arrays before the next task
     del data_train_x, data_train_y, test_sets_by_env

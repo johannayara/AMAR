@@ -164,6 +164,24 @@ preset = {
         "staged_count": True,
         "empty_threshold": None,
     },
+
+    ## H-WILD human-held-device localization (src/data/hwild.py). "path" is the dataset root holding
+    ## the Conference/, Laboratory/, Office/ and Lounge/ folders. Packets are sliced into fixed-length
+    ## windows; "window" must be a multiple of 20 and at least 320, which is what the THAT backbone's
+    ## pooling/conv geometry requires (see src/models/bce_that.py). The regression head is a small MLP
+    ## on the backbone embedding; the output is the normalized (x, y) position.
+    "hwild": {
+        "path": "dataset/hwild",
+        "window": 400,
+        "stride": 200,
+        "head_hidden": 128,
+        "head_dropout": 0.2,
+        "epoch": 60,
+        "patience": 20,
+        "batch_size": 32,
+        "lr": 1e-3,
+        "weight_decay": 2e-4,
+    },
 }
 
 preset["nn"]["num_classes"] = 6 if preset["task"] in ("location", "count") else 10

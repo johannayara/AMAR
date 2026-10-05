@@ -76,6 +76,16 @@ Download the WiMANS dataset from [Kaggle](https://www.kaggle.com/datasets/shuoka
 }
 ```
 
+**H-WILD (room-agnostic localization):** clone the [H-WILD dataset](https://github.com/H-WILD/human_held_device_wifi_indoor_localization_dataset)
+so the four room folders sit under `dataset/hwild/`:
+
+```bash
+git clone --depth 1 https://github.com/H-WILD/human_held_device_wifi_indoor_localization_dataset.git dataset/hwild
+rm -rf dataset/hwild/.git
+```
+
+The captures are MATLAB v7.3 (HDF5), so `h5py` is required (already in `environment.yaml`).
+
 **Sample Data:**
 
 <table align="center">
@@ -164,6 +174,27 @@ matches student queries to teacher queries with a Hungarian assignment on the fi
 probabilities, so it is invariant to the arbitrary query ordering of set prediction. Extra
 arguments: `--kd_temperature` (soft-target temperature), `--teacher_epochs` (defaults to
 `preset["nn"]["epoch"]`), `--no_compile`.
+
+### 3. Room-agnostic localization on H-WILD
+
+`scripts/run_hwild.py` trains the continuous density head (`DensityMapNet`) as a single-target
+localizer and evaluates it leave-one-room-out: it predicts an (x, y) position per CSI window and
+reports the Euclidean error in meters on the held-out room. The training target is a Gaussian bump at
+the ground-truth UWB position, and the prediction is the sub-pixel maximum of the predicted map.
+
+```bash
+# train on the other three rooms, test on Lounge
+python scripts/run_hwild.py --holdout Lounge --repeat 3 --epochs 60
+
+# quick smoke test on a few captures per room
+python scripts/run_hwild.py --holdout Lounge --max_files 4 --epochs 2 --repeat 1
+```
+
+Positions live in a fixed per-room `[0, 1]^2` frame built from the dataset's own coordinate grid
+(`src/data/hwild.py`, transcribed from `obtain_parameters.m`), so a model trained on some rooms
+predicts normalized coordinates that denormalize to meters in any room. Per-room metrics, prediction
+scatters and a training-curve plot are written under `visualizations/hwild/`, and the JSON/TXT report
+under `output/hwild/`.
 
 ## Available Models
 

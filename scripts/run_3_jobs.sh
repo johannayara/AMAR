@@ -16,5 +16,5 @@ env=${envs[$SLURM_ARRAY_TASK_ID]}
 start=$(date +%s)
 WANDB_MODE=offline python scripts/run_main.py \
     --model AMAR_WO_RVQ --task location --repeat 5 --env "$env" \
-    > "./output/single/AMAR_WO_RVQ_r5_${env}.txt" 2>&1
+    > "./output/single/AMAR_WO_RVQ_r5_${env}_$(date +%Y%m%d_%H%M%S).log" 2>&1
 echo "Total runtime $env: $(( $(date +%s) - start )) seconds"

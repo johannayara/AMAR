@@ -30,5 +30,5 @@ mkdir -p "./output/cd/density_map/lor_${held_out}/"
 start=$(date +%s)
 WANDB_MODE=offline python scripts/run_cross_domain.py \
     --model density_map --task location --repeat 5 --train_envs "$train_envs" --epochs 50 \
-    > "./output/cd/density_map/lor_${held_out}/test_cd.txt" 2>&1
+    > "./output/cd/density_map/lor_${held_out}/run_$(date +%Y%m%d_%H%M%S).log" 2>&1
 echo "Total runtime held-out $held_out: $(( $(date +%s) - start )) seconds"

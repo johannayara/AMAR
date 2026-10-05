@@ -44,5 +44,9 @@ start=$(date +%s)
 WANDB_MODE=offline python scripts/run_cross_domain.py \
     --model density_map --task location --repeat 5 --train_envs "$train_envs" --epochs 20 \
     > "./output/cd/density_map/lor_${held_out}/test_cd_2.txt" 2>&1
+=======
+    --model density_map --task location --repeat 5 --train_envs "$train_envs" --epochs 100 \
+    > "./output/cd/density_map/lor_${held_out}/run_$(date +%Y%m%d_%H%M%S).log" 2>&1
+>>>>>>> Stashed changes
 echo "Total runtime held-out $held_out: $(( $(date +%s) - start )) seconds"
 

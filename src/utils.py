@@ -314,6 +314,59 @@ class NumpyEncoder(json.JSONEncoder):
         return super().default(obj)
 
 
+def build_run_stem(*var_parts):
+    """
+    [description]
+    : join non-empty tag parts into one filesystem-safe stem, e.g.
+      ("density_map", "location", "train-empty_room+meeting_room", "r5", "e50", "20261005_171111")
+      -> "density_map_location_train-empty_room+meeting_room_r5_e50_20261005_171111".
+      Every run writes its own stem, so results never have to be renamed by hand.
+    """
+    var_parts = [str(var_part) for var_part in var_parts if var_part not in (None, "")]
+    var_stem = re.sub(r"[^A-Za-z0-9._+=-]+", "-", "_".join(var_parts))
+    return var_stem.strip("-_") or "run"
+
+
+def save_run_outputs(var_save_dir, var_protocol, var_stem, var_result, var_formatted):
+    """
+    [description]
+    : write a run's outputs to auto-named files under <save_dir>/<protocol>/:
+        <stem>.json  full result dict (self-describing config + metrics)
+        <stem>.txt   human-readable formatted report
+      The stem already carries the model/task/envs/repeats/epochs/timestamp, so concurrent or
+      repeated runs never collide and never need renaming.
+    : return: (json_path, txt_path)
+    """
+    var_dir = os.path.join(var_save_dir, var_protocol)
+    os.makedirs(var_dir, exist_ok=True)
+    var_json_path = os.path.join(var_dir, f"{var_stem}.json")
+    var_txt_path = os.path.join(var_dir, f"{var_stem}.txt")
+    with open(var_json_path, "w") as var_file:
+        json.dump(var_result, var_file, indent=4, cls=NumpyEncoder)
+    with open(var_txt_path, "w") as var_file:
+        var_file.write(var_formatted + "\n")
+    return var_json_path, var_txt_path
+
+
+def run_timestamp():
+    """
+    [description]
+    : unique-per-run timestamp for output file stems (second resolution).
+    """
+    return time.strftime("%Y%m%d_%H%M%S")
+
+
+def join_envs(var_envs):
+    """
+    [description]
+    : render a list of room names as a single filename-safe token, e.g. ["empty_room","classroom"] ->
+      "empty_room+classroom".
+    """
+    if isinstance(var_envs, str):
+        var_envs = [var_envs]
+    return "+".join(str(var_env) for var_env in var_envs)
+
+
 def calculate_scores(y_true, y_pred):
     """
     Calculate all performance metrics for the predictions

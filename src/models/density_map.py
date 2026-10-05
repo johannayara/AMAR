@@ -151,7 +151,7 @@ class DensityMapNet(torch.nn.Module):
     ##
     def __init__(self,
                  var_x_shape,
-                 var_layout,
+                 var_layout=None,
                  embedding_dim=100,
                  grid_size=32,
                  hidden_dim=None,
@@ -171,8 +171,15 @@ class DensityMapNet(torch.nn.Module):
         self.dropout = dropout
         self.output_mode = var_output_mode
         #
-        var_kernels, self.location_names = build_kernels(var_layout, grid_size, sigma)
-        self.register_buffer("kernels", torch.from_numpy(var_kernels))
+        ## The layout is optional: the WiMANS paths pass one to render and read their discrete
+        ## location kernels, while the H-WILD localization path predicts a free continuous map and
+        ## passes none, so no kernels are needed.
+        if var_layout is not None:
+            var_kernels, self.location_names = build_kernels(var_layout, grid_size, sigma)
+            self.register_buffer("kernels", torch.from_numpy(var_kernels))
+        else:
+            self.location_names = []
+            self.register_buffer("kernels", None)
         #
         ## Seed the map at 4x4 and upsample by 2 three times to 32x32; interpolate if grid_size differs.
         self.decoder_fc = torch.nn.Sequential(
@@ -229,8 +236,8 @@ def _extract_peaks(var_map, var_threshold_frac, var_abs_floor=0.0):
       a peak when it is the maximum of its 3x3 neighbourhood and clears max(threshold_frac * map_max,
       abs_floor). abs_floor is the absolute gate: a map whose maximum is below it has no peaks at all,
       and no cell below it counts, so a low-amplitude near-empty map no longer yields spurious peaks.
-    : var_abs_floor: absolute lower bound on the map maximum and on each peak value (e.g. the
-      validation-calibrated empty-gate threshold). 0.0 keeps the old relative-only behaviour.
+    : var_abs_floor: absolute lower bound on the map maximum and on each peak value (normally the
+      validation-calibrated count threshold). 0.0 keeps the old relative-only behaviour.
     """
     #
     var_max = float(var_map.max())
@@ -554,7 +561,7 @@ def visualize_density_map(data_true_density,
                           var_tag="density_map",
                           var_layout=None,
                           var_true_occupancy=None,
-                          var_empty_threshold=None):
+                          var_peak_floor=None):
     """
     [description]
     : plot the ground-truth and predicted density maps for a spread of test samples (one row per
@@ -569,9 +576,10 @@ def visualize_density_map(data_true_density,
     : var_true_occupancy: optional (N, num_locations) 0/1 occupancy targets aligned with the density
       maps; with var_layout, the ground-truth panel shows the labelled true positions instead of the
       peaks of the rendered target.
-    : var_empty_threshold: optional absolute gate for the peak panels, normally the empty-gate
-      threshold calibrated by resolve_count_decision. A map whose maximum is below it shows no peaks,
-      so a frame the decision rule calls empty is not drawn with spurious low-amplitude peaks.
+    : var_peak_floor: optional absolute floor for the peak panels, normally the calibrated count
+      threshold from resolve_count_decision. A map whose maximum is below it shows no peaks, and no
+      cell below it counts, so the peak count uses the same bar as the reported count instead of the
+      much looser empty-gate threshold.
     [return]
     : out_path: str, path of the saved figure
     """
@@ -583,7 +591,7 @@ def visualize_density_map(data_true_density,
     var_extent_m = (0.0, METERS_PER_UNIT, 0.0, METERS_PER_UNIT)
     ## one colour scale for the whole figure, so a low-amplitude prediction reads as weak
     var_vmax = max(float(np.max(data_true_density)), float(np.max(data_pred_density)), 1e-6)
-    var_abs_floor = 0.0 if var_empty_threshold is None else float(var_empty_threshold)
+    var_abs_floor = 0.0 if var_peak_floor is None else float(var_peak_floor)
     #
     ## spread the rows over the whole count range so the figure shows empty, single and crowded frames
     var_true_count = data_true_density.sum(axis=(1, 2))
@@ -773,6 +781,30 @@ def plot_training_curves(var_history, var_save_path, var_tag="training"):
     return var_png, var_csv
 
 
+def augment_csi(var_x):
+    """
+    [description]
+    : on-the-fly CSI augmentation shared by the WiMANS density trainer and the H-WILD localization
+      trainer. The encoder's LayerNorm removes a constant input scale, so the previous +0.1 noise was
+      negligible against amplitudes around 60 and the gain was largely cancelled. Scale the noise to
+      the signal and add a small temporal shift; keep the gain and channel dropout.
+    : var_x: tensor (batch, time, features)
+    : return: tensor, same shape
+    """
+    var_x = var_x + torch.randn_like(var_x) * (0.05 * var_x.detach().std())
+    var_scale = torch.rand(var_x.size(0), 1, device=var_x.device) * 0.2 + 0.9
+    var_x = var_x * var_scale.unsqueeze(-1)
+    var_shift = int(torch.randint(-var_x.size(1) // 20, var_x.size(1) // 20 + 1, (1,)).item())
+    if var_shift != 0:
+        var_x = torch.roll(var_x, var_shift, dims=1)
+        if var_shift > 0:
+            var_x[:, :var_shift] = 0
+        else:
+            var_x[:, var_shift:] = 0
+    var_x = var_x * torch.bernoulli(torch.ones_like(var_x) * 0.96)
+    return var_x
+
+
 def train_density(model,
                   optimizer,
                   data_train_set: TensorDataset,
@@ -871,23 +903,6 @@ def train_density(model,
         min_lr_ratio=preset["nn"]["scheduler"]["min_lr_ratio"],
     )
 
-    def apply_augmentation(var_x):
-        ## The encoder's LayerNorm removes a constant input scale, so the previous +0.1 noise was
-        ## negligible against amplitudes around 60 and the gain was largely cancelled. Scale the
-        ## noise to the signal and add a small temporal shift; keep the gain and channel dropout.
-        var_x = var_x + torch.randn_like(var_x) * (0.05 * var_x.detach().std())
-        var_scale = torch.rand(var_x.size(0), 1, device=var_x.device) * 0.2 + 0.9
-        var_x = var_x * var_scale.unsqueeze(-1)
-        var_shift = int(torch.randint(-var_x.size(1) // 20, var_x.size(1) // 20 + 1, (1,)).item())
-        if var_shift != 0:
-            var_x = torch.roll(var_x, var_shift, dims=1)
-            if var_shift > 0:
-                var_x[:, :var_shift] = 0
-            else:
-                var_x[:, var_shift:] = 0
-        var_x = var_x * torch.bernoulli(torch.ones_like(var_x) * 0.96)
-        return var_x
-
     for var_epoch in range(var_epochs):
         var_time_e0 = time.time()
         model.train()
@@ -897,7 +912,7 @@ def train_density(model,
         var_train_batches = 0
         for var_batch in var_train_loader:
             var_x, var_occupancy = var_batch[0], var_batch[1]
-            var_x = apply_augmentation(var_x.to(device))
+            var_x = augment_csi(var_x.to(device))
             var_occupancy = var_occupancy.to(device)
             #
             ## each sample is rendered with its own room's kernels when the batch mixes rooms
@@ -1233,7 +1248,7 @@ def run_density_map(data_train_x,
                                                  var_threshold_frac=preset["density"]["peak_threshold"],
                                                  var_tag=var_env,
                                                  var_layout=var_layout, var_true_occupancy=data_test_y,
-                                                 var_empty_threshold=var_empty_threshold)
+                                                 var_peak_floor=var_threshold)
             ## the standard per-location performance figures, on the binarized occupancy
             visualize_model_performance(pred_occupancy, data_test_y, save_dir=save_path,
                                         var_mode="occupancy", var_threshold=var_threshold)
@@ -1451,7 +1466,7 @@ def run_density_map_cross_domain(train_sets_by_env,
                        "empty_threshold": var_empty_threshold_log}
             env_rep_metrics.setdefault(var_env_name, []).append(var_rep)
             env_last_density[var_env_name] = (true_density, pred_density)
-            env_last_occupancy[var_env_name] = (var_occupancy, var_threshold, var_y_env, var_empty_threshold)
+            env_last_occupancy[var_env_name] = (var_occupancy, var_threshold, var_y_env)
             #
             wandb.log({
                 f"test_results_per_env/{var_env_name}/accuracy": var_count_metrics["accuracy"],
@@ -1502,14 +1517,14 @@ def run_density_map_cross_domain(train_sets_by_env,
         results[var_env_name] = var_env_result
         #
         var_true_density, var_pred_density = env_last_density[var_env_name]
-        var_occupancy_last, var_threshold_last, var_y_last, var_empty_last = env_last_occupancy[var_env_name]
+        var_occupancy_last, var_threshold_last, var_y_last = env_last_occupancy[var_env_name]
         visualize_density_map(var_true_density, var_pred_density,
                               os.path.join(save_path, var_env_name),
                               var_threshold_frac=preset["density"]["peak_threshold"],
                               var_tag=var_env_name,
                               var_layout=preset["layouts"][var_env_name],
                               var_true_occupancy=var_y_last,
-                              var_empty_threshold=var_empty_last)
+                              var_peak_floor=var_threshold_last)
         ## the standard per-location performance figures, on the binarized occupancy of the last repeat
         visualize_model_performance(var_occupancy_last, var_y_last,
                                     save_dir=os.path.join(save_path, var_env_name),
@@ -1754,7 +1769,7 @@ def run_density_map_few_shot(data_train_x,
                        "student_train_time": student_time_1 - student_time_0}
             env_rep_metrics.setdefault(var_env_name, []).append(var_rep)
             env_last_density[var_env_name] = (true_density, pred_density)
-            env_last_occupancy[var_env_name] = (var_occupancy, var_threshold, var_y_env, var_empty_threshold)
+            env_last_occupancy[var_env_name] = (var_occupancy, var_threshold, var_y_env)
             #
             wandb.log({
                 f"test_results_per_env/{var_env_name}/accuracy": var_count_metrics["accuracy"],
@@ -1813,14 +1828,14 @@ def run_density_map_few_shot(data_train_x,
         results[var_env_name] = var_env_result
         #
         var_true_density, var_pred_density = env_last_density[var_env_name]
-        var_occupancy_last, var_threshold_last, var_y_last, var_empty_last = env_last_occupancy[var_env_name]
+        var_occupancy_last, var_threshold_last, var_y_last = env_last_occupancy[var_env_name]
         visualize_density_map(var_true_density, var_pred_density,
                               os.path.join(save_path, var_env_name),
                               var_threshold_frac=preset["density"]["peak_threshold"],
                               var_tag=var_env_name,
                               var_layout=preset["layouts"][var_env_name],
                               var_true_occupancy=var_y_last,
-                              var_empty_threshold=var_empty_last)
+                              var_peak_floor=var_threshold_last)
         visualize_model_performance(var_occupancy_last, var_y_last,
                                     save_dir=os.path.join(save_path, var_env_name),
                                     var_mode="occupancy", var_threshold=var_threshold_last)

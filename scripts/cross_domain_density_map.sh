@@ -24,5 +24,5 @@ mkdir -p ./output/cd
 start=$(date +%s)
 WANDB_MODE=offline python scripts/run_cross_domain.py \
     --model density_map --task location --repeat 5 --env "$env" \
-    > "./output/cd/density_map_${env}_cd.txt" 2>&1
+    > "./output/cd/density_map_${env}_$(date +%Y%m%d_%H%M%S).log" 2>&1
 echo "Total runtime $env: $(( $(date +%s) - start )) seconds"

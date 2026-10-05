@@ -157,44 +157,6 @@ def format_result(var_model, var_task, result):
 
     return "\n".join(lines)
 
-def save_result(var_model, var_task, var_repeat, result):
-    """
-    [description]
-    : save the full result dict to one JSON file per run
-    """
-    result["model"] = var_model
-    result["task"] = var_task
-    result["repeat"] = var_repeat
-    result["data"] = preset["data"]
-    result["nn"] = preset["nn"]
-    result["saved_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    save_dir = preset["path"].get("save_dir", "output")
-    os.makedirs(save_dir, exist_ok=True)
-
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    out_path = os.path.join(
-        save_dir,
-        f"result_{var_model}_{var_task}_r{var_repeat}_{timestamp}.json",
-    )
-
-    with open(out_path, "w") as f:
-        json.dump(result, f, indent=4, cls=NumpyEncoder)
-
-    return out_path
-
-
-def write_result(out_path, formatted):
-    """
-    [description]
-    : append the formatted results to the run's output file
-    """
-    with open(out_path, "a") as f:
-        f.write(formatted + "\n")
-        f.write("\nFull Result Details:\n")
-        f.write(json.dumps(json.loads(open(out_path).read()) if False else "", default=str))
-    return out_path
-
 #
 ##
 def run():
@@ -255,15 +217,26 @@ def run():
     "task": var_task,
     "repeat": var_repeat,
     "train_envs": var_train_envs,
+    "test_envs": [e for e in preset["data"]["environment"] if e not in var_train_envs],
     "epochs": preset["nn"]["epoch"],
     "data": preset["data"],
     "nn": preset["nn"],
     }
 
-    
-    # Also write a human-readable summary alongside the JSON
+    #
+    ## write the JSON and the human-readable report to auto-named files, so the one-room and
+    ## leave-one-room-out folds (and repeated runs) never collide and never need renaming
     formatted = format_result(var_model, var_task, result)
+    var_test_envs = [e for e in preset["data"]["environment"] if e not in var_train_envs]
+    var_stem = build_run_stem(var_model, var_task,
+                              f"train-{join_envs(var_train_envs)}", f"test-{join_envs(var_test_envs)}",
+                              f"r{var_repeat}", f"e{preset['nn']['epoch']}", run_timestamp())
+    var_json_path, var_txt_path = save_run_outputs(
+        preset["path"].get("save_dir", "output"), "cross_domain", var_stem, result, formatted)
+
     print(formatted)
+    print(f"\nResults saved to: {var_json_path}")
+    print(f"Report saved to:  {var_txt_path}")
 
 if __name__ == "__main__":
     #

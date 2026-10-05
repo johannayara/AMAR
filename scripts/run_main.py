@@ -233,47 +233,6 @@ def format_result(var_model, var_task, result):
     return "\n".join(lines)
 
 
-def save_result(var_model, var_task, var_repeat, result):
-    """
-    [description]
-    : save the full result dict to one JSON file per run
-    """
-    result["model"] = var_model
-    result["task"] = var_task
-    result["repeat"] = var_repeat
-    result["data"] = preset["data"]
-    result["nn"] = preset["nn"]
-    result["saved_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    save_dir = preset["path"].get("save_dir", "output")
-    os.makedirs(save_dir, exist_ok=True)
-
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    out_path = os.path.join(
-        save_dir,
-        "json",
-        f"result_{var_model}_{var_task}_r{var_repeat}_{timestamp}.json",
-    )
-
-    with open(out_path, "w") as f:
-        json.dump(result, f, indent=4, cls=NumpyEncoder)
-
-    return out_path
-
-
-def write_result(out_path, formatted):
-    """
-    [description]
-    : append the formatted results to the run's output file
-    """
-    with open(out_path, "a") as f:
-        f.write(formatted + "\n")
-        f.write("\nFull Result Details:\n")
-        f.write(json.dumps(json.loads(open(out_path).read()) if False else "", default=str))
-    # Simpler: append formatted to the same file
-    return out_path
-
-
 #
 ##
 def run():
@@ -353,26 +312,17 @@ def run():
     result["density"] = preset["density"]
     result["hp_overrides"] = var_hp_applied
 
-    # Save result dict to a per-run JSON file (the sample-count study aggregates these)
-    save_dir = preset["path"].get("save_dir", "output")
-    os.makedirs(os.path.join(save_dir, "json"), exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    sample_tag = "all" if not var_args.train_samples else str(var_args.train_samples)
-    out_path = os.path.join(
-        save_dir, "json",
-        f"result_{var_model}_{var_task}_{var_env}_n{sample_tag}_r{var_repeat}_{timestamp}.json")
-
-    with open(out_path, "w") as f:
-        json.dump(result, f, indent=4, cls=NumpyEncoder)
-
-    print(f"Results saved to: {out_path}")
-
-    # Also write a human-readable summary alongside the JSON
+    ## write the JSON and the human-readable report to auto-named files, so concurrent or repeated
+    ## runs never collide and never have to be renamed by hand
     formatted = format_result(var_model, var_task, result)
-    # txt_path = out_path.replace(".json", ".txt")
-    # with open(txt_path, "w") as f:
-    #     f.write(formatted + "\n")
+    save_dir = preset["path"].get("save_dir", "output")
+    sample_tag = "all" if not var_args.train_samples else str(var_args.train_samples)
+    var_stem = build_run_stem(var_model, var_task, f"env-{var_env}", f"n{sample_tag}",
+                              f"r{var_repeat}", f"e{preset['nn']['epoch']}", run_timestamp())
+    var_json_path, var_txt_path = save_run_outputs(save_dir, "single", var_stem, result, formatted)
 
+    print(f"Results saved to: {var_json_path}")
+    print(f"Report saved to:  {var_txt_path}")
     print(formatted)
 
 
