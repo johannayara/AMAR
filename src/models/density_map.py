@@ -19,6 +19,7 @@
 ##
 
 import copy
+import csv
 import gc
 import math
 import os
@@ -41,6 +42,11 @@ import wandb
 
 
 torch.set_float32_matmul_precision("high")
+
+## The shared frame stores distances in cm divided by 1000 (see preset["layouts"]), so one grid unit
+## spans 10 m on both axes: a normalized coordinate v is v * 10 m from the transmitter corner. The
+## WiMANS rooms are 5.10 x 10.30 m, i.e. x in [0, 0.51] and y in [0, 1.03].
+METERS_PER_UNIT = 10.0
 
 #
 ##
@@ -133,6 +139,9 @@ class DensityMapNet(torch.nn.Module):
       only as a buffer, to render training targets and to read per-location occupancy back off the map.
       The decoder is deliberately small and regularised: a large decoder can satisfy the source-room
       loss by emitting that room's marginal map and ignoring the input, which does not transfer.
+    : var_output_mode: "probability" applies a sigmoid to the head (the BCE objective operates on the
+      logits); "raw" returns the head output untouched, which is what the DEM smooth-L1 objective
+      regresses directly.
     """
     #
     ##
@@ -143,7 +152,8 @@ class DensityMapNet(torch.nn.Module):
                  grid_size=32,
                  hidden_dim=None,
                  sigma=0.06,
-                 dropout=None):
+                 dropout=None,
+                 var_output_mode="probability"):
 
         super().__init__()
         if hidden_dim is None:
@@ -155,6 +165,7 @@ class DensityMapNet(torch.nn.Module):
         self.grid_size = grid_size
         self.hidden_dim = hidden_dim
         self.dropout = dropout
+        self.output_mode = var_output_mode
         #
         var_kernels, self.location_names = build_kernels(var_layout, grid_size, sigma)
         self.register_buffer("kernels", torch.from_numpy(var_kernels))
@@ -179,22 +190,27 @@ class DensityMapNet(torch.nn.Module):
     def forward(self, x):
         """
         [return]
-        : density: (batch, grid, grid) predicted occupancy probability map
+        : density: (batch, grid, grid) predicted occupancy map. Under "probability" it is the sigmoid
+          of the raw map; under "raw" it is the head output itself (the DEM regression target).
         : count: (batch,) integral of the density map (soft mass, not thresholded)
-        : density_logits: (batch, grid, grid) raw map logits
+        : density_map: (batch, grid, grid) raw head output; the BCE objective is applied to this, and
+          the DEM objective to `density`.
         """
         var_features = self.backbone(x)
         var_seed = self.decoder_fc(var_features).view(-1, self.hidden_dim, 4, 4)
-        var_density_logits = self.decoder_conv(var_seed).squeeze(1)
-        if var_density_logits.shape[-1] != self.grid_size:
-            var_density_logits = F.interpolate(var_density_logits.unsqueeze(1),
-                                               size=(self.grid_size, self.grid_size),
-                                               mode="bilinear", align_corners=False).squeeze(1)
+        var_density_map = self.decoder_conv(var_seed).squeeze(1)
+        if var_density_map.shape[-1] != self.grid_size:
+            var_density_map = F.interpolate(var_density_map.unsqueeze(1),
+                                            size=(self.grid_size, self.grid_size),
+                                            mode="bilinear", align_corners=False).squeeze(1)
         #
-        var_density = torch.sigmoid(var_density_logits)
+        if self.output_mode == "raw":
+            var_density = var_density_map
+        else:
+            var_density = torch.sigmoid(var_density_map)
         var_count = var_density.sum(dim=(1, 2))
         #
-        return var_density, var_count, var_density_logits
+        return var_density, var_count, var_density_map
 
 
 #
@@ -221,6 +237,43 @@ def _extract_peaks(var_map, var_threshold_frac):
     var_centroids = center_of_mass(var_map, var_labels, range(1, var_num + 1))
     #
     return np.array([[var_c[1] / var_width, var_c[0] / var_height] for var_c in var_centroids], dtype=np.float32)
+
+
+def normalized_to_meters(var_xy):
+    """
+    [description]
+    : convert one normalized (x, y) position, or an (N, 2) array of them, in the shared TX-anchored
+      frame to meters. The frame is normalized by 1000 cm, so the scale is uniform (METERS_PER_UNIT
+      on both axes).
+    """
+    return np.asarray(var_xy, dtype=np.float32) * METERS_PER_UNIT
+
+
+def _panel_positions_meters(var_map, var_threshold_frac, var_layout=None, var_occupancy=None):
+    """
+    [description]
+    : the positions to circle on one density-map panel, in meters. A ground-truth panel uses the known
+      layout directly when the occupancy is supplied (exact, and each position is labelled with its
+      WiMANS location letter); otherwise the positions are the peaks of the map, unlabelled.
+    : return: (positions_m (M, 2), labels (M,) of str)
+    """
+    if var_layout is not None and var_occupancy is not None:
+        var_names = sorted(var_layout)
+        var_flags = np.asarray(var_occupancy)
+        var_occupied = [var_name for var_name, var_flag in zip(var_names, var_flags) if var_flag > 0.5]
+        return normalized_to_meters([var_layout[var_name] for var_name in var_occupied]), var_occupied
+    var_peaks = _extract_peaks(var_map, var_threshold_frac)
+    return normalized_to_meters(var_peaks), ["" for _ in range(len(var_peaks))]
+
+
+def _format_positions_meters(var_positions):
+    """
+    [description]
+    : compact string of a list of (x, y) positions in meters, e.g. "(4.10, 6.00), (2.55, 4.55)".
+    """
+    if var_positions is None or len(var_positions) == 0:
+        return "[]"
+    return ", ".join(f"({var_x:.2f}, {var_y:.2f})" for var_x, var_y in np.asarray(var_positions))
 
 
 def _binary_f1(var_true, var_pred):
@@ -326,17 +379,42 @@ def calibrate_threshold(var_occupancy, var_true_count, var_grid=np.linspace(0.05
     return var_best_threshold, var_best_accuracy
 
 
+def resolve_eval_threshold(var_occupancy, var_true_count):
+    """
+    [description]
+    : occupancy decision threshold used for the count metrics. preset["density"]["eval_threshold"]
+      pins it to a fixed value; otherwise it is calibrated on the given split. Pinning matters for
+      hyperparameter search: calibrating the threshold on the split that is then scored is optimistic
+      and lets a config win by fitting the threshold sweep rather than the model.
+    : return: float
+    """
+    var_fixed = preset["density"].get("eval_threshold")
+    if var_fixed is not None:
+        return float(var_fixed)
+    return calibrate_threshold(var_occupancy, var_true_count)[0]
+
+
 def visualize_density_map(data_true_density,
                           data_pred_density,
                           save_dir,
                           var_num_samples=6,
                           var_threshold_frac=0.25,
-                          var_tag="density_map"):
+                          var_tag="density_map",
+                          var_layout=None,
+                          var_true_occupancy=None):
     """
     [description]
     : plot the ground-truth and predicted density maps for a spread of test samples (one row per
-      sample, ground truth on the left, prediction on the right). Detected locations are circled and
-      the title of each panel reports the number of detected peaks.
+      sample, ground truth on the left, prediction on the right). Both panels share a metric axis in
+      meters over the shared TX-anchored frame (x to the right, y away from the transmitter), every
+      position is circled and annotated with its (x, y) in meters, and the ground-truth panel labels
+      each occupied location with its WiMANS letter. The predicted and true positions are also printed
+      per sample, so the comparison is readable without opening the figure.
+    : var_layout: optional dict {letter: (x_norm, y_norm)} of the room, used to place the exact
+      ground-truth positions in meters.
+    : var_true_occupancy: optional (N, num_locations) 0/1 occupancy targets aligned with the density
+      maps; with var_layout, the ground-truth panel shows the labelled true positions instead of the
+      peaks of the rendered target.
     [return]
     : out_path: str, path of the saved figure
     """
@@ -344,33 +422,58 @@ def visualize_density_map(data_true_density,
     ##
     os.makedirs(save_dir, exist_ok=True)
     var_num_samples = min(var_num_samples, len(data_true_density))
+    ## the shared frame spans [0, 1] on both axes, i.e. [0, 10] m
+    var_extent_m = (0.0, METERS_PER_UNIT, 0.0, METERS_PER_UNIT)
     #
     ## spread the rows over the whole count range so the figure shows empty, single and crowded frames
     var_true_count = data_true_density.sum(axis=(1, 2))
     var_order = np.argsort(var_true_count)
     var_pick = var_order[np.linspace(0, len(var_order) - 1, var_num_samples).astype(int)]
     #
-    var_fig, var_axes = plt.subplots(var_num_samples, 2, figsize=(8, 3 * var_num_samples), squeeze=False)
-    var_fig.suptitle(f"Density map - ground truth vs prediction (env {var_tag})")
+    var_fig, var_axes = plt.subplots(var_num_samples, 2, figsize=(9, 3.2 * var_num_samples), squeeze=False)
+    var_fig.suptitle(f"Density map - ground truth vs prediction (env {var_tag}, axes in meters)")
     #
     for var_row, var_idx in enumerate(var_pick):
-        var_maps = ((data_true_density[var_idx], "ground truth"), (data_pred_density[var_idx], "prediction"))
+        var_true_occ = None if var_true_occupancy is None else np.asarray(var_true_occupancy)[var_idx]
+        var_maps = ((data_true_density[var_idx], "ground truth", var_true_occ),
+                    (data_pred_density[var_idx], "prediction", None))
         var_vmax = max(float(data_true_density[var_idx].max()), float(data_pred_density[var_idx].max()), 1e-6)
+        var_true_pos, var_pred_pos = None, None
         #
-        for var_col, (var_map, var_title) in enumerate(var_maps):
+        for var_col, (var_map, var_title, var_occ) in enumerate(var_maps):
             var_ax = var_axes[var_row][var_col]
-            var_ax.imshow(var_map, origin="upper", cmap="viridis", vmin=0, vmax=var_vmax)
-            var_ax.set_xticks([])
-            var_ax.set_yticks([])
+            ## origin="lower" puts y away from the transmitter upward, matching the shared frame; the
+            ## extent maps the grid onto meters so the scatter below can use meter coordinates directly
+            var_ax.imshow(var_map, origin="lower", cmap="viridis", vmin=0, vmax=var_vmax,
+                          extent=var_extent_m, aspect="equal")
+            var_ax.set_xticks(np.arange(0, METERS_PER_UNIT + 1, 2))
+            var_ax.set_yticks(np.arange(0, METERS_PER_UNIT + 1, 2))
+            var_ax.set_xlabel("x (m)")
+            var_ax.set_ylabel("y (m)")
             #
-            var_peaks = _extract_peaks(var_map, var_threshold_frac)
-            if len(var_peaks):
-                var_ax.scatter(var_peaks[:, 0] * var_map.shape[1] - 0.5,
-                               var_peaks[:, 1] * var_map.shape[0] - 0.5,
-                               s=70, facecolors="none", edgecolors="red", linewidths=1.5)
-            var_ax.set_title(f"{var_title} - {len(var_peaks)} peaks")
+            var_positions_m, var_labels = _panel_positions_meters(
+                var_map, var_threshold_frac, var_layout, var_occ)
+            if len(var_positions_m):
+                var_ax.scatter(var_positions_m[:, 0], var_positions_m[:, 1],
+                               s=90, facecolors="none", edgecolors="red", linewidths=1.5)
+                for var_pos, var_label in zip(var_positions_m, var_labels):
+                    var_prefix = f"{var_label} " if var_label else ""
+                    var_ax.annotate(f"{var_prefix}({var_pos[0]:.2f}, {var_pos[1]:.2f}) m",
+                                    (var_pos[0], var_pos[1]), textcoords="offset points", xytext=(6, 6),
+                                    fontsize=7, color="red")
+            var_ax.set_title(f"{var_title} - {len(var_positions_m)} "
+                             + (("location" if len(var_positions_m) == 1 else "locations")
+                                if var_occ is not None
+                                else ("peak" if len(var_positions_m) == 1 else "peaks")))
+            if var_title == "ground truth":
+                var_true_pos = var_positions_m
+            else:
+                var_pred_pos = var_positions_m
+        #
+        print(f"  [sample {var_idx}] true {_format_positions_meters(var_true_pos)} m | "
+              f"pred {_format_positions_meters(var_pred_pos)} m")
     #
-    var_fig.tight_layout(rect=[0, 0, 1, 0.95])
+    var_fig.tight_layout(rect=[0, 0, 1, 0.96])
     var_out_path = os.path.join(save_dir, f"density_map_{var_tag}.png")
     var_fig.savefig(var_out_path, dpi=120)
     plt.close(var_fig)
@@ -432,10 +535,67 @@ def save_density_checkpoint(model, var_x_shape, var_env, save_path, var_tag="mod
         "sigma": preset["density"]["sigma"],
         "decoder_hidden": model.hidden_dim,
         "decoder_dropout": model.dropout,
+        "output_mode": model.output_mode,
         "location_names": list(model.location_names),
     }, var_out_path)
     print(f"  Checkpoint saved to {var_out_path}")
     return var_out_path
+
+
+def plot_training_curves(var_history, var_save_path, var_tag="training"):
+    """
+    [description]
+    : write the per-epoch training history to a PNG and a CSV. Called after every epoch by
+      train_density, so both files on disk always show the run so far and can be opened while the
+      training is still going, without needing a display on the training node.
+    : var_history: dict of metric name -> list, one entry per epoch (see train_density).
+    : var_save_path: directory of the run; nothing is written when it is None or empty.
+    : var_tag: filename prefix, e.g. "train_r0" or "student_empty_room_r0".
+    : return: (png path, csv path), or None when there is nothing to plot.
+    """
+    if not var_save_path or not var_history.get("epoch"):
+        return None
+    os.makedirs(str(var_save_path), exist_ok=True)
+    #
+    ## (panel title, y label, [(history key, legend label, line style)])
+    var_panels = [
+        ("train loss", "BCE (+ KD)", [("train_loss", "train_loss", "-")]),
+        ("distillation term", "KD", [("train_kd", "train_kd", "-")]),
+        ("valid exact-count accuracy", "accuracy",
+         [("valid_accuracy", "raw", "-"), ("valid_accuracy_smoothed", "smoothed (EMA)", "--")]),
+        ("valid count MAE", "MAE",
+         [("valid_mae", "raw", "-"), ("valid_mae_smoothed", "smoothed (EMA)", "--")]),
+        ("valid occupancy accuracy", "accuracy", [("valid_occupancy_accuracy", "occupancy_acc", "-")]),
+        ("valid occupancy F1", "F1", [("valid_occupancy_f1", "occupancy_f1", "-")]),
+        ("occupancy threshold", "threshold", [("valid_occupancy_threshold", "threshold", "-")]),
+        ("learning rate", "lr", [("learning_rate", "lr", "-")]),
+    ]
+    var_epochs = var_history["epoch"]
+    var_fig, var_axes = plt.subplots(2, 4, figsize=(20, 8), squeeze=False)
+    for var_ax, (var_title, var_ylabel, var_series) in zip(var_axes.ravel(), var_panels):
+        for var_key, var_label, var_style in var_series:
+            var_ax.plot(var_epochs, var_history[var_key], var_style, label=var_label)
+        var_ax.set_title(var_title)
+        var_ax.set_xlabel("epoch")
+        var_ax.set_ylabel(var_ylabel)
+        var_ax.grid(alpha=0.3)
+        var_ax.legend(fontsize=8)
+    var_fig.suptitle(f"{var_tag} - metrics evolution")
+    var_fig.tight_layout(rect=[0, 0, 1, 0.95])
+    var_png = os.path.join(str(var_save_path), f"{var_tag}_curves.png")
+    var_fig.savefig(var_png, dpi=110)
+    plt.close(var_fig)
+    #
+    ## the CSV mirrors the figure, one row per epoch, so the numbers survive the run
+    var_csv = os.path.join(str(var_save_path), f"{var_tag}_curves.csv")
+    var_keys = ["epoch"] + [var_key for _, _, var_series in var_panels for var_key, _, _ in var_series]
+    with open(var_csv, "w", newline="") as var_file:
+        var_writer = csv.writer(var_file)
+        var_writer.writerow(var_keys)
+        for var_row in range(len(var_epochs)):
+            var_writer.writerow([var_history[var_key][var_row] for var_key in var_keys])
+    #
+    return var_png, var_csv
 
 
 def train_density(model,
@@ -449,12 +609,17 @@ def train_density(model,
                   teacher=None,
                   kd_loss=None,
                   kd_weight: float = 0.0,
-                  var_kernel_bank=None):
+                  var_kernel_bank=None,
+                  var_save_dir=None,
+                  var_tag="training",
+                  var_loss_mode="bce"):
     """
     [description]
     : train the density-map model. The objective is the binary cross-entropy between the predicted
-      density map and the Gaussian target rendered from the occupancy labels; the count and the
-      per-location occupancy are read back off the map. The occupancy threshold is calibrated on the
+      density map and the Gaussian target rendered from the occupancy labels ("bce"), or, under
+      var_loss_mode="dem", the smooth-L1 (Huber) direct error between the raw predicted map and the
+      same target; the count and the per-location occupancy are read back off the map either way.
+      The occupancy threshold is calibrated on the
       validation split each epoch, so model selection tracks the exact-count accuracy that is
       actually reported. The per-epoch validation metric is noisy on a small split, so it is smoothed
       (EMA) before selecting the checkpoint. When preset["density"]["balance_empty_class"] is set,
@@ -471,6 +636,9 @@ def train_density(model,
     : teacher: optional frozen DensityMapNet whose density logits supervise the student.
     : kd_loss: optional distillation criterion taking (student_outputs, teacher_outputs).
     : kd_weight: weight of the distillation term.
+    : var_save_dir: optional directory where the per-epoch curves (PNG + CSV) are rewritten after
+      every epoch; skipped when None, so the history is still kept in memory for the return value.
+    : var_tag: filename prefix of the curve files, e.g. "train_r0".
     """
     #
     if preset["density"].get("balance_empty_class", False):
@@ -499,6 +667,12 @@ def train_density(model,
     var_ema_accuracy = None
     var_ema_mae = None
     var_ema_decay = 0.3
+    #
+    ## per-epoch history, rewritten to var_save_dir after every epoch so the run can be watched live
+    var_history = {var_key: [] for var_key in (
+        "epoch", "train_loss", "train_kd", "valid_accuracy", "valid_accuracy_smoothed",
+        "valid_mae", "valid_mae_smoothed", "valid_occupancy_accuracy", "valid_occupancy_f1",
+        "valid_occupancy_threshold", "learning_rate")}
     #
     var_scheduler = get_cosine_schedule_with_warmup(
         optimizer,
@@ -574,7 +748,7 @@ def train_density(model,
             var_valid_y = var_valid_y.numpy()
         #
         var_true_count = var_valid_y.sum(axis=1).round()
-        var_threshold, _ = calibrate_threshold(var_valid_occupancy, var_true_count)
+        var_threshold = resolve_eval_threshold(var_valid_occupancy, var_true_count)
         var_metrics = count_metrics(var_true_count, predict_counts(var_valid_occupancy, var_threshold),
                                     var_valid_y, var_valid_occupancy, var_threshold)
         #
@@ -605,6 +779,20 @@ def train_density(model,
               "- Valid Acc %.4f" % var_metrics["accuracy"],
               "- Valid MAE %.4f" % var_metrics["mae"],
               "- Thr %.2f" % var_threshold)
+        #
+        ## append the epoch to the history and rewrite the curves, so the run can be watched live
+        var_history["epoch"].append(var_epoch)
+        var_history["train_loss"].append(float(var_loss.detach()))
+        var_history["train_kd"].append(var_kd_value)
+        var_history["valid_accuracy"].append(var_metrics["accuracy"])
+        var_history["valid_accuracy_smoothed"].append(var_ema_accuracy)
+        var_history["valid_mae"].append(var_metrics["mae"])
+        var_history["valid_mae_smoothed"].append(var_ema_mae)
+        var_history["valid_occupancy_accuracy"].append(var_metrics["occupancy_accuracy"])
+        var_history["valid_occupancy_f1"].append(var_metrics["occupancy_f1"])
+        var_history["valid_occupancy_threshold"].append(var_threshold)
+        var_history["learning_rate"].append(optimizer.param_groups[0]["lr"])
+        plot_training_curves(var_history, var_save_dir, var_tag)
         #
         if (var_ema_accuracy > var_best_score
                 or (var_ema_accuracy == var_best_score and var_ema_mae < var_best_mae)):
@@ -722,7 +910,8 @@ def run_density_map(data_train_x,
                                         data_valid_set=data_valid_set,
                                         var_batch_size=preset["nn"]["batch_size"],
                                         var_epochs=preset["nn"]["epoch"],
-                                        device=device)
+                                        device=device,
+                                        var_save_dir=save_path, var_tag=f"train_r{var_r}")
         var_time_1 = time.time()
 
         ##
@@ -749,7 +938,7 @@ def run_density_map(data_train_x,
             var_valid_density, _, _ = model_density(torch.from_numpy(data_valid_x).to(device))
             var_valid_occupancy = sample_location_occupancy(
                 var_valid_density, model_density.kernels).cpu().numpy()
-        var_threshold, _ = calibrate_threshold(var_valid_occupancy, data_valid_y.sum(axis=1).round())
+        var_threshold = resolve_eval_threshold(var_valid_occupancy, data_valid_y.sum(axis=1).round())
         #
         ## render the ground-truth density from the occupancy targets with the same kernels
         with torch.no_grad():
@@ -782,7 +971,8 @@ def run_density_map(data_train_x,
         if var_r == var_repeat - 1:
             var_fig_path = visualize_density_map(true_density, pred_density, save_path,
                                                  var_threshold_frac=preset["density"]["peak_threshold"],
-                                                 var_tag=var_env)
+                                                 var_tag=var_env,
+                                                 var_layout=var_layout, var_true_occupancy=data_test_y)
             ## the standard per-location performance figures, on the binarized occupancy
             visualize_model_performance(pred_occupancy, data_test_y, save_dir=save_path,
                                         var_mode="occupancy", var_threshold=var_threshold)
@@ -943,7 +1133,8 @@ def run_density_map_cross_domain(train_sets_by_env,
                                         var_batch_size=preset["nn"]["batch_size"],
                                         var_epochs=preset["nn"]["epoch"],
                                         device=device,
-                                        var_kernel_bank=var_kernel_bank)
+                                        var_kernel_bank=var_kernel_bank,
+                                        var_save_dir=save_path, var_tag=f"train_r{var_r}")
         model_density.load_state_dict(var_best_weight)
         model_density.eval()
         #
@@ -953,7 +1144,7 @@ def run_density_map_cross_domain(train_sets_by_env,
             var_valid_occupancy = sample_location_occupancy(
                 var_valid_density,
                 var_kernel_bank[torch.from_numpy(var_valid_room).to(var_kernel_bank.device)]).cpu().numpy()
-        var_threshold, _ = calibrate_threshold(var_valid_occupancy, var_valid_y.sum(axis=1).round())
+        var_threshold = resolve_eval_threshold(var_valid_occupancy, var_valid_y.sum(axis=1).round())
         #
         ## -------------------------------------- Test per room ----------------------------------------
         #
@@ -1033,7 +1224,9 @@ def run_density_map_cross_domain(train_sets_by_env,
         visualize_density_map(var_true_density, var_pred_density,
                               os.path.join(save_path, var_env_name),
                               var_threshold_frac=preset["density"]["peak_threshold"],
-                              var_tag=var_env_name)
+                              var_tag=var_env_name,
+                              var_layout=preset["layouts"][var_env_name],
+                              var_true_occupancy=var_y_env)
         ## the standard per-location performance figures, on the binarized occupancy of the last repeat
         var_occupancy_last, var_threshold_last, var_y_last = env_last_occupancy[var_env_name]
         visualize_model_performance(var_occupancy_last, var_y_last,
@@ -1183,7 +1376,8 @@ def run_density_map_few_shot(data_train_x,
                                             data_valid_set=teacher_valid_set,
                                             var_batch_size=preset["nn"]["batch_size"],
                                             var_epochs=var_teacher_epochs,
-                                            device=device)
+                                            device=device,
+                                            var_save_dir=save_path, var_tag=f"teacher_r{var_r}")
         teacher_time_1 = time.time()
         teacher.load_state_dict(teacher_best_weight)
         teacher.eval()
@@ -1211,7 +1405,8 @@ def run_density_map_few_shot(data_train_x,
                                             device=device,
                                             teacher=teacher,
                                             kd_loss=kd_loss,
-                                            kd_weight=var_kd_weight)
+                                            kd_weight=var_kd_weight,
+                                            var_save_dir=save_path, var_tag=f"student_r{var_r}")
         student_time_1 = time.time()
         student.load_state_dict(student_best_weight)
         student.eval()
@@ -1224,7 +1419,7 @@ def run_density_map_few_shot(data_train_x,
             var_valid_density, _, _ = student(torch.from_numpy(data_teacher_valid_x).to(device))
             var_valid_occupancy = sample_location_occupancy(
                 var_valid_density, student.kernels).cpu().numpy()
-        var_threshold, _ = calibrate_threshold(var_valid_occupancy, data_teacher_valid_y.sum(axis=1).round())
+        var_threshold = resolve_eval_threshold(var_valid_occupancy, data_teacher_valid_y.sum(axis=1).round())
 
         #
         ## ---------------------------- Test on the other environments ----------------------------
@@ -1314,7 +1509,9 @@ def run_density_map_few_shot(data_train_x,
         visualize_density_map(var_true_density, var_pred_density,
                               os.path.join(save_path, var_env_name),
                               var_threshold_frac=preset["density"]["peak_threshold"],
-                              var_tag=var_env_name)
+                              var_tag=var_env_name,
+                              var_layout=preset["layouts"][var_env_name],
+                              var_true_occupancy=var_y_env)
         var_occupancy_last, var_threshold_last, var_y_last = env_last_occupancy[var_env_name]
         visualize_model_performance(var_occupancy_last, var_y_last,
                                     save_dir=os.path.join(save_path, var_env_name),

@@ -147,6 +147,11 @@ preset = {
         ## decoder is kept small and regularised.
         "decoder_hidden": 64,
         "decoder_dropout": 0.1,
+        ## Occupancy decision threshold for the reported count. None => calibrate it on the validation
+        ## split (best for a final run, but optimistic when the same split is then scored). Set a
+        ## fixed value (e.g. 0.5) for hyperparameter search, so a config cannot win by fitting the
+        ## threshold sweep rather than the model.
+        "eval_threshold": None,
     },
 }
 
