@@ -19,8 +19,8 @@ mkdir -p "./output/${model}/${env}"
 start=$(date +%s)
 echo "Start: $(date)"
 export WANDB_MODE=offline 
-python scripts/run_main.py --model "${model}" --task location --repeat 3 --env "${env}" \
-  > "./output/${model}/${env}/test.txt" 2>&1
+python scripts/run_main.py --model "${model}" --task location --repeat 3 --env "${env}" --epochs 50\
+  > "./output/${model}/${env}/test_3.txt" 2>&1
 end=$(date +%s)
 
 echo "Total runtime: $((end - start)) seconds"

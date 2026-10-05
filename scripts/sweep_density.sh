@@ -4,7 +4,7 @@
 #SBATCH --mem 32G
 #SBATCH --qos normal
 #SBATCH --time 12:00:00
-#SBATCH --gres gpu:a100:1
+#SBATCH --gres gpu:a100:2
 #SBATCH --array=0-2
 #SBATCH --output=slurm_density_sweep_%A_%a.out
 #
