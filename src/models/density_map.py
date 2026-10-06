@@ -112,8 +112,14 @@ def render_density_targets(var_occupancy, var_kernels):
     """
     var_peak_kernels = peak_normalized_kernels(var_kernels)
     if var_peak_kernels.dim() == 3:
-        return torch.einsum("bl,lhw->bhw", var_occupancy, var_peak_kernels)
-    return torch.einsum("bl,blhw->bhw", var_occupancy, var_peak_kernels)
+        var_target = torch.einsum("bl,lhw->bhw", var_occupancy, var_peak_kernels)
+    else:
+        var_target = torch.einsum("bl,blhw->bhw", var_occupancy, var_peak_kernels)
+    ## Two occupied locations closer than the kernel width add up to > 1 in the overlap, which leaves
+    ## the [0,1] range a Bernoulli target must stay in. BCEWithLogitsLoss is unbounded below for a
+    ## target > 1: its gradient w.r.t. the logit is sigmoid(x) - target < 0 everywhere, so the logit
+    ## grows without bound and the loss runs away to -inf. Clamp so the map stays a probability.
+    return var_target.clamp_(0.0, 1.0)
 
 
 def sample_location_occupancy(var_density, var_kernels):
