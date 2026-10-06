@@ -1,0 +1,15 @@
+========================================================================================
+POOLED ROOM-AGNOSTIC LOR - WiMANS + H-WILD | folds ['empty_room', 'meeting_room', 'classroom', 'Conference', 'Laboratory', 'Office', 'Lounge'] | repeat 1 | epochs 20 | max_per_room 200
+========================================================================================
+room         dataset  model MDE  baseline MDE  model RMSE   median
+empty_room   wimans       2.233         1.803       2.448    2.324
+meeting_room wimans       2.454         2.294       2.645    2.674
+classroom    wimans       2.158         1.771       2.433    2.443
+Conference   hwild        3.080         2.407       3.207    3.013
+Laboratory   hwild        1.112         2.086       1.217    1.072
+Office       hwild        3.162         1.903       3.323    3.137
+Lounge       hwild        2.749         2.464       3.047    2.555
+----------------------------------------------------------------------------------------
+AVERAGE                   2.421         2.104
+
+Beating the baseline column means the model learned a transferable CSI-to-position mapping; falling below it means it only predicts a room centre.

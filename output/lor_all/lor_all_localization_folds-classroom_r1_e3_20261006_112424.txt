@@ -1,0 +1,9 @@
+========================================================================================
+POOLED ROOM-AGNOSTIC LOR - WiMANS + H-WILD | folds ['classroom'] | repeat 1 | epochs 3 | max_per_room 60
+========================================================================================
+room         dataset  model MDE  baseline MDE  model RMSE   median
+classroom    wimans       3.357         1.839       3.609    3.521
+----------------------------------------------------------------------------------------
+AVERAGE                   3.357         1.839
+
+Beating the baseline column means the model learned a transferable CSI-to-position mapping; falling below it means it only predicts a room centre.

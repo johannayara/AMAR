@@ -14,7 +14,8 @@ from .density_map import run_density_map, run_density_map_cross_domain, run_dens
 from .density_map_dem import (run_density_map_dem, run_density_map_dem_cross_domain,
                               run_density_map_dem_few_shot, DensityMapDEMNet)
 from .AMAR import run_AMAR
-from .hwild_localization import (run_hwild_cross_domain, load_hwild_model, predict_hwild_xy)
+from .room_localization import (run_localization_cross_domain, load_room_model, predict_room_xy)
+from .room_density import run_room_density_cross_domain
 
 #
 ##
@@ -39,6 +40,7 @@ __all__ = ["run_bce_ablstm",
            "run_density_map_dem_few_shot",
            "DensityMapDEMNet",
            "run_AMAR",
-           "run_hwild_cross_domain",
-           "load_hwild_model",
-           "predict_hwild_xy"]
+           "run_localization_cross_domain",
+           "load_room_model",
+           "predict_room_xy",
+           "run_room_density_cross_domain"]

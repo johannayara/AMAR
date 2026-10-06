@@ -1,8 +1,8 @@
 """
 [file]          run_hwild.py
-[description]   Leave-one-room-out (x, y) localization on the H-WILD dataset. Trains the continuous
-                density head on the training rooms and evaluates the Euclidean position error in
-                meters on every held-out room. See src/models/hwild_localization.py.
+[description]   Leave-one-room-out (x, y) localization on the H-WILD dataset. Trains the regression
+                localizer on the training rooms and evaluates the Euclidean position error in meters
+                on every held-out room. See src/models/room_localization.py.
 
                 Example:
                     python scripts/run_hwild.py --holdout Lounge --repeat 3 --epochs 60
@@ -24,7 +24,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from configs.preset import preset
 from src.data.hwild import room_names, load_hwild_room, room_span, HWILD_ROOMS
-from src.models.hwild_localization import run_hwild_cross_domain, format_hwild_result
+from src.models.room_localization import run_localization_cross_domain, format_localization_result
 from src.utils import save_run_outputs, build_run_stem, join_envs, run_timestamp
 
 #
@@ -120,8 +120,8 @@ def run():
     ## --------------------------------------- run the model ----------------------------------------
     var_save_path = f"./visualizations/hwild/{'_'.join(var_train_rooms)}"
     os.makedirs(var_save_path, exist_ok=True)
-    var_results = run_hwild_cross_domain(train_sets_by_room, test_sets_by_room,
-                                         var_repeat=var_args.repeat, save_path=var_save_path)
+    var_results = run_localization_cross_domain(train_sets_by_room, test_sets_by_room,
+                                                var_repeat=var_args.repeat, save_path=var_save_path)
     #
     var_result = {
         "protocol": "leave-one-room-out",
@@ -138,7 +138,7 @@ def run():
         "per_env": var_results,
     }
     #
-    var_formatted = format_hwild_result(var_train_rooms, var_test_rooms, var_results)
+    var_formatted = format_localization_result(var_train_rooms, var_test_rooms, var_results)
     var_stem = build_run_stem("hwild", "localization",
                               f"train-{join_envs(var_train_rooms)}", f"test-{join_envs(var_test_rooms)}",
                               f"r{var_args.repeat}", f"e{preset['hwild']['epoch']}", run_timestamp())

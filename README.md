@@ -177,10 +177,10 @@ arguments: `--kd_temperature` (soft-target temperature), `--teacher_epochs` (def
 
 ### 3. Room-agnostic localization on H-WILD
 
-`scripts/run_hwild.py` trains the continuous density head (`DensityMapNet`) as a single-target
-localizer and evaluates it leave-one-room-out: it predicts an (x, y) position per CSI window and
-reports the Euclidean error in meters on the held-out room. The training target is a Gaussian bump at
-the ground-truth UWB position, and the prediction is the sub-pixel maximum of the predicted map.
+`scripts/run_hwild.py` trains a single-target localizer (the THAT CSI backbone + a regression head,
+`RoomLocalizer` in `src/models/room_localization.py`) and evaluates it leave-one-room-out: it
+predicts an (x, y) position per CSI window and reports the Euclidean error in meters on the held-out
+room.
 
 ```bash
 # train on the other three rooms, test on Lounge
@@ -195,6 +195,50 @@ Positions live in a fixed per-room `[0, 1]^2` frame built from the dataset's own
 predicts normalized coordinates that denormalize to meters in any room. Per-room metrics, prediction
 scatters and a training-curve plot are written under `visualizations/hwild/`, and the JSON/TXT report
 under `output/hwild/`.
+
+Every report also prints a **constant-position baseline** (the mean training-room position). It is the
+reference a room-agnostic model must beat to show it learned a transferable CSI-to-position mapping
+rather than predicting a room's centre: on the raw single-AP CSI amplitude this task is hard, and the
+current model does not beat that baseline on most held-out rooms. The harness is the starting point
+for closing that gap (e.g. multi-AP fusion, AP-geometry conditioning, AoA features).
+
+### 4. Pooled leave-one-room-out across WiMANS + H-WILD
+
+`scripts/run_lor_all.py` pools all 7 rooms (WiMANS `empty_room`/`meeting_room`/`classroom` +
+H-WILD `Conference`/`Laboratory`/`Office`/`Lounge`) into one shared per-room `[0, 1]^2` frame and
+runs leave-one-room-out over the union, so a held-out room may come from either dataset:
+
+```bash
+# hold out every room in turn and report the per-room table
+python scripts/run_lor_all.py --folds all --max_per_room 200 --epochs 20 --repeat 2
+
+# hold out one random room (seeded)
+python scripts/run_lor_all.py --holdout random --max_per_room 200 --epochs 20 --repeat 2
+
+# the continuous density head instead of the general set-prediction model
+python scripts/run_lor_all.py --model density --folds all --max_per_room 200 --epochs 20
+```
+
+Two heads share the pooled setup (`--model`):
+
+- **`set` (default, general):** `src/models/set_localization.py` predicts a fixed set of position
+  queries with objectness logits, trained with a Hungarian assignment (the AMAR set-prediction
+  formulation). It needs no per-room location knowledge, and count and location are linked by
+  construction — the count is the number of queries asserting an object, each matched to a position,
+  so there is no separate peak detector to over/under-count. The objectness threshold is calibrated
+  on the training rooms' validation split.
+- **`density`:** `src/models/room_density.py` predicts a continuous occupancy map and extracts peaks.
+
+`src/data/unified_rooms.py` builds the shared frame and keeps the **multi-user** label: a WiMANS
+sample's label is the set of its occupied discrete locations (one per user, up to 6, empty room =
+empty set), an H-WILD sample's is a one-element set (the person's UWB position). Both are made
+90-feature (WiMANS averages its 3 TX antennas) and resampled to the common window length.
+`src/models/room_density.py` trains the continuous density head on the rendered multi-user target
+(sum of peak-normalized Gaussians at the label positions) and evaluates by matching the predicted
+map's peaks to the true set with a Hungarian assignment, so the reported error keeps the multi-user
+structure: set error (matched distance + per-miss penalty), matched MDE, count MAE, exact-count
+accuracy and detection P/R/F1. The report prints the constant-position baseline next to every room,
+so a run that only predicts a room centre is obvious.
 
 ## Available Models
 

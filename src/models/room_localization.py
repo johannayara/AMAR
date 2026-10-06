@@ -1,21 +1,24 @@
 """
-[file]          hwild_localization.py
-[description]   Room-agnostic (x, y) localization on the H-WILD dataset.
+[file]          room_localization.py
+[description]   Room-agnostic single-target (x, y) localization from CSI, over any set of rooms.
 
-                The CSI backbone (THAT, the same encoder the WiMANS models use) feeds a small
-                regression head that outputs one normalized position per window. Positions live in
-                the fixed per-room [0, 1]^2 frame of src/data/hwild.py, so a model trained on some
-                rooms predicts normalized coordinates that denormalize to meters in any room.
+                The CSI backbone (THAT, the encoder the WiMANS models use) feeds a small regression
+                head that outputs one normalized position per window. Every room is expressed in its
+                own [0, 1]^2 frame (src/data/hwild.py for H-WILD, src/data/unified_rooms.py for the
+                combined WiMANS + H-WILD set), so one model trained on some rooms predicts normalized
+                coordinates that denormalize to meters in any room.
 
                 A direct regression head is used rather than the WiMANS density head: reusing
                 DensityMapNet for continuous single-target localization collapses to the marginal map
-                (the predicted peak barely moves across windows, and the model does not beat a
+                (the predicted position barely moves across windows, and the model does not beat a
                 constant-position baseline even on a room it was trained on). Regressing the position
                 directly uses the CSI and beats that baseline.
 
                 The leave-one-room-out runner trains on N rooms and evaluates on a held-out room. Its
-                model selection and the reported error are in meters, using each room's physical span
-                (HWILD_ROOMS), so a 16 m room and a 10 m room are compared on equal footing.
+                model selection and the reported error are in meters, using each room's physical span,
+                so rooms of different sizes are compared on equal footing. Every report also carries a
+                constant-position baseline (the mean training-room position), the reference a
+                room-agnostic model must beat to show a transferable CSI-to-position mapping.
 """
 #
 ##
@@ -41,12 +44,12 @@ import wandb
 ##
 
 
-class HWILDLocalizer(nn.Module):
+class RoomLocalizer(nn.Module):
     """
     [description]
     : CSI backbone + a regression head that predicts the normalized (x, y) position of the target
       person from one CSI window. The backbone is THAT, shared with the WiMANS models; the head is a
-      small MLP. The output is in the fixed per-room [0, 1]^2 frame (src/data/hwild.py).
+      small MLP. The output is in the room's [0, 1]^2 frame.
     """
     #
     ##
@@ -73,7 +76,7 @@ class HWILDLocalizer(nn.Module):
     def forward(self, x):
         """
         [return]
-        : xy: (batch, 2) predicted normalized position in the shared per-room [0, 1]^2 frame
+        : xy: (batch, 2) predicted normalized position in the room's [0, 1]^2 frame
         """
         return self.head(self.backbone(x))
 
@@ -100,7 +103,31 @@ def localization_metrics(var_pred_xy, var_true_xy, var_span):
     }
 
 
-def _plot_hwild_curves(var_history, var_save_dir, var_tag="training"):
+def _resolve_spans(var_rooms, var_spans):
+    """
+    [description]
+    : per-room (x_span, y_span) in meters. Defaults to the H-WILD geometry when not given.
+    """
+    if var_spans is not None:
+        return var_spans
+    from src.data.hwild import room_span
+    return {var_room: room_span(var_room) for var_room in var_rooms}
+
+
+def _resolve_bounds(var_rooms, var_bounds):
+    """
+    [description]
+    : per-room (x_min, x_max, y_min, y_max) in meters. Defaults to the H-WILD geometry when not given.
+    """
+    if var_bounds is not None:
+        return var_bounds
+    from src.data.hwild import HWILD_ROOMS
+    return {var_room: (HWILD_ROOMS[var_room]["x_range"][0], HWILD_ROOMS[var_room]["x_range"][1],
+                       HWILD_ROOMS[var_room]["y_range"][0], HWILD_ROOMS[var_room]["y_range"][1])
+            for var_room in var_rooms}
+
+
+def _plot_curves(var_history, var_save_dir, var_tag="training"):
     """
     [description]
     : rewrite the training/validation loss and validation localization-error curves after an epoch.
@@ -118,7 +145,7 @@ def _plot_hwild_curves(var_history, var_save_dir, var_tag="training"):
     var_axes[1].plot(var_history["epoch"], var_history["valid_error_m"], label="valid mean error (m)")
     var_axes[1].plot(var_history["epoch"], var_history["valid_error_m_smoothed"], label="smoothed")
     var_axes[1].set_xlabel("epoch"); var_axes[1].set_ylabel("error (m)"); var_axes[1].legend()
-    var_fig.suptitle(f"{var_tag} - H-WILD localization")
+    var_fig.suptitle(f"{var_tag} - room localization")
     var_fig.tight_layout(rect=[0, 0, 1, 0.95])
     var_path = os.path.join(str(var_save_dir), f"{var_tag}_curves.png")
     var_fig.savefig(var_path, dpi=110)
@@ -126,8 +153,8 @@ def _plot_hwild_curves(var_history, var_save_dir, var_tag="training"):
     return var_path
 
 
-def train_hwild(model, optimizer, data_train_set, data_valid_set, var_batch_size, var_epochs,
-                device, var_span_bank, patience=60, var_save_dir=None, var_tag="training"):
+def train_room_localizer(model, optimizer, data_train_set, data_valid_set, var_batch_size, var_epochs,
+                         device, var_span_bank, patience=60, var_save_dir=None, var_tag="training"):
     """
     [description]
     : train the localizer. The objective is the Huber loss between the predicted and true normalized
@@ -195,7 +222,7 @@ def train_hwild(model, optimizer, data_train_set, data_valid_set, var_batch_size
                                    ("learning_rate", optimizer.param_groups[0]["lr"])):
             var_history[var_key].append(var_value)
         if var_save_dir is not None:
-            _plot_hwild_curves(var_history, var_save_dir, var_tag)
+            _plot_curves(var_history, var_save_dir, var_tag)
         #
         if var_ema_error < var_best_score:
             var_best_score, var_best_weight, var_epoch_saved, var_counter = \
@@ -212,67 +239,77 @@ def train_hwild(model, optimizer, data_train_set, data_valid_set, var_batch_size
     return var_best_weight, var_history
 
 
-def visualize_hwild_predictions(var_true_xy, var_pred_xy, var_room, save_dir, var_num_samples=400):
+def visualize_localization_predictions(var_true_xy, var_pred_xy, var_room, save_dir, var_bounds,
+                                       var_num_samples=400):
     """
     [description]
     : scatter the true and predicted positions of a test room in raw meters, so a run's spatial error
-      is visible at a glance. Saves <save_dir>/hwild_predictions_<room>.png.
+      is visible at a glance. Saves <save_dir>/predictions_<room>.png.
     : var_true_xy / var_pred_xy: (N, 2) normalized positions
+    : var_bounds: (x_min, x_max, y_min, y_max) in meters of the room's frame
     """
     #
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    from src.data.hwild import denormalize_xy, HWILD_ROOMS
     #
     os.makedirs(save_dir, exist_ok=True)
+    var_x0, var_x1, var_y0, var_y1 = var_bounds
     var_num = min(var_num_samples, len(var_true_xy))
     var_pick = np.linspace(0, len(var_true_xy) - 1, var_num).astype(int)
-    var_true_m = denormalize_xy(var_true_xy[var_pick], var_room)
-    var_pred_m = denormalize_xy(var_pred_xy[var_pick], var_room)
+    var_true_xy = np.asarray(var_true_xy)[var_pick]
+    var_pred_xy = np.asarray(var_pred_xy)[var_pick]
+    var_true_m = np.stack([var_x0 + var_true_xy[:, 0] * (var_x1 - var_x0),
+                           var_y0 + var_true_xy[:, 1] * (var_y1 - var_y0)], axis=1)
+    var_pred_m = np.stack([var_x0 + var_pred_xy[:, 0] * (var_x1 - var_x0),
+                           var_y0 + var_pred_xy[:, 1] * (var_y1 - var_y0)], axis=1)
     #
     var_fig, var_ax = plt.subplots(figsize=(6, 6))
     var_ax.scatter(var_true_m[:, 0], var_true_m[:, 1], s=10, c="tab:green", alpha=0.5, label="true")
     var_ax.scatter(var_pred_m[:, 0], var_pred_m[:, 1], s=10, c="tab:red", alpha=0.5, label="pred")
-    var_x_range = HWILD_ROOMS[var_room]["x_range"]
-    var_y_range = HWILD_ROOMS[var_room]["y_range"]
-    var_ax.set_xlim(var_x_range); var_ax.set_ylim(var_y_range)
+    var_ax.set_xlim(var_x0, var_x1); var_ax.set_ylim(var_y0, var_y1)
     var_ax.set_aspect("equal"); var_ax.set_xlabel("x (m)"); var_ax.set_ylabel("y (m)")
-    var_ax.set_title(f"H-WILD {var_room} - true vs predicted positions")
+    var_ax.set_title(f"{var_room} - true vs predicted positions")
     var_ax.legend(loc="upper right")
-    var_path = os.path.join(save_dir, f"hwild_predictions_{var_room}.png")
+    var_path = os.path.join(save_dir, f"predictions_{var_room}.png")
     var_fig.tight_layout(); var_fig.savefig(var_path, dpi=120); plt.close(var_fig)
     return var_path
 
 
-def run_hwild_cross_domain(train_sets_by_room, test_sets_by_room, var_repeat=3,
-                           save_path="./visualizations/hwild"):
+def run_localization_cross_domain(train_sets_by_room, test_sets_by_room, var_repeat=3,
+                                  save_path="./visualizations/room_localization",
+                                  var_spans=None, var_bounds=None):
     """
     [description]
-    : leave-one-room-out localization. Trains on every room in train_sets_by_room and evaluates on
-      every room in test_sets_by_room. Each training room keeps a 90/10 split so model selection and
-      the reported error are anchored on a validation set that covers every training room; the test
-      rooms contribute no labels. The error is the Euclidean distance between the predicted and the
-      ground-truth UWB position in meters.
-    : train_sets_by_room / test_sets_by_room: dict room name -> (X (N, window, 90), XY (N, 2) normalized)
+    : leave-one-room-out localization over an arbitrary room set (possibly mixing datasets). Trains on
+      every room in train_sets_by_room and evaluates on every room in test_sets_by_room. Each training
+      room keeps a 90/10 split so model selection and the reported error are anchored on a validation
+      set that covers every training room; the test rooms contribute no labels. The error is the
+      Euclidean distance between the predicted and the ground-truth position in meters.
+    : train_sets_by_room / test_sets_by_room: dict room name -> (X (N, window, features), XY (N, 2) normalized)
+    : var_spans: dict room -> (x_span, y_span) in meters (defaults to H-WILD geometry)
+    : var_bounds: dict room -> (x_min, x_max, y_min, y_max) in meters (defaults to H-WILD geometry)
     : return: dict, room name -> averaged localization metrics with SE
     """
-    #
-    from src.data.hwild import room_span
     #
     device = select_device()
     print(f"Using device: {device}")
     #
+    var_all_rooms = list(train_sets_by_room) + list(test_sets_by_room)
+    var_spans = _resolve_spans(var_all_rooms, var_spans)
+    var_bounds = _resolve_bounds(var_all_rooms, var_bounds)
     var_train_rooms = list(train_sets_by_room)
     var_room_index = {var_room: var_idx for var_idx, var_room in enumerate(var_train_rooms)}
-    var_span_bank = torch.tensor([room_span(var_room) for var_room in var_train_rooms], dtype=torch.float32)
+    var_span_bank = torch.tensor([var_spans[var_room] for var_room in var_train_rooms], dtype=torch.float32)
     #
     ## ------------------------------------------ data prep -------------------------------------------
     var_train_datasets, var_valid_datasets = [], []
+    var_train_y_all = []
     for var_room in var_train_rooms:
         var_x_room, var_y_room = train_sets_by_room[var_room]
         var_x_room = np.asarray(var_x_room, dtype=np.float32).reshape(len(var_x_room), var_x_room.shape[1], -1)
         var_y_room = np.asarray(var_y_room, dtype=np.float32)
+        var_train_y_all.append(var_y_room)
         var_idx_room = np.full(len(var_x_room), var_room_index[var_room], dtype=np.int64)
         var_dataset = TensorDataset(torch.from_numpy(var_x_room), torch.from_numpy(var_y_room),
                                     torch.from_numpy(var_idx_room))
@@ -286,21 +323,26 @@ def run_hwild_cross_domain(train_sets_by_room, test_sets_by_room, var_repeat=3,
     data_train_set = torch.utils.data.ConcatDataset(var_train_datasets)
     data_valid_set = torch.utils.data.ConcatDataset(var_valid_datasets)
     var_x_shape = tuple(var_train_datasets[0].dataset.tensors[0].shape[1:])
+    ## The mean training-room position is a trivial "no-information" localizer. It is reported next
+    ## to every test-room error: a model that does not beat it has not learned a transferable mapping
+    ## from CSI to position, however low the raw error looks.
+    var_train_mean_xy = np.concatenate(var_train_y_all).mean(axis=0)
     print(f"Training rooms: {var_train_rooms} ({len(data_train_set)} train / "
           f"{len(data_valid_set)} valid) | Test rooms: {list(test_sets_by_room)}")
+    print(f"Constant-position baseline (mean training position): {var_train_mean_xy.round(3)}")
     #
     ## --------------------------------------- train & evaluate ---------------------------------------
     var_env_rep_metrics, var_env_last_xy = {}, {}
     for var_r in range(var_repeat):
         print("Repeat", var_r)
-        wandb.init(project="hwild_localization", name=f"HWILDLoc{var_r}_" + "_".join(var_train_rooms),
+        wandb.init(project="room_localization", name=f"RoomLoc{var_r}_" + "_".join(var_train_rooms),
                    config=preset, reinit=True)
         torch.random.manual_seed(var_r + 39)
         #
-        model = HWILDLocalizer(var_x_shape).to(device)
+        model = RoomLocalizer(var_x_shape).to(device)
         optimizer = torch.optim.Adam(model.parameters(), lr=preset["hwild"]["lr"],
                                      weight_decay=preset["hwild"]["weight_decay"])
-        var_best_weight, _ = train_hwild(
+        var_best_weight, _ = train_room_localizer(
             model=model, optimizer=optimizer, data_train_set=data_train_set, data_valid_set=data_valid_set,
             var_batch_size=preset["hwild"]["batch_size"], var_epochs=preset["hwild"]["epoch"],
             device=device, var_span_bank=var_span_bank, patience=preset["hwild"]["patience"],
@@ -319,7 +361,10 @@ def run_hwild_cross_domain(train_sets_by_room, test_sets_by_room, var_repeat=3,
                 for (var_x,) in var_loader:
                     var_pred_list.append(model(var_x.to(device)).cpu())
             var_pred_xy = torch.cat(var_pred_list, dim=0).numpy()
-            var_metrics = localization_metrics(var_pred_xy, var_y_room, room_span(var_room))
+            var_metrics = localization_metrics(var_pred_xy, var_y_room, var_spans[var_room])
+            var_metrics["const_mean_error_m"] = localization_metrics(
+                np.tile(var_train_mean_xy, (len(var_y_room), 1)), var_y_room,
+                var_spans[var_room])["mean_error_m"]
             var_env_rep_metrics.setdefault(var_room, []).append(var_metrics)
             var_env_last_xy[var_room] = (var_y_room, var_pred_xy)
             #
@@ -328,7 +373,8 @@ def run_hwild_cross_domain(train_sets_by_room, test_sets_by_room, var_repeat=3,
                        f"test_results_per_env/{var_room}/median_error_m": var_metrics["median_error_m"]},
                       step=var_r + 100000)
             print(f"  [{var_room}] MDE {var_metrics['mean_error_m']:.4f} m - "
-                  f"RMSE {var_metrics['rmse_m']:.4f} m - Median {var_metrics['median_error_m']:.4f} m")
+                  f"RMSE {var_metrics['rmse_m']:.4f} m - Median {var_metrics['median_error_m']:.4f} m - "
+                  f"const {var_metrics['const_mean_error_m']:.4f} m")
         #
         if var_r != var_repeat - 1:
             del model, optimizer
@@ -338,7 +384,7 @@ def run_hwild_cross_domain(train_sets_by_room, test_sets_by_room, var_repeat=3,
         else:
             var_ckpt = {"state_dict": model.state_dict(), "x_shape": var_x_shape,
                         "train_rooms": var_train_rooms}
-            torch.save(var_ckpt, os.path.join(save_path, "hwild_model.pth"))
+            torch.save(var_ckpt, os.path.join(save_path, "model.pth"))
     wandb.finish()
     #
     ## ---------------------------------------- aggregate ---------------------------------------------
@@ -352,39 +398,41 @@ def run_hwild_cross_domain(train_sets_by_room, test_sets_by_room, var_repeat=3,
             var_env_result[f"avg_{var_name}"] = float(var_arr.mean())
             var_env_result[f"std_{var_name}"] = var_std
             var_env_result[f"se_{var_name}"] = var_std / np.sqrt(len(var_arr)) if len(var_arr) > 1 else 0.0
+        var_env_result["avg_const_mean_error_m"] = float(
+            np.mean([var_rep["const_mean_error_m"] for var_rep in var_rep_list]))
         results[var_room] = var_env_result
         var_true_xy, var_pred_xy = var_env_last_xy[var_room]
-        visualize_hwild_predictions(var_true_xy, var_pred_xy, var_room,
-                                    os.path.join(save_path, var_room))
+        visualize_localization_predictions(var_true_xy, var_pred_xy, var_room,
+                                           os.path.join(save_path, var_room), var_bounds[var_room])
         print(f"\n[{var_room}] avg over {var_repeat} repeats: "
               f"MDE {var_env_result['avg_mean_error_m']:.4f} ± {var_env_result['se_mean_error_m']:.4f} m | "
-              f"RMSE {var_env_result['avg_rmse_m']:.4f} ± {var_env_result['se_rmse_m']:.4f} m")
+              f"RMSE {var_env_result['avg_rmse_m']:.4f} ± {var_env_result['se_rmse_m']:.4f} m | "
+              f"constant-baseline MDE {var_env_result['avg_const_mean_error_m']:.4f} m")
     #
     return results
 
 
-def load_hwild_model(var_path, device=None):
+def load_room_model(var_path, device=None):
     """
     [description]
-    : rebuild an HWILDLocalizer saved by run_hwild_cross_domain and load its weights, so a live or new
-      capture can be run through it.
+    : rebuild a RoomLocalizer saved by run_localization_cross_domain and load its weights.
     : return: (model, checkpoint dict)
     """
     #
     var_device = device if device is not None else select_device()
     var_ckpt = torch.load(var_path, map_location=var_device)
-    var_model = HWILDLocalizer(tuple(var_ckpt["x_shape"])).to(var_device)
+    var_model = RoomLocalizer(tuple(var_ckpt["x_shape"])).to(var_device)
     var_model.load_state_dict(var_ckpt["state_dict"])
     var_model.eval()
     return var_model, var_ckpt
 
 
-def predict_hwild_xy(var_model, var_x, var_device=None):
+def predict_room_xy(var_model, var_x, var_device=None):
     """
     [description]
-    : run one CSI window (or a batch) through a loaded H-WILD model and return the predicted
-      normalized (x, y). Denormalize with src.data.hwild.denormalize_xy(..., room) for meters.
-    : var_x: numpy array (window, 90) or (N, window, 90)
+    : run one CSI window (or a batch) through a loaded model and return the predicted normalized
+      (x, y). Denormalize with the room's bounds for meters.
+    : var_x: numpy array (window, features) or (N, window, features)
     : return: numpy array (2,) or (N, 2) normalized positions
     """
     #
@@ -396,14 +444,14 @@ def predict_hwild_xy(var_model, var_x, var_device=None):
     return var_xy[0] if var_single else var_xy
 
 
-def format_hwild_result(var_train_rooms, var_test_rooms, results):
+def format_localization_result(var_train_rooms, var_test_rooms, results):
     """
     [description]
-    : human-readable report of a leave-one-room-out H-WILD localization run.
+    : human-readable report of a leave-one-room-out localization run.
     """
     #
     var_lines = ["=" * 80,
-                 f"H-WILD ROOM-AGNOSTIC LOCALIZATION - train {join_envs(var_train_rooms)}, "
+                 f"ROOM-AGNOSTIC LOCALIZATION - train {join_envs(var_train_rooms)}, "
                  f"test {join_envs(var_test_rooms)}",
                  "=" * 80]
     for var_room, var_env_result in results.items():
@@ -414,4 +462,6 @@ def format_hwild_result(var_train_rooms, var_test_rooms, results):
                          f"± {var_env_result['se_rmse_m']:.4f} m (SE)")
         var_lines.append(f"  Median Error:        {var_env_result['avg_median_error_m']:.4f} "
                          f"± {var_env_result['se_median_error_m']:.4f} m (SE)")
+        var_lines.append(f"  Constant-baseline:   {var_env_result['avg_const_mean_error_m']:.4f} m "
+                         f"(mean training position; beat this to show a transferable mapping)")
     return "\n".join(var_lines)

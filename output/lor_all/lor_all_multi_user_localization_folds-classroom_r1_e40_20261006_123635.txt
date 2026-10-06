@@ -1,0 +1,9 @@
+================================================================================================
+POOLED MULTI-USER ROOM-AGNOSTIC LOR - WiMANS + H-WILD | folds ['classroom'] | repeat 1 | epochs 40 | max_per_room 200
+================================================================================================
+room         dataset   setErr  baseline  matchedMDE  cntMAE  exactCnt   detF1
+classroom    wimans     3.358     3.447       0.817   2.845     0.060   0.586
+------------------------------------------------------------------------------------------------
+AVERAGE                 3.358     3.447
+
+setErr = mean matched distance + per-miss penalty (multi-user). Beating the baseline column means the model learned a transferable mapping.
