@@ -124,8 +124,8 @@ def select_sets(var_xy, var_obj, var_threshold):
     """
     #
     var_xy = var_xy.detach().cpu().numpy() if torch.is_tensor(var_xy) else np.asarray(var_xy)
-    var_prob = torch.sigmoid(torch.as_tensor(var_obj)).numpy() if torch.is_tensor(var_obj) \
-        else 1.0 / (1.0 + np.exp(-np.asarray(var_obj)))
+    var_prob = (torch.sigmoid(var_obj).detach().cpu().numpy() if torch.is_tensor(var_obj)
+                else 1.0 / (1.0 + np.exp(-np.asarray(var_obj))))
     return [var_xy[var_idx][var_prob[var_idx] > var_threshold] for var_idx in range(len(var_xy))]
 
 
