@@ -3,7 +3,7 @@
 #SBATCH --mem 16G
 #SBATCH --qos normal
 #SBATCH --time 4:00:00
-#SBATCH --gres gpu:a100:1
+#SBATCH --gres gpu:v100:1
 
 set -euo pipefail
 
@@ -11,7 +11,7 @@ source /software/anaconda3/etc/profile.d/conda.sh
 conda activate AMAR
 
 
-model=density_map
+model=density_map_dem
 env=meeting_room
 
 mkdir -p "./output/${model}/${env}"

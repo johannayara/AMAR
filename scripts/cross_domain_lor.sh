@@ -3,7 +3,7 @@
 #SBATCH --mem 30G
 #SBATCH --qos normal
 #SBATCH --time 6:00:00
-#SBATCH --gres gpu:a100:2
+#SBATCH --gres gpu:v100:2
 
 #
 ## Leave-one-room-out density-map cross-domain run. One array task per held-out room: train on the

@@ -1,0 +1,72 @@
+wandb: Using wandb-core as the SDK backend. Please refer to https://wandb.me/wandb-core for more information.
+wandb: Tracking run with wandb version 0.18.3
+wandb: W&B syncing is set to `offline` in this directory.  
+wandb: Run `wandb online` or set WANDB_MODE=online to enable cloud syncing.
+wandb: - 0.000 MB of 0.000 MB uploadedwandb:                                                                                
+wandb: 
+wandb: Run history:
+wandb:                                       epoch ▁█
+wandb:                               learning_rate █▁
+wandb:    test_results_per_env/classroom/count_mae ▁
+wandb: test_results_per_env/classroom/detection_f1 ▁
+wandb: test_results_per_env/classroom/mean_error_m ▁
+wandb:                                  train_loss █▁
+wandb:                             valid_count_mae █▁
+wandb:                          valid_detection_f1 █▁
+wandb:                               valid_error_m ▁█
+wandb:                      valid_error_m_smoothed ▁█
+wandb:                                  valid_loss █▁
+wandb: 
+wandb: Run summary:
+wandb:                                       epoch 1
+wandb:                               learning_rate 0.00012
+wandb:    test_results_per_env/classroom/count_mae 2.68333
+wandb: test_results_per_env/classroom/detection_f1 0.18321
+wandb: test_results_per_env/classroom/mean_error_m 4.55877
+wandb:                                  train_loss 1.28865
+wandb:                             valid_count_mae 1.38889
+wandb:                          valid_detection_f1 0
+wandb:                               valid_error_m 7.96625
+wandb:                      valid_error_m_smoothed 7.09717
+wandb:                                  valid_loss 1.02779
+wandb: 
+wandb: You can sync this run to the cloud by running:
+wandb: wandb sync /cluster/raid/home/jajo/AMAR/wandb/offline-run-20261006_162920-y1mrwvq3
+wandb: Find logs at: ./wandb/offline-run-20261006_162920-y1mrwvq3/logs
+Loading rooms:
+  loaded wimans empty_room   X (60, 400, 90) users/sample 2.65 span (5.1, 10.3)
+  loaded wimans meeting_room X (60, 400, 90) users/sample 2.65 span (5.1, 10.3)
+  loaded wimans classroom    X (60, 400, 90) users/sample 2.65 span (5.1, 10.3)
+  loaded hwild  Conference   X (60, 400, 90) users/sample 1.00 span (10.0, 10.0)
+  loaded hwild  Laboratory   X (60, 400, 90) users/sample 1.00 span (12.0, 12.0)
+  loaded hwild  Office       X (60, 400, 90) users/sample 1.00 span (10.0, 16.0)
+  loaded hwild  Lounge       X (60, 400, 90) users/sample 1.00 span (16.0, 16.0)
+Folds (held-out rooms): ['classroom']
+
+========================================================================================
+Fold: held-out classroom (wimans) | train ['empty_room', 'meeting_room', 'Conference', 'Laboratory', 'Office', 'Lounge']
+========================================================================================
+Using device: cuda
+Training rooms: ['empty_room', 'meeting_room', 'Conference', 'Laboratory', 'Office', 'Lounge'] (324 train / 36 valid) | Test rooms: ['classroom']
+Repeat 0
+Epoch 0/2 - 2.00s - Loss 1.807723 - ValidLoss 1.658911 - ValidErr 6.7247 m - CntMAE 4.611 - DetF1 0.135 - Smooth 6.7247 m
+Epoch 1/2 - 0.84s - Loss 1.288646 - ValidLoss 1.027785 - ValidErr 7.9663 m - CntMAE 1.389 - DetF1 0.000 - Smooth 7.0972 m
+Epoch that the model was saved 0 - best smoothed error 6.7247 m
+  calibrated objectness threshold: 0.90
+  [classroom] setErr 4.5588 m - matchedMDE 2.0599 m - cntMAE 2.683 - exactCnt 0.000 - detF1 0.183 - const 3.3365 m
+
+[classroom] avg over 1 repeats: setErr 4.5588 ± 0.0000 m | matchedMDE 2.0599 m | cntMAE 2.683 | detF1 0.183 | constant-baseline 3.3365 m
+
+================================================================================================
+POOLED MULTI-USER ROOM-AGNOSTIC LOR (set) - WiMANS + H-WILD | folds ['classroom'] | repeat 1 | epochs 2 | max_per_room 60
+================================================================================================
+room         dataset   setErr  baseline  matchedMDE  cntMAE  exactCnt   detF1
+classroom    wimans     4.559     3.337       2.060   2.683     0.000   0.183
+------------------------------------------------------------------------------------------------
+AVERAGE                 4.559     3.337
+
+setErr = mean matched distance + per-miss penalty (multi-user). Beating the baseline column means the model learned a transferable mapping.
+
+Results saved to: output/lor_all/lor_all_multi_user_set_folds-classroom_r1_e2_20261006_162927.json
+Report saved to:  output/lor_all/lor_all_multi_user_set_folds-classroom_r1_e2_20261006_162927.txt
+Total time: 18.363932371139526 seconds

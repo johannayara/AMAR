@@ -1,0 +1,287 @@
+wandb: Using wandb-core as the SDK backend. Please refer to https://wandb.me/wandb-core for more information.
+wandb: Tracking run with wandb version 0.18.3
+wandb: W&B syncing is set to `offline` in this directory.  
+wandb: Run `wandb online` or set WANDB_MODE=online to enable cloud syncing.
+wandb: - 0.000 MB of 0.000 MB uploadedwandb:                                                                                
+wandb: 
+wandb: Run history:
+wandb:                                       epoch ▁▁▁▁▁▂▂▂▂▃▃▃▃▃▃▄▄▄▄▄▄▅▅▅▅▅▅▆▆▆▆▇▇▇▇▇▇███
+wandb:                               learning_rate ██████████▇▇▇▇▇▇▇▇▇▇▆▆▆▆▆▅▅▅▅▅▄▄▃▃▃▃▂▂▂▁
+wandb:    test_results_per_env/classroom/count_mae ▁
+wandb: test_results_per_env/classroom/detection_f1 ▁
+wandb: test_results_per_env/classroom/mean_error_m ▁
+wandb:                                  train_loss █▅▅▃▃▃▃▃▃▂▃▃▂▂▂▂▂▂▂▂▂▂▂▂▂▁▂▂▂▂▁▁▂▁▁▁▁▁▁▁
+wandb:                             valid_count_mae █▂▂▁▂▂▁▁▁▂▂▁▂▂▁▁▁▁▂▂▁▁▁▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:                          valid_detection_f1 ▄▁▂▃▄▅▃▆▄▆▃▆▇▇▅▄█▆▆▅▇▅▄▆▅▆▆█▇▆▆▇▅▆▇▇▆▆▇█
+wandb:                               valid_error_m ▁█▇▆█▇▄▅▆▆▆▆▆▆▅▅▆▇▅▆▅▅▆▆▆▅▆▅▅▅▄▅▆▅▅▆▅▆▄▄
+wandb:                      valid_error_m_smoothed ▁▄▅▆▇██▆▆▇▇▇▇▇▇▇▇█▇▆▇▇▇▇▇▇▆▅▆▆▆▆▆▆▆▆▆▇▇▆
+wandb:                                  valid_loss █▄▄▃▃▂▂▂▂▂▂▂▂▂▂▂▂▁▁▂▂▁▁▁▁▁▁▁▁▁▂▂▁▁▁▁▁▁▁▁
+wandb: 
+wandb: Run summary:
+wandb:                                       epoch 60
+wandb:                               learning_rate 0.00076
+wandb:    test_results_per_env/classroom/count_mae 2.68333
+wandb: test_results_per_env/classroom/detection_f1 0.18321
+wandb: test_results_per_env/classroom/mean_error_m 4.55877
+wandb:                                  train_loss 0.57727
+wandb:                             valid_count_mae 0.97222
+wandb:                          valid_detection_f1 0.34667
+wandb:                               valid_error_m 7.27977
+wandb:                      valid_error_m_smoothed 7.37318
+wandb:                                  valid_loss 0.59075
+wandb: 
+wandb: You can sync this run to the cloud by running:
+wandb: wandb sync /cluster/raid/home/jajo/AMAR/wandb/offline-run-20261006_164643-5eb1w9fy
+wandb: Find logs at: ./wandb/offline-run-20261006_164643-5eb1w9fy/logs
+wandb: Tracking run with wandb version 0.18.3
+wandb: W&B syncing is set to `offline` in this directory.  
+wandb: Run `wandb online` or set WANDB_MODE=online to enable cloud syncing.
+Loading rooms:
+  loaded wimans empty_room   X (60, 400, 90) users/sample 2.65 span (5.1, 10.3)
+  loaded wimans meeting_room X (60, 400, 90) users/sample 2.65 span (5.1, 10.3)
+  loaded wimans classroom    X (60, 400, 90) users/sample 2.65 span (5.1, 10.3)
+  loaded hwild  Conference   X (60, 400, 90) users/sample 1.00 span (10.0, 10.0)
+  loaded hwild  Laboratory   X (60, 400, 90) users/sample 1.00 span (12.0, 12.0)
+  loaded hwild  Office       X (60, 400, 90) users/sample 1.00 span (10.0, 16.0)
+  loaded hwild  Lounge       X (60, 400, 90) users/sample 1.00 span (16.0, 16.0)
+Folds (held-out rooms): ['classroom']
+
+========================================================================================
+Fold: held-out classroom (wimans) | train ['empty_room', 'meeting_room', 'Conference', 'Laboratory', 'Office', 'Lounge']
+========================================================================================
+Using device: cuda
+Training rooms: ['empty_room', 'meeting_room', 'Conference', 'Laboratory', 'Office', 'Lounge'] (324 train / 36 valid) | Test rooms: ['classroom']
+Repeat 0
+Epoch 0/150 - 1.96s - Loss 1.807722 - ValidLoss 1.658929 - ValidErr 6.7247 m - CntMAE 4.611 - DetF1 0.135 - Smooth 6.7247 m
+Epoch 1/150 - 0.83s - Loss 1.298531 - ValidLoss 1.570932 - ValidErr 7.9663 m - CntMAE 1.389 - DetF1 0.000 - Smooth 7.0972 m
+Epoch 2/150 - 0.84s - Loss 1.120628 - ValidLoss 0.982260 - ValidErr 7.8380 m - CntMAE 1.278 - DetF1 0.034 - Smooth 7.3194 m
+Epoch 3/150 - 0.83s - Loss 0.987464 - ValidLoss 1.016985 - ValidErr 7.8494 m - CntMAE 1.333 - DetF1 0.030 - Smooth 7.4784 m
+Epoch 4/150 - 0.83s - Loss 0.976929 - ValidLoss 0.857448 - ValidErr 7.5755 m - CntMAE 1.139 - DetF1 0.154 - Smooth 7.5075 m
+Epoch 5/150 - 0.83s - Loss 0.886937 - ValidLoss 0.887082 - ValidErr 7.9020 m - CntMAE 1.333 - DetF1 0.071 - Smooth 7.6259 m
+Epoch 6/150 - 0.83s - Loss 0.863008 - ValidLoss 0.726057 - ValidErr 7.8638 m - CntMAE 1.306 - DetF1 0.113 - Smooth 7.6973 m
+Epoch 7/150 - 0.83s - Loss 0.813726 - ValidLoss 0.759003 - ValidErr 7.7594 m - CntMAE 1.222 - DetF1 0.167 - Smooth 7.7159 m
+Epoch 8/150 - 0.83s - Loss 0.801499 - ValidLoss 0.733744 - ValidErr 7.3865 m - CntMAE 1.111 - DetF1 0.176 - Smooth 7.6171 m
+Epoch 9/150 - 0.83s - Loss 0.807808 - ValidLoss 0.769957 - ValidErr 7.1811 m - CntMAE 1.167 - DetF1 0.341 - Smooth 7.4863 m
+Epoch 10/150 - 0.83s - Loss 0.784681 - ValidLoss 0.673991 - ValidErr 7.3607 m - CntMAE 0.972 - DetF1 0.219 - Smooth 7.4486 m
+Epoch 11/150 - 0.83s - Loss 0.807206 - ValidLoss 0.735736 - ValidErr 7.6673 m - CntMAE 1.278 - DetF1 0.257 - Smooth 7.5142 m
+Epoch 12/150 - 0.83s - Loss 0.759254 - ValidLoss 0.740196 - ValidErr 7.6599 m - CntMAE 1.278 - DetF1 0.114 - Smooth 7.5580 m
+Epoch 13/150 - 0.83s - Loss 0.739468 - ValidLoss 0.686683 - ValidErr 7.4199 m - CntMAE 1.222 - DetF1 0.263 - Smooth 7.5165 m
+Epoch 14/150 - 0.83s - Loss 0.726585 - ValidLoss 0.759780 - ValidErr 7.6454 m - CntMAE 1.194 - DetF1 0.154 - Smooth 7.5552 m
+Epoch 15/150 - 0.83s - Loss 0.760591 - ValidLoss 0.729390 - ValidErr 7.5407 m - CntMAE 1.083 - DetF1 0.215 - Smooth 7.5509 m
+Epoch 16/150 - 0.83s - Loss 0.751104 - ValidLoss 0.697900 - ValidErr 7.6393 m - CntMAE 1.222 - DetF1 0.242 - Smooth 7.5774 m
+Epoch 17/150 - 0.83s - Loss 0.736418 - ValidLoss 0.712026 - ValidErr 7.6554 m - CntMAE 1.306 - DetF1 0.274 - Smooth 7.6008 m
+Epoch 18/150 - 0.83s - Loss 0.748740 - ValidLoss 0.715315 - ValidErr 7.4215 m - CntMAE 1.056 - DetF1 0.118 - Smooth 7.5470 m
+Epoch 19/150 - 0.83s - Loss 0.720087 - ValidLoss 0.719601 - ValidErr 7.6657 m - CntMAE 1.222 - DetF1 0.290 - Smooth 7.5826 m
+Epoch 20/150 - 0.83s - Loss 0.726194 - ValidLoss 0.705019 - ValidErr 7.5083 m - CntMAE 1.083 - DetF1 0.319 - Smooth 7.5603 m
+Epoch 21/150 - 0.83s - Loss 0.724587 - ValidLoss 0.713695 - ValidErr 7.4284 m - CntMAE 1.111 - DetF1 0.317 - Smooth 7.5207 m
+Epoch 22/150 - 0.83s - Loss 0.709021 - ValidLoss 0.708844 - ValidErr 7.5679 m - CntMAE 1.111 - DetF1 0.211 - Smooth 7.5349 m
+Epoch 23/150 - 0.83s - Loss 0.720576 - ValidLoss 0.722502 - ValidErr 7.8590 m - CntMAE 1.306 - DetF1 0.109 - Smooth 7.6321 m
+Epoch 24/150 - 0.83s - Loss 0.721560 - ValidLoss 0.689093 - ValidErr 7.8512 m - CntMAE 1.306 - DetF1 0.140 - Smooth 7.6979 m
+Epoch 25/150 - 0.83s - Loss 0.725345 - ValidLoss 0.701929 - ValidErr 7.4160 m - CntMAE 1.083 - DetF1 0.282 - Smooth 7.6133 m
+Epoch 26/150 - 0.83s - Loss 0.716114 - ValidLoss 0.696937 - ValidErr 7.6096 m - CntMAE 1.167 - DetF1 0.371 - Smooth 7.6122 m
+Epoch 27/150 - 0.83s - Loss 0.711064 - ValidLoss 0.683162 - ValidErr 7.2319 m - CntMAE 1.056 - DetF1 0.256 - Smooth 7.4981 m
+Epoch 28/150 - 0.83s - Loss 0.700269 - ValidLoss 0.649731 - ValidErr 7.5172 m - CntMAE 1.056 - DetF1 0.286 - Smooth 7.5038 m
+Epoch 29/150 - 0.83s - Loss 0.686745 - ValidLoss 0.639374 - ValidErr 7.4630 m - CntMAE 0.972 - DetF1 0.232 - Smooth 7.4916 m
+Epoch 30/150 - 0.83s - Loss 0.687633 - ValidLoss 0.677610 - ValidErr 7.6278 m - CntMAE 1.167 - DetF1 0.182 - Smooth 7.5324 m
+Epoch 31/150 - 0.83s - Loss 0.694127 - ValidLoss 0.677976 - ValidErr 7.5833 m - CntMAE 1.250 - DetF1 0.320 - Smooth 7.5477 m
+Epoch 32/150 - 0.83s - Loss 0.676406 - ValidLoss 0.673426 - ValidErr 7.6984 m - CntMAE 1.167 - DetF1 0.226 - Smooth 7.5929 m
+Epoch 33/150 - 0.83s - Loss 0.672395 - ValidLoss 0.686349 - ValidErr 7.6302 m - CntMAE 1.056 - DetF1 0.152 - Smooth 7.6041 m
+Epoch 34/150 - 0.83s - Loss 0.682177 - ValidLoss 0.655791 - ValidErr 7.5658 m - CntMAE 1.167 - DetF1 0.250 - Smooth 7.5926 m
+Epoch 35/150 - 0.83s - Loss 0.648184 - ValidLoss 0.635236 - ValidErr 7.5732 m - CntMAE 1.167 - DetF1 0.222 - Smooth 7.5868 m
+Epoch 36/150 - 0.83s - Loss 0.642475 - ValidLoss 0.646453 - ValidErr 7.6344 m - CntMAE 1.167 - DetF1 0.242 - Smooth 7.6011 m
+Epoch 37/150 - 0.83s - Loss 0.665373 - ValidLoss 0.644190 - ValidErr 7.5890 m - CntMAE 1.167 - DetF1 0.265 - Smooth 7.5974 m
+Epoch 38/150 - 0.83s - Loss 0.640680 - ValidLoss 0.649991 - ValidErr 7.5644 m - CntMAE 1.139 - DetF1 0.282 - Smooth 7.5875 m
+Epoch 39/150 - 0.82s - Loss 0.641694 - ValidLoss 0.659572 - ValidErr 7.5329 m - CntMAE 1.139 - DetF1 0.197 - Smooth 7.5711 m
+Epoch 40/150 - 0.83s - Loss 0.633370 - ValidLoss 0.633849 - ValidErr 7.4062 m - CntMAE 1.083 - DetF1 0.247 - Smooth 7.5217 m
+Epoch 41/150 - 0.83s - Loss 0.612288 - ValidLoss 0.650342 - ValidErr 6.9933 m - CntMAE 1.083 - DetF1 0.347 - Smooth 7.3631 m
+Epoch 42/150 - 0.83s - Loss 0.643690 - ValidLoss 0.662620 - ValidErr 7.3455 m - CntMAE 1.056 - DetF1 0.343 - Smooth 7.3578 m
+Epoch 43/150 - 0.83s - Loss 0.637069 - ValidLoss 0.644913 - ValidErr 7.5303 m - CntMAE 1.167 - DetF1 0.278 - Smooth 7.4096 m
+Epoch 44/150 - 0.83s - Loss 0.629470 - ValidLoss 0.634969 - ValidErr 7.4982 m - CntMAE 1.139 - DetF1 0.254 - Smooth 7.4362 m
+Epoch 45/150 - 0.83s - Loss 0.658601 - ValidLoss 0.670713 - ValidErr 7.3805 m - CntMAE 1.083 - DetF1 0.286 - Smooth 7.4195 m
+Epoch 46/150 - 0.83s - Loss 0.637081 - ValidLoss 0.655453 - ValidErr 7.4286 m - CntMAE 1.111 - DetF1 0.270 - Smooth 7.4222 m
+Epoch 47/150 - 0.83s - Loss 0.626507 - ValidLoss 0.648510 - ValidErr 7.3976 m - CntMAE 0.972 - DetF1 0.219 - Smooth 7.4148 m
+Epoch 48/150 - 0.83s - Loss 0.616761 - ValidLoss 0.650857 - ValidErr 7.3188 m - CntMAE 1.111 - DetF1 0.293 - Smooth 7.3860 m
+Epoch 49/150 - 0.83s - Loss 0.629870 - ValidLoss 0.680448 - ValidErr 7.4508 m - CntMAE 1.028 - DetF1 0.219 - Smooth 7.4055 m
+Epoch 50/150 - 0.83s - Loss 0.620054 - ValidLoss 0.674312 - ValidErr 7.5723 m - CntMAE 1.083 - DetF1 0.239 - Smooth 7.4555 m
+Epoch 51/150 - 0.83s - Loss 0.626584 - ValidLoss 0.635201 - ValidErr 7.4840 m - CntMAE 1.056 - DetF1 0.314 - Smooth 7.4641 m
+Epoch 52/150 - 0.83s - Loss 0.618950 - ValidLoss 0.611528 - ValidErr 7.4341 m - CntMAE 0.972 - DetF1 0.299 - Smooth 7.4551 m
+Epoch 53/150 - 0.83s - Loss 0.617140 - ValidLoss 0.630913 - ValidErr 7.3563 m - CntMAE 1.028 - DetF1 0.320 - Smooth 7.4254 m
+Epoch 54/150 - 0.83s - Loss 0.628241 - ValidLoss 0.616956 - ValidErr 7.5597 m - CntMAE 1.083 - DetF1 0.246 - Smooth 7.4657 m
+Epoch 55/150 - 0.83s - Loss 0.606727 - ValidLoss 0.601201 - ValidErr 7.5209 m - CntMAE 1.083 - DetF1 0.290 - Smooth 7.4823 m
+Epoch 56/150 - 0.83s - Loss 0.579137 - ValidLoss 0.599880 - ValidErr 7.5642 m - CntMAE 1.111 - DetF1 0.265 - Smooth 7.5069 m
+Epoch 57/150 - 0.83s - Loss 0.579203 - ValidLoss 0.588164 - ValidErr 7.5586 m - CntMAE 1.111 - DetF1 0.265 - Smooth 7.5224 m
+Epoch 58/150 - 0.83s - Loss 0.572556 - ValidLoss 0.608658 - ValidErr 7.2296 m - CntMAE 0.944 - DetF1 0.333 - Smooth 7.4345 m
+Epoch 59/150 - 0.83s - Loss 0.585989 - ValidLoss 0.606567 - ValidErr 7.3634 m - CntMAE 1.000 - DetF1 0.237 - Smooth 7.4132 m
+Epoch 60/150 - 0.84s - Loss 0.577274 - ValidLoss 0.590753 - ValidErr 7.2798 m - CntMAE 0.972 - DetF1 0.347 - Smooth 7.3732 m
+Early stopping triggered at epoch 60
+Epoch that the model was saved 0 - best smoothed error 6.7247 m
+  calibrated objectness threshold: 0.90
+  [classroom] setErr 4.5588 m - matchedMDE 2.0599 m - cntMAE 2.683 - exactCnt 0.000 - detF1 0.183 - const 3.3365 m
+Repeat 1
+Epoch 0/150 - 0.85s - Loss 1.236453 - ValidLoss 1.362209 - ValidErr 7.9663 m - CntMAE 1.389 - DetF1 0.000 - Smooth 7.9663 m
+Epoch 1/150 - 0.83s - Loss 1.208648 - ValidLoss 1.209069 - ValidErr 7.7663 m - CntMAE 1.278 - DetF1 0.034 - Smooth 7.9063 m
+Epoch 2/150 - 0.83s - Loss 1.070952 - ValidLoss 1.032473 - ValidErr 7.5103 m - CntMAE 1.861 - DetF1 0.168 - Smooth 7.7875 m
+Epoch 3/150 - 0.83s - Loss 0.966830 - ValidLoss 0.828969 - ValidErr 7.7005 m - CntMAE 1.194 - DetF1 0.222 - Smooth 7.7614 m
+Epoch 4/150 - 0.83s - Loss 0.896136 - ValidLoss 0.801146 - ValidErr 7.4756 m - CntMAE 1.194 - DetF1 0.120 - Smooth 7.6756 m
+Epoch 5/150 - 0.83s - Loss 0.850115 - ValidLoss 0.794202 - ValidErr 7.7750 m - CntMAE 1.250 - DetF1 0.145 - Smooth 7.7055 m
+Epoch 6/150 - 0.84s - Loss 0.776956 - ValidLoss 0.716637 - ValidErr 7.2518 m - CntMAE 0.944 - DetF1 0.289 - Smooth 7.5694 m
+Epoch 7/150 - 0.83s - Loss 0.800951 - ValidLoss 0.773019 - ValidErr 7.5212 m - CntMAE 1.500 - DetF1 0.283 - Smooth 7.5549 m
+Epoch 8/150 - 0.84s - Loss 0.812364 - ValidLoss 0.722600 - ValidErr 7.5015 m - CntMAE 1.306 - DetF1 0.222 - Smooth 7.5389 m
+Epoch 9/150 - 0.83s - Loss 0.732949 - ValidLoss 0.674333 - ValidErr 7.3794 m - CntMAE 1.111 - DetF1 0.333 - Smooth 7.4911 m
+Epoch 10/150 - 0.83s - Loss 0.717426 - ValidLoss 0.674510 - ValidErr 6.3865 m - CntMAE 0.917 - DetF1 0.312 - Smooth 7.1597 m
+Epoch 11/150 - 0.83s - Loss 0.728536 - ValidLoss 0.692038 - ValidErr 7.8423 m - CntMAE 1.278 - DetF1 0.111 - Smooth 7.3645 m
+Epoch 12/150 - 0.83s - Loss 0.725756 - ValidLoss 0.640334 - ValidErr 7.8273 m - CntMAE 1.278 - DetF1 0.148 - Smooth 7.5033 m
+Epoch 13/150 - 0.83s - Loss 0.731423 - ValidLoss 0.650105 - ValidErr 7.1074 m - CntMAE 1.167 - DetF1 0.172 - Smooth 7.3846 m
+Epoch 14/150 - 0.83s - Loss 0.710430 - ValidLoss 0.582182 - ValidErr 7.4502 m - CntMAE 1.111 - DetF1 0.324 - Smooth 7.4042 m
+Epoch 15/150 - 0.83s - Loss 0.663591 - ValidLoss 0.573114 - ValidErr 7.4572 m - CntMAE 1.139 - DetF1 0.406 - Smooth 7.4201 m
+Epoch 16/150 - 0.83s - Loss 0.672071 - ValidLoss 0.582463 - ValidErr 7.5274 m - CntMAE 1.028 - DetF1 0.286 - Smooth 7.4523 m
+Epoch 17/150 - 0.83s - Loss 0.636120 - ValidLoss 0.604718 - ValidErr 7.6088 m - CntMAE 1.222 - DetF1 0.273 - Smooth 7.4993 m
+Epoch 18/150 - 0.84s - Loss 0.649575 - ValidLoss 0.599678 - ValidErr 7.6705 m - CntMAE 1.111 - DetF1 0.200 - Smooth 7.5506 m
+Epoch 19/150 - 0.83s - Loss 0.638612 - ValidLoss 0.591524 - ValidErr 7.5304 m - CntMAE 1.111 - DetF1 0.371 - Smooth 7.5446 m
+Epoch 20/150 - 0.83s - Loss 0.599626 - ValidLoss 0.590677 - ValidErr 6.4868 m - CntMAE 0.944 - DetF1 0.410 - Smooth 7.2272 m
+Epoch 21/150 - 0.84s - Loss 0.608967 - ValidLoss 0.577562 - ValidErr 7.2916 m - CntMAE 1.056 - DetF1 0.400 - Smooth 7.2465 m
+Epoch 22/150 - 0.83s - Loss 0.624333 - ValidLoss 0.600997 - ValidErr 7.2915 m - CntMAE 1.083 - DetF1 0.420 - Smooth 7.2600 m
+Epoch 23/150 - 0.84s - Loss 0.649788 - ValidLoss 0.578078 - ValidErr 7.4304 m - CntMAE 1.000 - DetF1 0.371 - Smooth 7.3112 m
+Epoch 24/150 - 0.83s - Loss 0.622644 - ValidLoss 0.592678 - ValidErr 7.1704 m - CntMAE 1.000 - DetF1 0.366 - Smooth 7.2689 m
+Epoch 25/150 - 0.83s - Loss 0.577821 - ValidLoss 0.557202 - ValidErr 4.6435 m - CntMAE 0.611 - DetF1 0.463 - Smooth 6.4813 m
+Epoch 26/150 - 0.83s - Loss 0.587200 - ValidLoss 0.577539 - ValidErr 7.6016 m - CntMAE 1.111 - DetF1 0.161 - Smooth 6.8174 m
+Epoch 27/150 - 0.83s - Loss 0.592913 - ValidLoss 0.558263 - ValidErr 7.6825 m - CntMAE 1.167 - DetF1 0.207 - Smooth 7.0769 m
+Epoch 28/150 - 0.83s - Loss 0.596129 - ValidLoss 0.554606 - ValidErr 7.3312 m - CntMAE 1.056 - DetF1 0.278 - Smooth 7.1532 m
+Epoch 29/150 - 0.83s - Loss 0.615640 - ValidLoss 0.561252 - ValidErr 7.6317 m - CntMAE 1.139 - DetF1 0.286 - Smooth 7.2968 m
+Epoch 30/150 - 0.83s - Loss 0.603003 - ValidLoss 0.539916 - ValidErr 7.3444 m - CntMAE 1.000 - DetF1 0.294 - Smooth 7.3110 m
+Epoch 31/150 - 0.83s - Loss 0.584814 - ValidLoss 0.567697 - ValidErr 7.0852 m - CntMAE 1.056 - DetF1 0.381 - Smooth 7.2433 m
+Epoch 32/150 - 0.83s - Loss 0.627378 - ValidLoss 0.604926 - ValidErr 7.4522 m - CntMAE 1.000 - DetF1 0.212 - Smooth 7.3060 m
+Epoch 33/150 - 0.83s - Loss 0.586520 - ValidLoss 0.595555 - ValidErr 7.0250 m - CntMAE 1.083 - DetF1 0.338 - Smooth 7.2217 m
+Epoch 34/150 - 0.83s - Loss 0.607829 - ValidLoss 0.581868 - ValidErr 7.1764 m - CntMAE 1.083 - DetF1 0.430 - Smooth 7.2081 m
+Epoch 35/150 - 0.83s - Loss 0.607841 - ValidLoss 0.560935 - ValidErr 7.5101 m - CntMAE 1.111 - DetF1 0.324 - Smooth 7.2987 m
+Epoch 36/150 - 0.83s - Loss 0.598138 - ValidLoss 0.552970 - ValidErr 7.5269 m - CntMAE 1.111 - DetF1 0.333 - Smooth 7.3671 m
+Epoch 37/150 - 0.83s - Loss 0.596208 - ValidLoss 0.538013 - ValidErr 6.2009 m - CntMAE 0.889 - DetF1 0.450 - Smooth 7.0173 m
+Epoch 38/150 - 0.83s - Loss 0.578471 - ValidLoss 0.568975 - ValidErr 6.5550 m - CntMAE 0.944 - DetF1 0.303 - Smooth 6.8786 m
+Epoch 39/150 - 0.83s - Loss 0.568216 - ValidLoss 0.573967 - ValidErr 6.8521 m - CntMAE 1.028 - DetF1 0.290 - Smooth 6.8706 m
+Epoch 40/150 - 0.83s - Loss 0.584704 - ValidLoss 0.539108 - ValidErr 5.2137 m - CntMAE 0.694 - DetF1 0.390 - Smooth 6.3736 m
+Epoch 41/150 - 0.84s - Loss 0.576612 - ValidLoss 0.579523 - ValidErr 6.2452 m - CntMAE 0.917 - DetF1 0.377 - Smooth 6.3350 m
+Epoch 42/150 - 0.83s - Loss 0.579751 - ValidLoss 0.583525 - ValidErr 5.3053 m - CntMAE 0.750 - DetF1 0.460 - Smooth 6.0261 m
+Epoch 43/150 - 0.83s - Loss 0.563522 - ValidLoss 0.553915 - ValidErr 5.5121 m - CntMAE 0.833 - DetF1 0.475 - Smooth 5.8719 m
+Epoch 44/150 - 0.83s - Loss 0.558996 - ValidLoss 0.552809 - ValidErr 5.9852 m - CntMAE 0.806 - DetF1 0.438 - Smooth 5.9059 m
+Epoch 45/150 - 0.84s - Loss 0.565171 - ValidLoss 0.562458 - ValidErr 6.5077 m - CntMAE 0.889 - DetF1 0.368 - Smooth 6.0864 m
+Epoch 46/150 - 0.83s - Loss 0.556361 - ValidLoss 0.572890 - ValidErr 5.1312 m - CntMAE 0.694 - DetF1 0.405 - Smooth 5.7999 m
+Epoch 47/150 - 0.83s - Loss 0.556958 - ValidLoss 0.561391 - ValidErr 5.6151 m - CntMAE 0.778 - DetF1 0.390 - Smooth 5.7445 m
+Epoch 48/150 - 0.83s - Loss 0.560799 - ValidLoss 0.540095 - ValidErr 4.8856 m - CntMAE 0.667 - DetF1 0.425 - Smooth 5.4868 m
+Epoch 49/150 - 0.83s - Loss 0.560981 - ValidLoss 0.537630 - ValidErr 4.0931 m - CntMAE 0.528 - DetF1 0.447 - Smooth 5.0687 m
+Epoch 50/150 - 0.83s - Loss 0.549085 - ValidLoss 0.549070 - ValidErr 6.9812 m - CntMAE 1.028 - DetF1 0.411 - Smooth 5.6425 m
+Epoch 51/150 - 0.83s - Loss 0.546911 - ValidLoss 0.556777 - ValidErr 4.7393 m - CntMAE 0.611 - DetF1 0.463 - Smooth 5.3715 m
+Epoch 52/150 - 0.83s - Loss 0.533381 - ValidLoss 0.557110 - ValidErr 6.4194 m - CntMAE 0.861 - DetF1 0.373 - Smooth 5.6859 m
+Epoch 53/150 - 0.83s - Loss 0.530057 - ValidLoss 0.550263 - ValidErr 5.3432 m - CntMAE 0.694 - DetF1 0.456 - Smooth 5.5831 m
+Epoch 54/150 - 0.84s - Loss 0.516606 - ValidLoss 0.577674 - ValidErr 4.0434 m - CntMAE 0.500 - DetF1 0.479 - Smooth 5.1212 m
+Epoch 55/150 - 0.83s - Loss 0.534975 - ValidLoss 0.564707 - ValidErr 5.7719 m - CntMAE 0.833 - DetF1 0.425 - Smooth 5.3164 m
+Epoch 56/150 - 0.83s - Loss 0.532784 - ValidLoss 0.569569 - ValidErr 4.8986 m - CntMAE 0.611 - DetF1 0.415 - Smooth 5.1910 m
+Epoch 57/150 - 0.83s - Loss 0.536991 - ValidLoss 0.556014 - ValidErr 4.3953 m - CntMAE 0.556 - DetF1 0.523 - Smooth 4.9523 m
+Epoch 58/150 - 0.83s - Loss 0.541896 - ValidLoss 0.546983 - ValidErr 6.3775 m - CntMAE 0.917 - DetF1 0.394 - Smooth 5.3799 m
+Epoch 59/150 - 0.83s - Loss 0.517625 - ValidLoss 0.581321 - ValidErr 4.2707 m - CntMAE 0.528 - DetF1 0.506 - Smooth 5.0471 m
+Epoch 60/150 - 0.83s - Loss 0.513563 - ValidLoss 0.560984 - ValidErr 4.5404 m - CntMAE 0.611 - DetF1 0.439 - Smooth 4.8951 m
+Epoch 61/150 - 0.83s - Loss 0.517178 - ValidLoss 0.565235 - ValidErr 4.8176 m - CntMAE 0.611 - DetF1 0.488 - Smooth 4.8718 m
+Epoch 62/150 - 0.83s - Loss 0.524658 - ValidLoss 0.555413 - ValidErr 4.6327 m - CntMAE 0.556 - DetF1 0.500 - Smooth 4.8001 m
+Epoch 63/150 - 0.83s - Loss 0.498338 - ValidLoss 0.584532 - ValidErr 4.6304 m - CntMAE 0.583 - DetF1 0.447 - Smooth 4.7492 m
+Epoch 64/150 - 0.83s - Loss 0.507416 - ValidLoss 0.569248 - ValidErr 5.1079 m - CntMAE 0.611 - DetF1 0.442 - Smooth 4.8568 m
+Epoch 65/150 - 0.83s - Loss 0.510287 - ValidLoss 0.579995 - ValidErr 3.5259 m - CntMAE 0.389 - DetF1 0.521 - Smooth 4.4575 m
+Epoch 66/150 - 0.83s - Loss 0.494508 - ValidLoss 0.586212 - ValidErr 5.2647 m - CntMAE 0.667 - DetF1 0.465 - Smooth 4.6997 m
+Epoch 67/150 - 0.83s - Loss 0.503757 - ValidLoss 0.585873 - ValidErr 4.1168 m - CntMAE 0.500 - DetF1 0.511 - Smooth 4.5248 m
+Epoch 68/150 - 0.83s - Loss 0.494626 - ValidLoss 0.576437 - ValidErr 5.5721 m - CntMAE 0.694 - DetF1 0.386 - Smooth 4.8390 m
+Epoch 69/150 - 0.83s - Loss 0.520487 - ValidLoss 0.559381 - ValidErr 4.9227 m - CntMAE 0.611 - DetF1 0.442 - Smooth 4.8641 m
+Epoch 70/150 - 0.83s - Loss 0.511321 - ValidLoss 0.607244 - ValidErr 4.6249 m - CntMAE 0.583 - DetF1 0.458 - Smooth 4.7923 m
+Epoch 71/150 - 0.83s - Loss 0.492555 - ValidLoss 0.594314 - ValidErr 4.4331 m - CntMAE 0.583 - DetF1 0.409 - Smooth 4.6846 m
+Epoch 72/150 - 0.83s - Loss 0.485509 - ValidLoss 0.612255 - ValidErr 5.3795 m - CntMAE 0.639 - DetF1 0.400 - Smooth 4.8930 m
+Epoch 73/150 - 0.84s - Loss 0.493175 - ValidLoss 0.606869 - ValidErr 5.5916 m - CntMAE 0.667 - DetF1 0.429 - Smooth 5.1026 m
+Epoch 74/150 - 0.83s - Loss 0.514724 - ValidLoss 0.593291 - ValidErr 5.6126 m - CntMAE 0.694 - DetF1 0.370 - Smooth 5.2556 m
+Epoch 75/150 - 0.84s - Loss 0.483518 - ValidLoss 0.577964 - ValidErr 4.8235 m - CntMAE 0.667 - DetF1 0.457 - Smooth 5.1260 m
+Epoch 76/150 - 0.83s - Loss 0.474524 - ValidLoss 0.627321 - ValidErr 4.8492 m - CntMAE 0.667 - DetF1 0.405 - Smooth 5.0429 m
+Epoch 77/150 - 0.83s - Loss 0.495573 - ValidLoss 0.611180 - ValidErr 4.8612 m - CntMAE 0.611 - DetF1 0.442 - Smooth 4.9884 m
+Epoch 78/150 - 0.83s - Loss 0.480427 - ValidLoss 0.607968 - ValidErr 4.7327 m - CntMAE 0.667 - DetF1 0.476 - Smooth 4.9117 m
+Epoch 79/150 - 0.83s - Loss 0.491549 - ValidLoss 0.608126 - ValidErr 4.2501 m - CntMAE 0.528 - DetF1 0.437 - Smooth 4.7132 m
+Epoch 80/150 - 0.83s - Loss 0.486848 - ValidLoss 0.624825 - ValidErr 4.4317 m - CntMAE 0.556 - DetF1 0.386 - Smooth 4.6288 m
+Epoch 81/150 - 0.83s - Loss 0.474758 - ValidLoss 0.625216 - ValidErr 5.0794 m - CntMAE 0.639 - DetF1 0.376 - Smooth 4.7640 m
+Epoch 82/150 - 0.83s - Loss 0.483448 - ValidLoss 0.620608 - ValidErr 5.2461 m - CntMAE 0.667 - DetF1 0.419 - Smooth 4.9086 m
+Epoch 83/150 - 0.83s - Loss 0.481274 - ValidLoss 0.626999 - ValidErr 5.6604 m - CntMAE 0.750 - DetF1 0.382 - Smooth 5.1341 m
+Epoch 84/150 - 0.83s - Loss 0.486076 - ValidLoss 0.600618 - ValidErr 4.3473 m - CntMAE 0.528 - DetF1 0.449 - Smooth 4.8981 m
+Epoch 85/150 - 0.83s - Loss 0.490723 - ValidLoss 0.643401 - ValidErr 4.6617 m - CntMAE 0.528 - DetF1 0.418 - Smooth 4.8272 m
+Epoch 86/150 - 0.83s - Loss 0.446130 - ValidLoss 0.631584 - ValidErr 4.0532 m - CntMAE 0.500 - DetF1 0.444 - Smooth 4.5950 m
+Epoch 87/150 - 0.83s - Loss 0.457352 - ValidLoss 0.627686 - ValidErr 4.6964 m - CntMAE 0.639 - DetF1 0.430 - Smooth 4.6254 m
+Epoch 88/150 - 0.83s - Loss 0.448894 - ValidLoss 0.634632 - ValidErr 4.4730 m - CntMAE 0.472 - DetF1 0.360 - Smooth 4.5797 m
+Epoch 89/150 - 0.83s - Loss 0.457768 - ValidLoss 0.627538 - ValidErr 4.1618 m - CntMAE 0.528 - DetF1 0.495 - Smooth 4.4543 m
+Epoch 90/150 - 0.83s - Loss 0.482178 - ValidLoss 0.598673 - ValidErr 5.1101 m - CntMAE 0.611 - DetF1 0.409 - Smooth 4.6511 m
+Epoch 91/150 - 0.83s - Loss 0.479854 - ValidLoss 0.597570 - ValidErr 3.9712 m - CntMAE 0.500 - DetF1 0.500 - Smooth 4.4471 m
+Epoch 92/150 - 0.83s - Loss 0.448766 - ValidLoss 0.586782 - ValidErr 4.1274 m - CntMAE 0.500 - DetF1 0.386 - Smooth 4.3512 m
+Epoch 93/150 - 0.83s - Loss 0.440426 - ValidLoss 0.602529 - ValidErr 4.6719 m - CntMAE 0.556 - DetF1 0.386 - Smooth 4.4474 m
+Epoch 94/150 - 0.83s - Loss 0.439144 - ValidLoss 0.617552 - ValidErr 5.0344 m - CntMAE 0.694 - DetF1 0.437 - Smooth 4.6235 m
+Epoch 95/150 - 0.84s - Loss 0.437691 - ValidLoss 0.632082 - ValidErr 4.1683 m - CntMAE 0.500 - DetF1 0.409 - Smooth 4.4869 m
+Epoch 96/150 - 0.83s - Loss 0.451811 - ValidLoss 0.639146 - ValidErr 3.7810 m - CntMAE 0.472 - DetF1 0.473 - Smooth 4.2752 m
+Epoch 97/150 - 0.83s - Loss 0.465515 - ValidLoss 0.598853 - ValidErr 3.8100 m - CntMAE 0.472 - DetF1 0.495 - Smooth 4.1356 m
+Epoch 98/150 - 0.83s - Loss 0.452203 - ValidLoss 0.609116 - ValidErr 3.9785 m - CntMAE 0.472 - DetF1 0.462 - Smooth 4.0885 m
+Epoch 99/150 - 0.83s - Loss 0.433502 - ValidLoss 0.636267 - ValidErr 4.6412 m - CntMAE 0.583 - DetF1 0.427 - Smooth 4.2543 m
+Epoch 100/150 - 0.84s - Loss 0.465167 - ValidLoss 0.657964 - ValidErr 4.1385 m - CntMAE 0.556 - DetF1 0.455 - Smooth 4.2196 m
+Epoch 101/150 - 0.83s - Loss 0.450546 - ValidLoss 0.657614 - ValidErr 4.8758 m - CntMAE 0.639 - DetF1 0.414 - Smooth 4.4164 m
+Epoch 102/150 - 0.83s - Loss 0.444223 - ValidLoss 0.626858 - ValidErr 4.4759 m - CntMAE 0.611 - DetF1 0.404 - Smooth 4.4343 m
+Epoch 103/150 - 0.83s - Loss 0.449993 - ValidLoss 0.640922 - ValidErr 4.3724 m - CntMAE 0.583 - DetF1 0.430 - Smooth 4.4157 m
+Epoch 104/150 - 0.83s - Loss 0.422850 - ValidLoss 0.668541 - ValidErr 4.5334 m - CntMAE 0.611 - DetF1 0.409 - Smooth 4.4510 m
+Epoch 105/150 - 0.83s - Loss 0.423840 - ValidLoss 0.651867 - ValidErr 4.4918 m - CntMAE 0.611 - DetF1 0.422 - Smooth 4.4632 m
+Epoch 106/150 - 0.83s - Loss 0.430145 - ValidLoss 0.630993 - ValidErr 3.7678 m - CntMAE 0.500 - DetF1 0.426 - Smooth 4.2546 m
+Epoch 107/150 - 0.83s - Loss 0.434536 - ValidLoss 0.640571 - ValidErr 3.6954 m - CntMAE 0.444 - DetF1 0.457 - Smooth 4.0868 m
+Epoch 108/150 - 0.83s - Loss 0.418191 - ValidLoss 0.658422 - ValidErr 3.8691 m - CntMAE 0.472 - DetF1 0.421 - Smooth 4.0215 m
+Epoch 109/150 - 0.84s - Loss 0.421172 - ValidLoss 0.648779 - ValidErr 4.1957 m - CntMAE 0.528 - DetF1 0.462 - Smooth 4.0738 m
+Epoch 110/150 - 0.84s - Loss 0.426059 - ValidLoss 0.630552 - ValidErr 4.6612 m - CntMAE 0.639 - DetF1 0.437 - Smooth 4.2500 m
+Epoch 111/150 - 0.83s - Loss 0.392074 - ValidLoss 0.653696 - ValidErr 3.4855 m - CntMAE 0.500 - DetF1 0.437 - Smooth 4.0207 m
+Epoch 112/150 - 0.83s - Loss 0.415125 - ValidLoss 0.658371 - ValidErr 4.7545 m - CntMAE 0.611 - DetF1 0.409 - Smooth 4.2408 m
+Epoch 113/150 - 0.84s - Loss 0.407826 - ValidLoss 0.638827 - ValidErr 3.4972 m - CntMAE 0.417 - DetF1 0.462 - Smooth 4.0178 m
+Epoch 114/150 - 0.83s - Loss 0.407947 - ValidLoss 0.654789 - ValidErr 3.7467 m - CntMAE 0.500 - DetF1 0.500 - Smooth 3.9364 m
+Epoch 115/150 - 0.84s - Loss 0.440912 - ValidLoss 0.635547 - ValidErr 4.3509 m - CntMAE 0.611 - DetF1 0.468 - Smooth 4.0608 m
+Epoch 116/150 - 0.84s - Loss 0.399710 - ValidLoss 0.633321 - ValidErr 3.5871 m - CntMAE 0.500 - DetF1 0.500 - Smooth 3.9187 m
+Epoch 117/150 - 0.84s - Loss 0.392644 - ValidLoss 0.643578 - ValidErr 3.5466 m - CntMAE 0.500 - DetF1 0.490 - Smooth 3.8071 m
+Epoch 118/150 - 0.83s - Loss 0.404227 - ValidLoss 0.650886 - ValidErr 3.3318 m - CntMAE 0.500 - DetF1 0.500 - Smooth 3.6645 m
+Epoch 119/150 - 0.83s - Loss 0.415160 - ValidLoss 0.632872 - ValidErr 4.5007 m - CntMAE 0.639 - DetF1 0.442 - Smooth 3.9153 m
+Epoch 120/150 - 0.83s - Loss 0.414967 - ValidLoss 0.634327 - ValidErr 3.6470 m - CntMAE 0.500 - DetF1 0.500 - Smooth 3.8348 m
+Epoch 121/150 - 0.83s - Loss 0.404188 - ValidLoss 0.632696 - ValidErr 4.3889 m - CntMAE 0.611 - DetF1 0.468 - Smooth 4.0011 m
+Epoch 122/150 - 0.83s - Loss 0.411953 - ValidLoss 0.639279 - ValidErr 4.0463 m - CntMAE 0.611 - DetF1 0.490 - Smooth 4.0146 m
+Epoch 123/150 - 0.83s - Loss 0.377960 - ValidLoss 0.628216 - ValidErr 4.0766 m - CntMAE 0.556 - DetF1 0.458 - Smooth 4.0332 m
+Epoch 124/150 - 0.83s - Loss 0.386943 - ValidLoss 0.617847 - ValidErr 3.6389 m - CntMAE 0.472 - DetF1 0.495 - Smooth 3.9149 m
+Epoch 125/150 - 0.83s - Loss 0.415825 - ValidLoss 0.659445 - ValidErr 4.5064 m - CntMAE 0.556 - DetF1 0.457 - Smooth 4.0924 m
+Epoch 126/150 - 0.83s - Loss 0.429414 - ValidLoss 0.640118 - ValidErr 3.9818 m - CntMAE 0.500 - DetF1 0.447 - Smooth 4.0592 m
+Epoch 127/150 - 0.83s - Loss 0.401822 - ValidLoss 0.632133 - ValidErr 4.1283 m - CntMAE 0.556 - DetF1 0.468 - Smooth 4.0799 m
+Epoch 128/150 - 0.83s - Loss 0.378754 - ValidLoss 0.646142 - ValidErr 3.6866 m - CntMAE 0.444 - DetF1 0.468 - Smooth 3.9619 m
+Epoch 129/150 - 0.83s - Loss 0.396633 - ValidLoss 0.659021 - ValidErr 4.0300 m - CntMAE 0.528 - DetF1 0.452 - Smooth 3.9823 m
+Epoch 130/150 - 0.83s - Loss 0.376833 - ValidLoss 0.652802 - ValidErr 3.4620 m - CntMAE 0.500 - DetF1 0.469 - Smooth 3.8262 m
+Epoch 131/150 - 0.83s - Loss 0.394965 - ValidLoss 0.642762 - ValidErr 3.7203 m - CntMAE 0.528 - DetF1 0.495 - Smooth 3.7945 m
+Epoch 132/150 - 0.83s - Loss 0.378611 - ValidLoss 0.645035 - ValidErr 4.2010 m - CntMAE 0.583 - DetF1 0.463 - Smooth 3.9164 m
+Epoch 133/150 - 0.83s - Loss 0.389454 - ValidLoss 0.639053 - ValidErr 3.7308 m - CntMAE 0.528 - DetF1 0.474 - Smooth 3.8607 m
+Epoch 134/150 - 0.83s - Loss 0.403370 - ValidLoss 0.634377 - ValidErr 4.0853 m - CntMAE 0.583 - DetF1 0.452 - Smooth 3.9281 m
+Epoch 135/150 - 0.83s - Loss 0.401940 - ValidLoss 0.667814 - ValidErr 4.1522 m - CntMAE 0.556 - DetF1 0.447 - Smooth 3.9953 m
+Epoch 136/150 - 0.83s - Loss 0.392737 - ValidLoss 0.649354 - ValidErr 3.5378 m - CntMAE 0.528 - DetF1 0.505 - Smooth 3.8581 m
+Epoch 137/150 - 0.83s - Loss 0.383233 - ValidLoss 0.631353 - ValidErr 4.3434 m - CntMAE 0.611 - DetF1 0.457 - Smooth 4.0037 m
+Epoch 138/150 - 0.83s - Loss 0.381061 - ValidLoss 0.639347 - ValidErr 4.1697 m - CntMAE 0.611 - DetF1 0.500 - Smooth 4.0535 m
+Epoch 139/150 - 0.83s - Loss 0.352668 - ValidLoss 0.666562 - ValidErr 3.8150 m - CntMAE 0.556 - DetF1 0.510 - Smooth 3.9819 m
+Epoch 140/150 - 0.83s - Loss 0.376067 - ValidLoss 0.634686 - ValidErr 3.8517 m - CntMAE 0.528 - DetF1 0.505 - Smooth 3.9429 m
+Epoch 141/150 - 0.83s - Loss 0.386039 - ValidLoss 0.636986 - ValidErr 4.2761 m - CntMAE 0.611 - DetF1 0.489 - Smooth 4.0428 m
+Epoch 142/150 - 0.83s - Loss 0.362565 - ValidLoss 0.623642 - ValidErr 3.7444 m - CntMAE 0.556 - DetF1 0.490 - Smooth 3.9533 m
+Epoch 143/150 - 0.83s - Loss 0.361109 - ValidLoss 0.634210 - ValidErr 3.8725 m - CntMAE 0.583 - DetF1 0.495 - Smooth 3.9291 m
+Epoch 144/150 - 0.83s - Loss 0.370174 - ValidLoss 0.660479 - ValidErr 3.5671 m - CntMAE 0.583 - DetF1 0.554 - Smooth 3.8205 m
+Epoch 145/150 - 0.83s - Loss 0.348480 - ValidLoss 0.650148 - ValidErr 4.0151 m - CntMAE 0.528 - DetF1 0.484 - Smooth 3.8789 m
+Epoch 146/150 - 0.83s - Loss 0.376674 - ValidLoss 0.643724 - ValidErr 4.7252 m - CntMAE 0.639 - DetF1 0.462 - Smooth 4.1328 m
+Epoch 147/150 - 0.84s - Loss 0.357270 - ValidLoss 0.663190 - ValidErr 3.8436 m - CntMAE 0.528 - DetF1 0.505 - Smooth 4.0460 m
+Epoch 148/150 - 0.83s - Loss 0.380692 - ValidLoss 0.688131 - ValidErr 3.0054 m - CntMAE 0.417 - DetF1 0.515 - Smooth 3.7338 m
+Traceback (most recent call last):
+  File "/cluster/raid/home/jajo/AMAR/scripts/run_lor_all.py", line 200, in <module>
+    run()
+  File "/cluster/raid/home/jajo/AMAR/scripts/run_lor_all.py", line 140, in run
+    var_results = var_runner(
+  File "/cluster/raid/home/jajo/AMAR/src/models/set_localization.py", line 325, in run_set_localization_cross_domain
+    var_best_weight, _ = train_set_localizer(
+  File "/cluster/raid/home/jajo/AMAR/src/models/set_localization.py", line 221, in train_set_localizer
+    var_valid_loss = float(hungarian_set_loss(
+  File "/cluster/raid/home/jajo/AMAR/src/models/set_localization.py", line 110, in hungarian_set_loss
+    var_rows, var_cols = linear_sum_assignment(var_cost.detach().cpu().numpy())
+  File "/cluster/raid/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/scipy/optimize/_lsap.py", line 100, in linear_sum_assignment
+    return _lsap_module.calculate_assignment(cost_matrix)
+ValueError: matrix contains invalid numeric entries
+[1;34mwandb[0m:
+[1;34mwandb[0m: You can sync this run to the cloud by running:
+[1;34mwandb[0m: [1mwandb sync /cluster/raid/home/jajo/AMAR/wandb/offline-run-20261006_164751-ttnw40e4[0m
+[1;34mwandb[0m: Find logs at: [1;35mwandb/offline-run-20261006_164751-ttnw40e4/logs[0m

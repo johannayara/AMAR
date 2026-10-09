@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #SBATCH --job-name lor_all
 #SBATCH --cpus-per-task 8
-#SBATCH --mem 40G
+#SBATCH --mem 32G
 #SBATCH --qos normal
 #SBATCH --time 12:00:00
-#SBATCH --gres gpu:a100:1
+#SBATCH --gres gpu:v100:1
 #SBATCH --output lor_all_%j.out
 
 #
@@ -20,27 +20,17 @@
 ## Runs the general set-prediction model (--model set). Switch to the density head with
 ## --model density. --max_per_room 0 uses every sample/window of every room; drop it (or set a
 ## number) to cap for a quicker run.
-#
 set -euo pipefail
 
 source /software/anaconda3/etc/profile.d/conda.sh
 conda activate AMAR
 export WANDB_MODE=offline
 
-mkdir -p ./output/lor_all
+mkdir -p ./output/lor/all_data
 
 start=$(date +%s)
 echo "Start: $(date)"
-
 python scripts/run_lor_all.py \
-    --model set \
-    --folds all \
-    --max_per_room 0 \
-    --epochs 100 \
-    --repeat 3 \
-    > ./output/lor_all/lor_all_set_full.txt 2>&1
-
+    --model set --holdout classroom --max_per_room 60 --epochs 150 --repeat 3 > "./output/lor/all_data/run_$(date +%Y%m%d_%H%M%S).log" 2>&1
 end=$(date +%s)
 echo "Total runtime: $((end - start)) seconds"
-
-
