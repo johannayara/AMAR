@@ -3,20 +3,30 @@
 [description]   THAT-style CSI encoder extended for localization ("THATV").
 
                 It keeps the two-stream convolution-augmented transformer design of THAT
-                (src/models/bce_that.py) but changes the three things that hurt localization:
+                (src/models/bce_that.py) and adds three localization-specific branches:
 
                 1. Temporal statistics. THAT never sees an explicit motion cue: a stationary room and
                    a moving one can produce similar per-token features. THIS backbone computes
                    per-feature temporal statistics of the raw window (mean, std, and first-difference
-                   energy, i.e. how much the CSI amplitude varies over time) and injects the projected
-                   summary into every time token. This is the "CSI variance over time" feature.
+                   energy, i.e. how much the CSI amplitude varies over time) and adds the projected
+                   summary to every time token *after* the left encoder's LayerNorm, so the injected
+                   shift reaches the convs instead of being re-normalised away. This is the "CSI
+                   variance over time" feature.
                 2. Tokens are kept, not summed. THAT collapses the whole window with a global sum, so
                    a head can only ever emit one vector per window and all "where/when" detail must
                    survive that sum. THIS backbone exposes the left stream's per-time-step tokens
                    through forward_sequence(), so sequence heads (AMAR) can attend over time.
-                3. Attention pooling instead of a sum. The single-vector output (density_map) is a
-                   learned softmax-weighted average of the tokens plus the right stream's pooled
-                   features, not an unweighted sum.
+                3. Attention pooling as a residual. The single-vector output (density_map) keeps
+                   THAT's unweighted sum of the left convs as its base and ADDS a learned
+                   softmax-weighted average of the same tokens.
+
+                The three branches are zero-initialised (reset_residual_branches), so a freshly built
+                THATV reproduces THAT's single-vector aggregation exactly (the added terms are 0) and
+                the optimizer grows them from there. This matters because an earlier revision of this
+                file *replaced* THAT's sum with attention pooling and a final LayerNorm, which removed
+                the total-mass cue the density head needs to count people: on the classroom run it
+                dropped Exact-count accuracy from 0.62 to 0.38 and Count MAE from 0.40 to 0.78
+                (output/density_map/{default,thatv}/classroom/run_20261012_164132.log).
 
                 Two entry points, matching the two consumers:
                   - forward(x)          -> (B, D)          for single-vector heads (DensityMapNet)
@@ -51,8 +61,9 @@ class THATV(nn.Module):
     """
     [description]
     : CSI encoder for localization. Left stream ("time-over-channel") produces one token per pooled
-      time step and keeps them; right stream ("channel-over-time") is pooled as in THAT. Both receive
-      the temporal-statistics summary through the left tokens.
+      time step and keeps them; right stream ("channel-over-time") is pooled as in THAT. The
+      single-vector output is THAT's sum aggregation plus an attention-pooled residual, so the
+      localization branches add capacity on top of the baseline rather than replacing it.
     """
 
     #
@@ -105,11 +116,33 @@ class THATV(nn.Module):
         #
         self.layer_leakyrelu = nn.LeakyReLU()
         #
-        ## ---- heads: left tokens and right pooled -> the requested embedding width ----
+        ## ---- heads ----
+        ## the single-vector head is THAT's Linear(256 + 32 -> D); the attention-pooled residual is
+        ## added on top and starts at zero
         self.layer_token_proj = nn.Linear(256, var_dim_output)
-        self.layer_right_proj = nn.Linear(32, var_dim_output)
         self.layer_pool_score = nn.Linear(var_dim_output, 1)
-        self.layer_out_norm = nn.LayerNorm(var_dim_output, eps=1e-6)
+        self.layer_pool_proj = nn.Linear(256, var_dim_output)
+        self.layer_output = nn.Linear(256 + 32, var_dim_output)
+        #
+        self.reset_residual_branches()
+
+    #
+    ##
+    def reset_residual_branches(self):
+        """
+        [description]
+        : zero the three localization-specific branches (temporal statistics, attention scores,
+          attention residual). With them at zero, forward() is exactly THAT's single-vector encoder:
+          sum the left convs over time, concat the right pooled vector, one Linear. Training then
+          starts from the baseline solution and adds the localization capacity only as far as it
+          lowers the loss, instead of starting from a randomly-initialised different aggregation.
+        """
+        nn.init.zeros_(self.layer_stats[0].weight)
+        nn.init.zeros_(self.layer_stats[0].bias)
+        nn.init.zeros_(self.layer_pool_score.weight)
+        nn.init.zeros_(self.layer_pool_score.bias)
+        nn.init.zeros_(self.layer_pool_proj.weight)
+        nn.init.zeros_(self.layer_pool_proj.bias)
 
     #
     ##
@@ -131,22 +164,55 @@ class THATV(nn.Module):
 
     #
     ##
+    def _left_conv(self, var_input):
+        """
+        [return]
+        : (var_left_0, var_left_1): (B, 128, N) each, the two length-preserving conv branches over
+          the pooled time tokens, before any time aggregation.
+        """
+        var_stats = self.temporal_statistics(var_input)
+        #
+        var_left = self.layer_left_pooling(var_input.permute(0, 2, 1)).permute(0, 2, 1)
+        var_left = self.layer_left_gaussian(var_left)
+        for var_layer in self.layer_left_encoder:
+            var_left = var_layer(var_left)
+        #
+        ## inject the temporal statistics AFTER the encoder's LayerNorm: added before it, the
+        ## per-token normalisation would strip most of the shift again
+        var_left = self.layer_left_norm(var_left) + var_stats.unsqueeze(1)
+        var_left = var_left.permute(0, 2, 1)
+        var_left_0 = self.layer_leakyrelu(self.layer_left_cnn_0(var_left))
+        var_left_1 = self.layer_leakyrelu(self.layer_left_cnn_1(var_left))
+        #
+        return var_left_0, var_left_1
+
+    #
+    ##
+    def _right_pooled(self, var_input):
+        """
+        [return]
+        : (B, 32): THAT's right stream, pooled over the channel axis and summed over time.
+        """
+        var_right = self.layer_right_pooling(var_input.permute(0, 2, 1))
+        for var_layer in self.layer_right_encoder:
+            var_right = var_layer(var_right)
+        var_right = self.layer_right_norm(var_right).permute(0, 2, 1)
+        var_right_0 = self.layer_leakyrelu(self.layer_right_cnn_0(var_right))
+        var_right_1 = self.layer_leakyrelu(self.layer_right_cnn_1(var_right))
+        var_right = torch.cat([var_right_0.sum(-1), var_right_1.sum(-1)], dim=-1)
+        #
+        return self.layer_right_dropout(var_right)
+
+    #
+    ##
     def forward_sequence(self, var_input):
         """
         [return]
         : tokens: (B, N, D) with N = pooled time steps, for sequence heads (AMAR_WO_RVQ).
         """
-        var_stats = self.temporal_statistics(var_input)
-        #
-        ## left stream, keeping the time axis
-        var_left = self.layer_left_pooling(var_input.permute(0, 2, 1)).permute(0, 2, 1)
-        var_left = self.layer_left_gaussian(var_left) + var_stats.unsqueeze(1)
-        for var_layer in self.layer_left_encoder:
-            var_left = var_layer(var_left)
-        var_left = self.layer_left_norm(var_left).permute(0, 2, 1)
-        var_left_0 = self.layer_leakyrelu(self.layer_left_cnn_0(var_left))
-        var_left_1 = self.layer_leakyrelu(self.layer_left_cnn_1(var_left))
-        var_left = self.layer_left_dropout(torch.cat([var_left_0, var_left_1], dim=1))
+        var_left_0, var_left_1 = self._left_conv(var_input)
+        var_left = torch.cat([var_left_0, var_left_1], dim=1)
+        var_left = self.layer_left_dropout(var_left)
         #
         return self.layer_token_proj(var_left.permute(0, 2, 1))
 
@@ -157,18 +223,20 @@ class THATV(nn.Module):
         [return]
         : embedding: (B, D) single vector per window, for single-vector heads (DensityMapNet).
         """
-        var_tokens = self.forward_sequence(var_input)
+        var_left_0, var_left_1 = self._left_conv(var_input)
         #
-        ## right stream, pooled over the channel axis as in THAT
-        var_right = self.layer_right_pooling(var_input.permute(0, 2, 1))
-        for var_layer in self.layer_right_encoder:
-            var_right = var_layer(var_right)
-        var_right = self.layer_right_norm(var_right).permute(0, 2, 1)
-        var_right_0 = self.layer_leakyrelu(self.layer_right_cnn_0(var_right))
-        var_right_1 = self.layer_leakyrelu(self.layer_right_cnn_1(var_right))
-        var_right = self.layer_right_dropout(torch.cat([var_right_0.sum(-1), var_right_1.sum(-1)], dim=-1))
+        ## THAT base: sum each left conv over time, concat the right pooled vector, one Linear. The
+        ## sum (not a mean) keeps the total-mass cue the density head reads its count from.
+        var_left = torch.cat([var_left_0.sum(-1), var_left_1.sum(-1)], dim=-1)
+        var_left = self.layer_left_dropout(var_left)
+        var_right = self._right_pooled(var_input)
+        var_output = self.layer_output(torch.cat([var_left, var_right], dim=-1))
         #
-        ## learned attention pooling over the left tokens + the right pooled features
-        var_weights = torch.softmax(self.layer_pool_score(var_tokens).squeeze(-1), dim=1)
-        var_pooled = (var_tokens * var_weights.unsqueeze(-1)).sum(dim=1)
-        return self.layer_out_norm(var_pooled + self.layer_right_proj(var_right))
+        ## localization residual: softmax-weighted average of the same left tokens. Scores and
+        ## projection are zero-init, so this term is 0 at build time and only learns if it helps.
+        var_tokens = torch.cat([var_left_0, var_left_1], dim=1)
+        var_scores = self.layer_pool_score(self.layer_token_proj(var_tokens.permute(0, 2, 1)))
+        var_weights = torch.softmax(var_scores.squeeze(-1), dim=1)
+        var_pooled = (var_tokens * var_weights.unsqueeze(1)).sum(dim=-1)
+        #
+        return var_output + self.layer_pool_proj(var_pooled)
