@@ -125,6 +125,15 @@ def format_result(var_model, var_task, result, var_few_shot_ratio, var_kd_weight
                          f"± {stats['se_occupancy_accuracy']:.4f} (SE)")
             lines.append(f"  Avg Occupancy F1: {stats['avg_occupancy_f1']:.4f} "
                          f"± {stats['se_occupancy_f1']:.4f} (SE)")
+            if "avg_mass_accuracy" in stats:
+                lines.append(f"  Avg Layout-free Mass Accuracy: {stats['avg_mass_accuracy']:.4f} "
+                             f"± {stats['se_mass_accuracy']:.4f} (SE)")
+                lines.append(f"  Avg Layout-free Mass MAE: {stats['avg_mass_mae']:.4f} "
+                             f"± {stats['se_mass_mae']:.4f} (SE)")
+                lines.append(f"  Avg Position Error (m): {stats['avg_position_error_m']:.4f} "
+                             f"± {stats['se_position_error_m']:.4f} (SE)")
+                lines.append(f"  Avg Position Miss Rate: {stats['avg_position_miss_rate']:.4f} "
+                             f"± {stats['se_position_miss_rate']:.4f} (SE)")
         else:
             for metric, label in (("precision", "Precision"), ("recall", "Recall"),
                                   ("PPP", "Perfect Prediction %"), ("f1_score", "F1 Score"),
@@ -228,7 +237,7 @@ def run():
     ## write the JSON and the human-readable report to auto-named files, so the per-teacher-room and
     ## repeated runs never collide and never need renaming
     var_stem = build_run_stem(var_model, var_task, f"train-{var_env}",
-                              f"test-{join_envs(other_envs)}", f"k{var_args.few_shot_ratio}",
+                              f"test-{join_envs(list(test_sets_by_env))}", f"k{var_args.few_shot_ratio}",
                               f"r{var_repeat}", f"e{var_args.epochs}", run_timestamp())
     var_json_path, var_txt_path = save_run_outputs(
         preset["path"].get("save_dir", "output"), "few_shot", var_stem, result, formatted)

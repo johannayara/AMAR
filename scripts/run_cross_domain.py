@@ -124,6 +124,15 @@ def format_result(var_model, var_task, result):
                 lines.append(f"  Count MAE: {env_results['avg_mae']:.4f} ± {env_results['se_mae']:.4f} (SE)")
                 lines.append(f"  Occupancy Accuracy: {env_results['avg_occupancy_accuracy']:.4f} ± {env_results['se_occupancy_accuracy']:.4f} (SE)")
                 lines.append(f"  Occupancy F1: {env_results['avg_occupancy_f1']:.4f} ± {env_results['se_occupancy_f1']:.4f} (SE)")
+                if 'avg_mass_accuracy' in env_results:
+                    lines.append(f"  Layout-free Mass Accuracy: {env_results['avg_mass_accuracy']:.4f} "
+                                 f"± {env_results['se_mass_accuracy']:.4f} (SE)")
+                    lines.append(f"  Layout-free Mass MAE: {env_results['avg_mass_mae']:.4f} "
+                                 f"± {env_results['se_mass_mae']:.4f} (SE)")
+                    lines.append(f"  Position Error (m): {env_results['avg_position_error_m']:.4f} "
+                                 f"± {env_results['se_position_error_m']:.4f} (SE)")
+                    lines.append(f"  Position Miss Rate: {env_results['avg_position_miss_rate']:.4f} "
+                                 f"± {env_results['se_position_miss_rate']:.4f} (SE)")
                 per_class = env_results.get('per_class_accuracy', {})
                 if per_class:
                     lines.append("  Per-count Accuracy: "

@@ -32,7 +32,9 @@ import time
 import numpy as np
 import torch
 import torch.nn.functional as F
-from scipy.ndimage import center_of_mass, label, maximum_filter
+from scipy.ndimage import center_of_mass, label, maximum, maximum_filter
+from scipy.optimize import linear_sum_assignment
+from scipy.spatial.distance import cdist
 from sklearn.model_selection import train_test_split
 from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import TensorDataset
@@ -235,31 +237,45 @@ class DensityMapNet(torch.nn.Module):
 ## --------------------------------------------- metrics ---------------------------------------- ##
 #
 ##
-def _extract_peaks(var_map, var_threshold_frac, var_abs_floor=0.0):
+def _peaks_with_values(var_map, var_threshold_frac, var_abs_floor=0.0):
     """
     [description]
-    : return the (x, y) normalized coordinates of the local maxima of a single density map. A cell is
-      a peak when it is the maximum of its 3x3 neighbourhood and clears max(threshold_frac * map_max,
-      abs_floor). abs_floor is the absolute gate: a map whose maximum is below it has no peaks at all,
-      and no cell below it counts, so a low-amplitude near-empty map no longer yields spurious peaks.
+    : local maxima of a single density map, with the value of each one. A cell is a peak when it is the
+      maximum of its 3x3 neighbourhood and clears max(threshold_frac * map_max, abs_floor). Adjacent
+      peak cells form one component, which contributes its centroid as the position and its maximum as
+      the value, so a broad blob is one peak, not many.
     : var_abs_floor: absolute lower bound on the map maximum and on each peak value (normally the
-      validation-calibrated count threshold). 0.0 keeps the old relative-only behaviour.
+      validation-calibrated count threshold). 0.0 keeps the relative-only behaviour.
+    : return: (positions (M, 2) normalized, values (M,))
     """
     #
+    var_map = np.asarray(var_map, dtype=np.float32)
     var_max = float(var_map.max())
     if var_max <= 0 or var_max < var_abs_floor:
-        return np.zeros((0, 2), dtype=np.float32)
+        return np.zeros((0, 2), dtype=np.float32), np.zeros((0,), dtype=np.float32)
     #
     var_cut = max(var_threshold_frac * var_max, var_abs_floor)
     var_mask = (var_map == maximum_filter(var_map, size=3)) & (var_map > var_cut)
     var_labels, var_num = label(var_mask)
     if var_num == 0:
-        return np.zeros((0, 2), dtype=np.float32)
+        return np.zeros((0, 2), dtype=np.float32), np.zeros((0,), dtype=np.float32)
     #
     var_height, var_width = var_map.shape
     var_centroids = center_of_mass(var_map, var_labels, range(1, var_num + 1))
+    var_values = maximum(var_map, var_labels, range(1, var_num + 1))
+    var_positions = np.array([[var_c[1] / var_width, var_c[0] / var_height] for var_c in var_centroids],
+                             dtype=np.float32)
     #
-    return np.array([[var_c[1] / var_width, var_c[0] / var_height] for var_c in var_centroids], dtype=np.float32)
+    return var_positions, np.asarray(var_values, dtype=np.float32)
+
+
+def _extract_peaks(var_map, var_threshold_frac, var_abs_floor=0.0):
+    """
+    [description]
+    : return the (x, y) normalized coordinates of the local maxima of a single density map. See
+      _peaks_with_values for the peak definition; this is the positions-only view used for plotting.
+    """
+    return _peaks_with_values(var_map, var_threshold_frac, var_abs_floor)[0]
 
 
 def normalized_to_meters(var_xy):
@@ -304,6 +320,74 @@ def _format_positions_meters(var_positions, var_max_shown=8):
     if len(var_positions) > var_max_shown:
         var_shown += f", ... (+{len(var_positions) - var_max_shown} more)"
     return var_shown
+
+
+def occupancy_to_positions(var_occupancy, var_layout):
+    """
+    [description]
+    : the true (x, y) positions in meters of every occupied location of a batch, from the 0/1 occupancy
+      targets and the room layout. Used only to score a layout-free prediction; the model itself never
+      sees the layout.
+    : var_occupancy: array (N, num_locations) of 0/1 occupancy targets
+    : var_layout: dict {letter: (x_norm, y_norm)} of the room
+    : return: list of (M, 2) float32 arrays in meters, one per sample (empty array for a count of 0)
+    """
+    var_names = sorted(var_layout)
+    var_out = []
+    for var_row in np.asarray(var_occupancy):
+        var_occupied = [var_name for var_name, var_flag in zip(var_names, var_row) if var_flag > 0.5]
+        if var_occupied:
+            var_out.append(normalized_to_meters([var_layout[var_name] for var_name in var_occupied]))
+        else:
+            var_out.append(np.zeros((0, 2), dtype=np.float32))
+    return var_out
+
+
+def position_error_metrics(var_pred_positions, var_true_positions):
+    """
+    [description]
+    : localization error of a layout-free prediction, in meters. Predicted peaks are matched to the
+      true occupied positions one-to-one with a minimum-cost assignment (Hungarian); an unmatched
+      position costs the frame diagonal sqrt(2) * METERS_PER_UNIT, so a missing or spurious peak is
+      penalized as a full-frame miss rather than ignored.
+    : var_pred_positions: list of (M, 2) predicted peak positions in meters, one per sample
+    : var_true_positions: list of (K, 2) true positions in meters, one per sample
+    : return: dict with the mean per-true-position error, the fraction of true positions left
+      unmatched, and the fraction of predicted peaks that are spurious (over-prediction)
+    """
+    var_penalty = float(np.sqrt(2.0) * METERS_PER_UNIT)
+    var_errors, var_misses, var_spurious, var_true_total = [], 0, 0, 0
+    for var_pred, var_true in zip(var_pred_positions, var_true_positions):
+        var_pred = np.asarray(var_pred, dtype=np.float64).reshape(-1, 2)
+        var_true = np.asarray(var_true, dtype=np.float64).reshape(-1, 2)
+        var_true_total += len(var_true)
+        if len(var_true) == 0:
+            ## every peak on an empty frame is spurious
+            var_spurious += len(var_pred)
+            continue
+        if len(var_pred) == 0:
+            var_errors.extend([var_penalty] * len(var_true))
+            var_misses += len(var_true)
+            continue
+        var_size = max(len(var_true), len(var_pred))
+        var_cost = np.full((var_size, var_size), var_penalty)
+        var_cost[:len(var_true), :len(var_pred)] = cdist(var_true, var_pred)
+        var_rows, var_cols = linear_sum_assignment(var_cost)
+        for var_row, var_col in zip(var_rows, var_cols):
+            if var_row >= len(var_true):
+                ## an extra predicted peak matched to a dummy true position
+                var_spurious += 1
+                continue
+            var_cost_value = float(var_cost[var_row, var_col])
+            var_errors.append(var_cost_value)
+            var_misses += int(var_cost_value >= var_penalty - 1e-9)
+    #
+    return {
+        "position_error_m": float(np.mean(var_errors)) if var_errors else float("nan"),
+        "position_miss_rate": float(var_misses / var_true_total) if var_true_total else float("nan"),
+        "position_false_positive_rate": (float(var_spurious / var_true_total)
+                                         if var_true_total else float("nan")),
+    }
 
 
 def _binary_f1(var_true, var_pred):
@@ -559,6 +643,153 @@ def resolve_count_decision(var_occupancy, var_true_count, var_map_max):
     return var_empty_threshold, var_count_threshold
 
 
+def layout_free_calibration(var_valid_density, var_true_count):
+    """
+    [description]
+    : calibrate the two layout-free count rules on the validation split, from the predicted maps alone
+      (no room layout involved):
+      - peak_threshold: a peak counts when its value is strictly above it. Swept over the midpoints of
+        the observed peak values, keeping the one that maximizes balanced count accuracy, so the
+        threshold can be raised until a near-empty map yields no peaks.
+      - per_person_mass: the map mass one person contributes. The value that minimizes the count MAE
+        of round(map_sum / mass) on the validation split, grid-searched between the observed
+        mass-per-person ratios. A plain median is biased low when occupied locations sit near the
+        frame edge (their kernel is clipped), so rounding under-counts those frames.
+    : var_valid_density: numpy (N, H, W) predicted maps of the validation split
+    : var_true_count: (N,) integer true counts
+    : return: (peak_threshold, per_person_mass)
+    """
+    var_true_count = np.asarray(var_true_count).astype(int)
+    var_num_classes = preset["nn"]["num_count_classes"]
+    var_threshold_frac = preset["density"]["peak_threshold"]
+    #
+    var_peak_values, var_map_sum = [], []
+    for var_map in np.asarray(var_valid_density):
+        var_peak_values.append(_peaks_with_values(var_map, var_threshold_frac, 0.0)[1])
+        var_map_sum.append(float(np.sum(var_map)))
+    var_map_sum = np.asarray(var_map_sum, dtype=np.float64)
+    #
+    ## candidates sit between the observed peak values, plus one below the smallest (count everything)
+    ## and one above the largest (count nothing)
+    var_all_values = np.concatenate(var_peak_values) if var_peak_values else np.zeros((0,), dtype=np.float32)
+    if len(var_all_values):
+        var_sorted = np.unique(var_all_values)
+        var_candidates = np.concatenate([[var_sorted[0] - 1.0],
+                                         (var_sorted[:-1] + var_sorted[1:]) / 2.0,
+                                         [var_sorted[-1] + 1.0]])
+    else:
+        var_candidates = np.array([1e-6])
+    var_best_threshold, var_best_score, var_best_margin = float(var_candidates[0]), -1.0, -1.0
+    for var_threshold in var_candidates:
+        var_counts = np.array([int(np.sum(var_values > var_threshold)) for var_values in var_peak_values])
+        var_score = _balanced_accuracy(var_true_count, var_counts, var_num_classes, 0)
+        var_margin = (float(np.min(np.abs(var_all_values - var_threshold))) if len(var_all_values)
+                      else float("inf"))
+        if (var_score > var_best_score
+                or (var_score == var_best_score and var_margin > var_best_margin)):
+            var_best_threshold, var_best_score, var_best_margin = float(var_threshold), var_score, var_margin
+    #
+    var_nonempty = var_true_count > 0
+    if var_nonempty.any():
+        ## grid-search the mass that minimizes the count MAE: a plain median of map_sum/count is
+        ## biased low when the occupied locations sit near the frame edge (their kernel is clipped),
+        ## so rounding under-counts those frames; the grid picks the value that balances the error
+        var_ratios = var_map_sum[var_nonempty] / var_true_count[var_nonempty]
+        var_lo, var_hi = float(var_ratios.min()), float(var_ratios.max())
+        var_candidates = (np.linspace(var_lo * 0.5, var_hi * 1.5, 400)
+                          if var_hi > var_lo else np.array([var_lo]))
+        var_mass, var_best_mae = float(var_candidates[0]), np.inf
+        for var_candidate in var_candidates:
+            var_mae = float(np.mean(np.abs(np.round(var_map_sum / var_candidate) - var_true_count)))
+            if var_mae < var_best_mae:
+                var_mass, var_best_mae = float(var_candidate), var_mae
+    else:
+        var_mass = float(var_map_sum.max()) if len(var_map_sum) else 1.0
+    var_mass = max(var_mass, 1e-6)
+    #
+    return var_best_threshold, var_mass
+
+
+def layout_free_counts(var_density, var_peak_threshold, var_mass, var_empty_threshold=None):
+    """
+    [description]
+    : the two layout-free counts of a batch, plus the predicted peak positions.
+      - peak count: number of map peaks whose value is strictly above var_peak_threshold.
+      - mass count: round(map_sum / per_person_mass), forced to 0 when the map maximum is below the
+        empty gate (the same map-max gate the template rule uses).
+    : var_density: numpy (N, H, W) predicted maps
+    : var_peak_threshold: absolute peak value threshold from layout_free_calibration
+    : var_mass: per-person map mass from layout_free_calibration
+    : var_empty_threshold: optional map-max gate; None disables it
+    : return: (peak_counts (N,), mass_counts (N,), peak_positions list of (M, 2) arrays in meters)
+    """
+    var_threshold_frac = preset["density"]["peak_threshold"]
+    var_peak_counts, var_mass_counts, var_positions = [], [], []
+    for var_map in np.asarray(var_density):
+        var_peaks, var_values = _peaks_with_values(var_map, var_threshold_frac, 0.0)
+        var_peak_counts.append(int(np.sum(var_values > var_peak_threshold)))
+        var_mass_counts.append(int(round(float(np.sum(var_map)) / var_mass)))
+        var_positions.append(normalized_to_meters(var_peaks))
+    var_peak_counts = np.asarray(var_peak_counts, dtype=int)
+    var_mass_counts = np.asarray(var_mass_counts, dtype=int)
+    if var_empty_threshold is not None:
+        var_mass_counts = np.where(density_map_maxima(var_density) < var_empty_threshold, 0, var_mass_counts)
+    return var_peak_counts, var_mass_counts, var_positions
+
+
+def evaluate_count_rule(var_rule, var_pred_density, var_true_y, var_layout, var_kernels,
+                        var_occ_threshold, var_empty_threshold,
+                        var_peak_threshold=None, var_mass=None):
+    """
+    [description]
+    : full metric dict of one evaluated room under the chosen count rule.
+      "template": count = number of the room's known locations whose per-location occupancy readout
+        clears var_occ_threshold (the original rule; needs the layout).
+      "layout_free": count = number of map peaks above var_peak_threshold, with the mass count and the
+        position error reported alongside; the per-location occupancy readout is still reported as an
+        auxiliary metric but plays no part in the count.
+    : var_pred_density: numpy (N, H, W) predicted maps
+    : var_true_y: (N, num_locations) 0/1 occupancy targets (ground truth, for scoring only)
+    : var_layout: dict of the room, used to score positions (never fed to the model)
+    : var_kernels: tensor (num_locations, H, W) used for the auxiliary occupancy readout
+    : return: (metrics dict, extras dict with the raw occupancy / positions / counts)
+    """
+    var_pred_density = np.asarray(var_pred_density, dtype=np.float32)
+    var_true_y = np.asarray(var_true_y)
+    var_true_count = var_true_y.sum(axis=1).round().astype(int)
+    var_occupancy = sample_location_occupancy(
+        torch.from_numpy(var_pred_density), torch.as_tensor(var_kernels)).numpy()
+    var_map_max = density_map_maxima(var_pred_density)
+    #
+    if var_rule == "template":
+        var_metrics = count_metrics(
+            var_true_count,
+            predict_counts_staged(var_occupancy, var_map_max, var_occ_threshold, var_empty_threshold),
+            var_true_y, var_occupancy, var_occ_threshold)
+        return var_metrics, {"occupancy": var_occupancy}
+    #
+    var_peak_counts, var_mass_counts, var_positions = layout_free_counts(
+        var_pred_density, var_peak_threshold, var_mass, var_empty_threshold)
+    var_peak_metrics = count_metrics(var_true_count, var_peak_counts, var_true_y, var_occupancy, var_occ_threshold)
+    var_mass_metrics = count_metrics(var_true_count, var_mass_counts, None, None, var_occ_threshold)
+    var_position_metrics = position_error_metrics(var_positions, occupancy_to_positions(var_true_y, var_layout))
+    var_metrics = {
+        "accuracy": var_peak_metrics["accuracy"],
+        "balanced_accuracy": var_peak_metrics["balanced_accuracy"],
+        "mae": var_peak_metrics["mae"],
+        "per_class_accuracy": var_peak_metrics["per_class_accuracy"],
+        "mass_accuracy": var_mass_metrics["accuracy"],
+        "mass_balanced_accuracy": var_mass_metrics["balanced_accuracy"],
+        "mass_mae": var_mass_metrics["mae"],
+        "mass_per_class_accuracy": var_mass_metrics["per_class_accuracy"],
+        "occupancy_accuracy": var_peak_metrics["occupancy_accuracy"],
+        "occupancy_f1": var_peak_metrics["occupancy_f1"],
+        **var_position_metrics,
+    }
+    return var_metrics, {"occupancy": var_occupancy, "positions": var_positions,
+                         "peak_counts": var_peak_counts, "mass_counts": var_mass_counts}
+
+
 def visualize_density_map(data_true_density,
                           data_pred_density,
                           save_dir,
@@ -567,7 +798,9 @@ def visualize_density_map(data_true_density,
                           var_tag="density_map",
                           var_layout=None,
                           var_true_occupancy=None,
-                          var_peak_floor=None):
+                          var_peak_floor=None,
+                          var_pred_peak_counts=None,
+                          var_pred_mass_counts=None):
     """
     [description]
     : plot the ground-truth and predicted density maps for a spread of test samples (one row per
@@ -586,6 +819,9 @@ def visualize_density_map(data_true_density,
       threshold from resolve_count_decision. A map whose maximum is below it shows no peaks, and no
       cell below it counts, so the peak count uses the same bar as the reported count instead of the
       much looser empty-gate threshold.
+    : var_pred_peak_counts / var_pred_mass_counts: optional (N,) inferred counts per sample; when
+      given, the prediction panel title shows the layout-free peak count and mass count, so the figure
+      states the number the model actually predicts rather than only how many circles are drawn.
     [return]
     : out_path: str, path of the saved figure
     """
@@ -609,6 +845,10 @@ def visualize_density_map(data_true_density,
     #
     for var_row, var_idx in enumerate(var_pick):
         var_true_occ = None if var_true_occupancy is None else np.asarray(var_true_occupancy)[var_idx]
+        var_peak_count_row = (None if var_pred_peak_counts is None
+                              else int(np.asarray(var_pred_peak_counts)[var_idx]))
+        var_mass_count_row = (None if var_pred_mass_counts is None
+                              else int(np.asarray(var_pred_mass_counts)[var_idx]))
         var_maps = ((data_true_density[var_idx], "ground truth", var_true_occ),
                     (data_pred_density[var_idx], "prediction", None))
         var_true_pos, var_pred_pos = None, None
@@ -642,9 +882,16 @@ def visualize_density_map(data_true_density,
                 var_true_pos = var_positions_m
             else:
                 var_pred_pos = var_positions_m
+                if var_peak_count_row is not None:
+                    var_count_note = f"count {var_peak_count_row}"
+                    if var_mass_count_row is not None:
+                        var_count_note += f", mass {var_mass_count_row}"
+                    var_ax.set_title(f"{var_ax.get_title()} ({var_count_note})")
         #
         print(f"  [sample {var_idx}] true {_format_positions_meters(var_true_pos)} m | "
-              f"pred {_format_positions_meters(var_pred_pos)} m")
+              f"pred {_format_positions_meters(var_pred_pos)} m"
+              + (f" | count peaks {var_peak_count_row} mass {var_mass_count_row}"
+                 if var_peak_count_row is not None else ""))
     #
     var_fig.tight_layout(rect=[0, 0, 1, 0.96])
     var_out_path = os.path.join(save_dir, f"density_map_{var_tag}.png")
@@ -1130,6 +1377,7 @@ def run_density_map(data_train_x,
     print(f"Using device: {device}")
 
     var_layout = preset["layouts"][var_env]
+    var_count_rule = preset["density"].get("count_rule", "layout_free")
 
     #
     ## ============================================ Preprocess ============================================
@@ -1151,8 +1399,8 @@ def run_density_map(data_train_x,
     ##
     ## ========================================= Train & Evaluate =========================================
     #
-    result_accuracy, result_balanced, result_mae, result_occ_accuracy, result_occ_f1 = [], [], [], [], []
     result_per_class = []
+    var_rep_metrics = []
     #
     var_macs, var_params = get_model_complexity_info(
         DensityMapNet(var_x_shape, var_layout, grid_size=var_grid_size,
@@ -1200,9 +1448,6 @@ def run_density_map(data_train_x,
                 var_density, _, _ = model_density(var_x.to(device))
                 pred_density.append(var_density.cpu())
         pred_density = torch.cat(pred_density, dim=0)
-        ## read the per-location occupancy off the continuous map at this room's known locations
-        pred_occupancy = sample_location_occupancy(pred_density, model_density.kernels.cpu()).numpy()
-        pred_map_max = density_map_maxima(pred_density)
         pred_density = pred_density.numpy()
         var_time_2 = time.time()
         #
@@ -1214,6 +1459,13 @@ def run_density_map(data_train_x,
                 var_valid_density, model_density.kernels).cpu().numpy()
         var_empty_threshold, var_threshold = resolve_count_decision(
             var_valid_occupancy, data_valid_y.sum(axis=1).round(), density_map_maxima(var_valid_density))
+        ## layout-free count rule: calibrate the peak threshold and the per-person mass on the same
+        ## validation split, from the predicted maps alone
+        if var_count_rule == "layout_free":
+            var_peak_threshold, var_mass = layout_free_calibration(
+                var_valid_density.cpu().numpy(), data_valid_y.sum(axis=1).round())
+        else:
+            var_peak_threshold, var_mass = None, None
         #
         ## render the ground-truth density from the occupancy targets with the same kernels
         with torch.no_grad():
@@ -1224,12 +1476,24 @@ def run_density_map(data_train_x,
         #
         ## -------------------------------------- Evaluate ----------------------------------------
         #
-        var_count_metrics = count_metrics(
-            data_test_y.sum(axis=1).round(),
-            predict_counts_staged(pred_occupancy, pred_map_max, var_threshold, var_empty_threshold),
-            data_test_y, pred_occupancy, var_threshold)
+        var_count_metrics, var_extra = evaluate_count_rule(
+            var_count_rule, pred_density, data_test_y, var_layout, model_density.kernels.cpu(),
+            var_threshold, var_empty_threshold, var_peak_threshold, var_mass)
+        var_occupancy = var_extra["occupancy"]
         #
         var_empty_threshold_log = _finite_or_nan(var_empty_threshold)
+        var_metric_logs = {}
+        if "mass_accuracy" in var_count_metrics:
+            var_metric_logs = {
+                "mass_accuracy": var_count_metrics["mass_accuracy"],
+                "mass_balanced_accuracy": var_count_metrics["mass_balanced_accuracy"],
+                "mass_mae": var_count_metrics["mass_mae"],
+                "position_error_m": var_count_metrics["position_error_m"],
+                "position_miss_rate": var_count_metrics["position_miss_rate"],
+                "position_false_positive_rate": var_count_metrics["position_false_positive_rate"],
+                "peak_threshold": var_peak_threshold,
+                "per_person_mass": var_mass,
+            }
         wandb.log({
             "repeat": var_r,
             "train_time": var_time_1 - var_time_0,
@@ -1241,6 +1505,7 @@ def run_density_map(data_train_x,
             "occupancy_f1": var_count_metrics["occupancy_f1"],
             "occupancy_threshold": var_threshold,
             "empty_threshold": var_empty_threshold_log,
+            **var_metric_logs,
         }, step=var_r + 100000)
         #
         print("  COUNT: Acc %.4f - Bal %.4f - MAE %.4f - Occupancy Acc %.4f - Occupancy F1 %.4f - "
@@ -1248,29 +1513,36 @@ def run_density_map(data_train_x,
               % (var_count_metrics["accuracy"], var_count_metrics["balanced_accuracy"],
                  var_count_metrics["mae"], var_count_metrics["occupancy_accuracy"],
                  var_count_metrics["occupancy_f1"], var_threshold, var_empty_threshold_log))
+        if "mass_accuracy" in var_count_metrics:
+            print("  LAYOUT-FREE: peaks Acc %.4f | mass Acc %.4f - mass MAE %.4f | "
+                  "position err %.3f m (miss %.3f, fp %.3f) | peakThr %.4f - mass/person %.3f"
+                  % (var_count_metrics["accuracy"], var_count_metrics["mass_accuracy"],
+                     var_count_metrics["mass_mae"], var_count_metrics["position_error_m"],
+                     var_count_metrics["position_miss_rate"],
+                     var_count_metrics["position_false_positive_rate"],
+                     var_peak_threshold, var_mass))
         #
         if var_r == var_repeat - 1:
+            var_peak_floor = var_peak_threshold if var_count_rule == "layout_free" else var_threshold
             var_fig_path = visualize_density_map(true_density, pred_density, save_path,
                                                  var_threshold_frac=preset["density"]["peak_threshold"],
                                                  var_tag=var_env,
                                                  var_layout=var_layout, var_true_occupancy=data_test_y,
-                                                 var_peak_floor=var_threshold)
+                                                 var_peak_floor=var_peak_floor,
+                                                 var_pred_peak_counts=var_extra.get("peak_counts"),
+                                                 var_pred_mass_counts=var_extra.get("mass_counts"))
             ## the standard per-location performance figures, on the binarized occupancy
-            visualize_model_performance(pred_occupancy, data_test_y, save_dir=save_path,
+            visualize_model_performance(var_occupancy, data_test_y, save_dir=save_path,
                                         var_mode="occupancy", var_threshold=var_threshold)
             ## keep the last repeat's weights so a live capture can be run through the model
             save_density_checkpoint(model_density, var_x_shape, var_env, save_path)
             print(f"  Figure saved to {var_fig_path}")
         #
-        result_accuracy.append(var_count_metrics["accuracy"])
-        result_balanced.append(var_count_metrics["balanced_accuracy"])
-        result_mae.append(var_count_metrics["mae"])
-        result_occ_accuracy.append(var_count_metrics["occupancy_accuracy"])
-        result_occ_f1.append(var_count_metrics["occupancy_f1"])
+        var_rep_metrics.append(var_count_metrics)
         result_per_class.append(var_count_metrics["per_class_accuracy"])
         #
         if var_r != var_repeat - 1:
-            del model_density, optimizer, test_loader, pred_density, pred_occupancy, true_density
+            del model_density, optimizer, test_loader, pred_density, var_occupancy, true_density
             torch.cuda.empty_cache()
             gc.collect()
 
@@ -1284,17 +1556,27 @@ def run_density_map(data_train_x,
         return (float(var_values.mean()),
                 float(var_values.std(ddof=1) / np.sqrt(len(var_values))) if len(var_values) > 1 else 0.0)
 
+    ## every numeric metric of the chosen rule, so layout-free adds its mass and position metrics
+    var_metric_names = ["accuracy", "balanced_accuracy", "mae",
+                        "mass_accuracy", "mass_balanced_accuracy", "mass_mae",
+                        "position_error_m", "position_miss_rate", "position_false_positive_rate",
+                        "occupancy_accuracy", "occupancy_f1"]
     results = {}
-    for var_name, var_values in (("accuracy", result_accuracy), ("balanced_accuracy", result_balanced),
-                                 ("mae", result_mae),
-                                 ("occupancy_accuracy", result_occ_accuracy), ("occupancy_f1", result_occ_f1)):
-        var_mean, var_se = mean_se(var_values)
-        results[f"avg_{var_name}"] = var_mean
-        results[f"se_{var_name}"] = var_se
+    for var_name in var_metric_names:
+        if all(var_name in var_rep for var_rep in var_rep_metrics):
+            var_mean, var_se = mean_se([var_rep[var_name] for var_rep in var_rep_metrics])
+            results[f"avg_{var_name}"] = var_mean
+            results[f"se_{var_name}"] = var_se
     results["per_class_accuracy"] = {
         var_class: float(np.mean([var_rep[var_class] for var_rep in result_per_class]))
         for var_class in range(var_num_classes)
     }
+    if all("mass_per_class_accuracy" in var_rep for var_rep in var_rep_metrics):
+        results["mass_per_class_accuracy"] = {
+            var_class: float(np.mean([var_rep["mass_per_class_accuracy"][var_class]
+                                      for var_rep in var_rep_metrics]))
+            for var_class in range(var_num_classes)
+        }
     #
     wandb.log({f"avg_{var_name}": results[f"avg_{var_name}"] for var_name in
                ("accuracy", "balanced_accuracy", "mae", "occupancy_accuracy", "occupancy_f1")})
@@ -1343,6 +1625,7 @@ def run_density_map_cross_domain(train_sets_by_env,
     #
     var_train_envs = list(train_sets_by_env)
     var_layout = preset["layouts"][var_train_envs[0]]
+    var_count_rule = preset["density"].get("count_rule", "layout_free")
     var_grid_size = preset["density"]["grid_size"]
     var_sigma = preset["density"]["sigma"]
     #
@@ -1437,6 +1720,13 @@ def run_density_map_cross_domain(train_sets_by_env,
                 var_kernel_bank[torch.from_numpy(var_valid_room).to(var_kernel_bank.device)]).cpu().numpy()
         var_empty_threshold, var_threshold = resolve_count_decision(
             var_valid_occupancy, var_valid_y.sum(axis=1).round(), density_map_maxima(var_valid_density))
+        ## layout-free count rule: calibrate the peak threshold and the per-person mass on the training
+        ## rooms' validation split, from the predicted maps alone
+        if var_count_rule == "layout_free":
+            var_peak_threshold, var_mass = layout_free_calibration(
+                var_valid_density.cpu().numpy(), var_valid_y.sum(axis=1).round())
+        else:
+            var_peak_threshold, var_mass = None, None
         var_empty_threshold_log = _finite_or_nan(var_empty_threshold)
         #
         ## -------------------------------------- Test per room ----------------------------------------
@@ -1455,25 +1745,30 @@ def run_density_map_cross_domain(train_sets_by_env,
                     var_density, _, _ = model_density(var_x.to(device))
                     var_density_pred.append(var_density.cpu())
             pred_density = torch.cat(var_density_pred, dim=0)
-            ## the map is continuous; read this test room's occupancy off its own known locations
-            var_occupancy = sample_location_occupancy(pred_density, var_test_kernels).numpy()
-            pred_map_max = density_map_maxima(pred_density)
             true_density = torch.einsum("bl,lhw->bhw",
                                         torch.from_numpy(var_y_env),
                                         peak_normalized_kernels(var_test_kernels)).numpy()
             pred_density = pred_density.numpy()
             #
-            var_count_metrics = count_metrics(
-                var_y_env.sum(axis=1).round(),
-                predict_counts_staged(var_occupancy, pred_map_max, var_threshold, var_empty_threshold),
-                var_y_env, var_occupancy, var_threshold)
+            var_count_metrics, var_extra = evaluate_count_rule(
+                var_count_rule, pred_density, var_y_env, preset["layouts"][var_env_name],
+                var_test_kernels, var_threshold, var_empty_threshold,
+                var_peak_threshold, var_mass)
+            var_occupancy = var_extra["occupancy"]
             #
             var_rep = {**var_count_metrics, "threshold": var_threshold,
                        "empty_threshold": var_empty_threshold_log}
             env_rep_metrics.setdefault(var_env_name, []).append(var_rep)
             env_last_density[var_env_name] = (true_density, pred_density)
-            env_last_occupancy[var_env_name] = (var_occupancy, var_threshold, var_y_env)
+            env_last_occupancy[var_env_name] = (var_occupancy, var_threshold, var_y_env, var_extra)
             #
+            var_metric_logs = {}
+            if "mass_accuracy" in var_count_metrics:
+                var_metric_logs = {
+                    f"test_results_per_env/{var_env_name}/{var_name}": var_count_metrics[var_name]
+                    for var_name in ("mass_accuracy", "mass_balanced_accuracy", "mass_mae",
+                                     "position_error_m", "position_miss_rate",
+                                     "position_false_positive_rate")}
             wandb.log({
                 f"test_results_per_env/{var_env_name}/accuracy": var_count_metrics["accuracy"],
                 f"test_results_per_env/{var_env_name}/balanced_accuracy": var_count_metrics["balanced_accuracy"],
@@ -1481,6 +1776,7 @@ def run_density_map_cross_domain(train_sets_by_env,
                 f"test_results_per_env/{var_env_name}/occupancy_accuracy": var_count_metrics["occupancy_accuracy"],
                 f"test_results_per_env/{var_env_name}/occupancy_f1": var_count_metrics["occupancy_f1"],
                 f"test_results_per_env/{var_env_name}/empty_threshold": var_empty_threshold_log,
+                **var_metric_logs,
             }, step=var_r + 100000)
             #
             print(f"  [{var_env_name}] COUNT Acc {var_count_metrics['accuracy']:.4f} - "
@@ -1489,6 +1785,12 @@ def run_density_map_cross_domain(train_sets_by_env,
                   f"Occ Acc {var_count_metrics['occupancy_accuracy']:.4f} - "
                   f"Occ F1 {var_count_metrics['occupancy_f1']:.4f} "
                   f"(Thr {var_threshold:.2f}, EmptyThr {var_empty_threshold_log:.3f})")
+            if "mass_accuracy" in var_count_metrics:
+                print(f"  [{var_env_name}] LAYOUT-FREE mass Acc {var_count_metrics['mass_accuracy']:.4f} - "
+                      f"mass MAE {var_count_metrics['mass_mae']:.4f} - "
+                      f"position err {var_count_metrics['position_error_m']:.3f} m "
+                      f"(miss {var_count_metrics['position_miss_rate']:.3f}, "
+                      f"fp {var_count_metrics['position_false_positive_rate']:.3f})")
         #
         if var_r != var_repeat - 1:
             del model_density, optimizer
@@ -1502,11 +1804,16 @@ def run_density_map_cross_domain(train_sets_by_env,
     ## -------------------------------------- Aggregate per room ----------------------------------------
     #
     var_num_classes = preset["nn"]["num_count_classes"]
-    var_metric_names = ("accuracy", "balanced_accuracy", "mae", "occupancy_accuracy", "occupancy_f1")
+    var_metric_names = ("accuracy", "balanced_accuracy", "mae",
+                        "mass_accuracy", "mass_balanced_accuracy", "mass_mae",
+                        "position_error_m", "position_miss_rate", "position_false_positive_rate",
+                        "occupancy_accuracy", "occupancy_f1")
     results = {}
     for var_env_name, var_rep_list in env_rep_metrics.items():
         var_env_result = {}
         for var_name in var_metric_names:
+            if not all(var_name in var_rep for var_rep in var_rep_list):
+                continue
             var_arr = np.array([var_rep[var_name] for var_rep in var_rep_list])
             var_env_result[f"avg_{var_name}"] = float(var_arr.mean())
             var_std = float(var_arr.std(ddof=1)) if len(var_arr) > 1 else 0.0
@@ -1520,17 +1827,26 @@ def run_density_map_cross_domain(train_sets_by_env,
             var_class: float(np.mean([var_rep["per_class_accuracy"][var_class] for var_rep in var_rep_list]))
             for var_class in range(var_num_classes)
         }
+        if all("mass_per_class_accuracy" in var_rep for var_rep in var_rep_list):
+            var_env_result["mass_per_class_accuracy"] = {
+                var_class: float(np.mean([var_rep["mass_per_class_accuracy"][var_class]
+                                          for var_rep in var_rep_list]))
+                for var_class in range(var_num_classes)
+            }
         results[var_env_name] = var_env_result
         #
         var_true_density, var_pred_density = env_last_density[var_env_name]
-        var_occupancy_last, var_threshold_last, var_y_last = env_last_occupancy[var_env_name]
+        var_occupancy_last, var_threshold_last, var_y_last, var_extra_last = env_last_occupancy[var_env_name]
+        var_peak_floor_last = var_peak_threshold if var_count_rule == "layout_free" else var_threshold_last
         visualize_density_map(var_true_density, var_pred_density,
                               os.path.join(save_path, var_env_name),
                               var_threshold_frac=preset["density"]["peak_threshold"],
                               var_tag=var_env_name,
                               var_layout=preset["layouts"][var_env_name],
                               var_true_occupancy=var_y_last,
-                              var_peak_floor=var_threshold_last)
+                              var_peak_floor=var_peak_floor_last,
+                              var_pred_peak_counts=var_extra_last.get("peak_counts"),
+                              var_pred_mass_counts=var_extra_last.get("mass_counts"))
         ## the standard per-location performance figures, on the binarized occupancy of the last repeat
         visualize_model_performance(var_occupancy_last, var_y_last,
                                     save_dir=os.path.join(save_path, var_env_name),
@@ -1616,6 +1932,7 @@ def run_density_map_few_shot(data_train_x,
         test_sets_by_env[var_env_key] = (var_x_env, np.asarray(var_y_env, dtype=np.float32))
 
     var_layout = preset["layouts"][var_env]
+    var_count_rule = preset["density"].get("count_rule", "layout_free")
     var_grid_size = preset["density"]["grid_size"]
     var_sigma = preset["density"]["sigma"]
 
@@ -1737,6 +2054,13 @@ def run_density_map_few_shot(data_train_x,
         var_empty_threshold, var_threshold = resolve_count_decision(
             var_valid_occupancy, data_teacher_valid_y.sum(axis=1).round(),
             density_map_maxima(var_valid_density))
+        ## layout-free count rule: calibrate the peak threshold and the per-person mass on the student's
+        ## validation split, from the predicted maps alone
+        if var_count_rule == "layout_free":
+            var_peak_threshold, var_mass = layout_free_calibration(
+                var_valid_density.cpu().numpy(), data_teacher_valid_y.sum(axis=1).round())
+        else:
+            var_peak_threshold, var_mass = None, None
         var_empty_threshold_log = _finite_or_nan(var_empty_threshold)
 
         #
@@ -1756,18 +2080,16 @@ def run_density_map_few_shot(data_train_x,
                     var_density, _, _ = student(var_x.to(device))
                     var_density_pred.append(var_density.cpu())
             pred_density = torch.cat(var_density_pred, dim=0)
-            ## the map is continuous; read this test room's occupancy off its own known locations
-            var_occupancy = sample_location_occupancy(pred_density, var_test_kernels).numpy()
-            pred_map_max = density_map_maxima(pred_density)
             true_density = torch.einsum("bl,lhw->bhw",
                                         torch.from_numpy(var_y_env),
                                         peak_normalized_kernels(var_test_kernels)).numpy()
             pred_density = pred_density.numpy()
             #
-            var_count_metrics = count_metrics(
-                var_y_env.sum(axis=1).round(),
-                predict_counts_staged(var_occupancy, pred_map_max, var_threshold, var_empty_threshold),
-                var_y_env, var_occupancy, var_threshold)
+            var_count_metrics, var_extra = evaluate_count_rule(
+                var_count_rule, pred_density, var_y_env, preset["layouts"][var_env_name],
+                var_test_kernels, var_threshold, var_empty_threshold,
+                var_peak_threshold, var_mass)
+            var_occupancy = var_extra["occupancy"]
             #
             var_rep = {**var_count_metrics, "threshold": var_threshold,
                        "empty_threshold": var_empty_threshold_log,
@@ -1775,8 +2097,15 @@ def run_density_map_few_shot(data_train_x,
                        "student_train_time": student_time_1 - student_time_0}
             env_rep_metrics.setdefault(var_env_name, []).append(var_rep)
             env_last_density[var_env_name] = (true_density, pred_density)
-            env_last_occupancy[var_env_name] = (var_occupancy, var_threshold, var_y_env)
+            env_last_occupancy[var_env_name] = (var_occupancy, var_threshold, var_y_env, var_extra)
             #
+            var_metric_logs = {}
+            if "mass_accuracy" in var_count_metrics:
+                var_metric_logs = {
+                    f"test_results_per_env/{var_env_name}/{var_name}": var_count_metrics[var_name]
+                    for var_name in ("mass_accuracy", "mass_balanced_accuracy", "mass_mae",
+                                     "position_error_m", "position_miss_rate",
+                                     "position_false_positive_rate")}
             wandb.log({
                 f"test_results_per_env/{var_env_name}/accuracy": var_count_metrics["accuracy"],
                 f"test_results_per_env/{var_env_name}/balanced_accuracy": var_count_metrics["balanced_accuracy"],
@@ -1787,6 +2116,7 @@ def run_density_map_few_shot(data_train_x,
                 f"test_results_per_env/{var_env_name}/empty_threshold": var_empty_threshold_log,
                 f"test_results_per_env/{var_env_name}/teacher_train_time": teacher_time_1 - teacher_time_0,
                 f"test_results_per_env/{var_env_name}/student_train_time": student_time_1 - student_time_0,
+                **var_metric_logs,
             }, step=var_r + 100000)
             #
             print(f"  [{var_env_name}] COUNT Acc {var_count_metrics['accuracy']:.4f} - "
@@ -1795,6 +2125,12 @@ def run_density_map_few_shot(data_train_x,
                   f"Occ Acc {var_count_metrics['occupancy_accuracy']:.4f} - "
                   f"Occ F1 {var_count_metrics['occupancy_f1']:.4f} "
                   f"(Thr {var_threshold:.2f}, EmptyThr {var_empty_threshold_log:.3f})")
+            if "mass_accuracy" in var_count_metrics:
+                print(f"  [{var_env_name}] LAYOUT-FREE mass Acc {var_count_metrics['mass_accuracy']:.4f} - "
+                      f"mass MAE {var_count_metrics['mass_mae']:.4f} - "
+                      f"position err {var_count_metrics['position_error_m']:.3f} m "
+                      f"(miss {var_count_metrics['position_miss_rate']:.3f}, "
+                      f"fp {var_count_metrics['position_false_positive_rate']:.3f})")
         #
         if var_r == var_repeat - 1:
             ## keep the last repeat's student so a live capture can be run through it
@@ -1809,11 +2145,16 @@ def run_density_map_few_shot(data_train_x,
     ## -------------------------------------- Aggregate per room ----------------------------------------
     #
     var_num_classes = preset["nn"]["num_count_classes"]
-    var_metric_names = ("accuracy", "balanced_accuracy", "mae", "occupancy_accuracy", "occupancy_f1")
+    var_metric_names = ("accuracy", "balanced_accuracy", "mae",
+                        "mass_accuracy", "mass_balanced_accuracy", "mass_mae",
+                        "position_error_m", "position_miss_rate", "position_false_positive_rate",
+                        "occupancy_accuracy", "occupancy_f1")
     results = {}
     for var_env_name, var_rep_list in env_rep_metrics.items():
         var_env_result = {}
         for var_name in var_metric_names:
+            if not all(var_name in var_rep for var_rep in var_rep_list):
+                continue
             var_arr = np.array([var_rep[var_name] for var_rep in var_rep_list])
             var_env_result[f"avg_{var_name}"] = float(var_arr.mean())
             var_std = float(var_arr.std(ddof=1)) if len(var_arr) > 1 else 0.0
@@ -1831,17 +2172,26 @@ def run_density_map_few_shot(data_train_x,
             var_class: float(np.mean([var_rep["per_class_accuracy"][var_class] for var_rep in var_rep_list]))
             for var_class in range(var_num_classes)
         }
+        if all("mass_per_class_accuracy" in var_rep for var_rep in var_rep_list):
+            var_env_result["mass_per_class_accuracy"] = {
+                var_class: float(np.mean([var_rep["mass_per_class_accuracy"][var_class]
+                                          for var_rep in var_rep_list]))
+                for var_class in range(var_num_classes)
+            }
         results[var_env_name] = var_env_result
         #
         var_true_density, var_pred_density = env_last_density[var_env_name]
-        var_occupancy_last, var_threshold_last, var_y_last = env_last_occupancy[var_env_name]
+        var_occupancy_last, var_threshold_last, var_y_last, var_extra_last = env_last_occupancy[var_env_name]
+        var_peak_floor_last = var_peak_threshold if var_count_rule == "layout_free" else var_threshold_last
         visualize_density_map(var_true_density, var_pred_density,
                               os.path.join(save_path, var_env_name),
                               var_threshold_frac=preset["density"]["peak_threshold"],
                               var_tag=var_env_name,
                               var_layout=preset["layouts"][var_env_name],
                               var_true_occupancy=var_y_last,
-                              var_peak_floor=var_threshold_last)
+                              var_peak_floor=var_peak_floor_last,
+                              var_pred_peak_counts=var_extra_last.get("peak_counts"),
+                              var_pred_mass_counts=var_extra_last.get("mass_counts"))
         visualize_model_performance(var_occupancy_last, var_y_last,
                                     save_dir=os.path.join(save_path, var_env_name),
                                     var_mode="occupancy", var_threshold=var_threshold_last)

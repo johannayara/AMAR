@@ -149,6 +149,14 @@ preset = {
         "sigma": 0.08,
         "count_loss_weight": 1.0,
         "peak_threshold": 0.25,  # fraction of the map max used to extract predicted locations
+        ## How the reported count is decided.
+        ##   "layout_free" (default): count = number of predicted map peaks above a validation-
+        ##     calibrated absolute threshold; the map-mass count and the position error are reported
+        ##     alongside. Needs no knowledge of the room's known locations at inference time.
+        ##   "template": the original rule, count = number of the room's known locations whose
+        ##     per-location occupancy readout clears the calibrated threshold. Kept for reproducing
+        ##     the earlier protocol.
+        "count_rule": "layout_free",
         ## Absolute floor for peak extraction (e.g. the pcap-inference path, which has no validation
         ## split to calibrate an empty gate on). A map whose maximum is below it yields no peaks.
         "peak_abs_floor": 0.0,

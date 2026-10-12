@@ -225,6 +225,15 @@ def format_result(var_model, var_task, result):
                 lines.append(f"  Count MAE: {result['avg_mae']:.4f} ± {result['se_mae']:.4f} (SE)")
                 lines.append(f"  Occupancy Accuracy: {result['avg_occupancy_accuracy']:.4f} ± {result['se_occupancy_accuracy']:.4f} (SE)")
                 lines.append(f"  Occupancy F1: {result['avg_occupancy_f1']:.4f} ± {result['se_occupancy_f1']:.4f} (SE)")
+                if 'avg_mass_accuracy' in result:
+                    lines.append(f"  Layout-free Mass Accuracy: {result['avg_mass_accuracy']:.4f} "
+                                 f"± {result['se_mass_accuracy']:.4f} (SE)")
+                    lines.append(f"  Layout-free Mass MAE: {result['avg_mass_mae']:.4f} "
+                                 f"± {result['se_mass_mae']:.4f} (SE)")
+                    lines.append(f"  Position Error (m): {result['avg_position_error_m']:.4f} "
+                                 f"± {result['se_position_error_m']:.4f} (SE)")
+                    lines.append(f"  Position Miss Rate: {result['avg_position_miss_rate']:.4f} "
+                                 f"± {result['se_position_miss_rate']:.4f} (SE)")
                 per_class = result.get('per_class_accuracy', {})
                 if per_class:
                     formatted = ", ".join(f"{k}:{v:.3f}" for k, v in per_class.items())
