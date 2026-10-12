@@ -41,6 +41,7 @@ from torch.utils.data import TensorDataset
 from ptflops import get_model_complexity_info
 
 from src.models.bce_that import THAT
+from src.models.that_variance import THATV
 from src.models.losses.supervised_loss import OccupancyDistillationLoss
 from configs.preset import preset
 from src.utils import *
@@ -173,7 +174,9 @@ class DensityMapNet(torch.nn.Module):
         if dropout is None:
             dropout = preset["density"].get("decoder_dropout", 0.1)
         #
-        self.backbone = THAT(var_x_shape, [embedding_dim])
+        self.backbone = (THATV(var_x_shape, [embedding_dim])
+                         if preset["nn"].get("backbone", "default") == "thatv"
+                         else THAT(var_x_shape, [embedding_dim]))
         self.grid_size = grid_size
         self.hidden_dim = hidden_dim
         self.dropout = dropout

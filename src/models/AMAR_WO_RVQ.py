@@ -12,6 +12,7 @@ import torch.nn as nn
 from torch.utils.data import TensorDataset
 from ptflops import get_model_complexity_info
 from src.models.modules.molecules import Backbone, Transformer_Encoder, TransformerDecoder
+from src.models.that_variance import THATV
 from src.models.losses.supervised_loss import HungarianMatchingLoss, SetDistillationLoss
 from src.train import train
 from configs.preset import preset
@@ -26,7 +27,14 @@ class AMAR_WO_RVQ(nn.Module):
                  temp_cross=1, n_attention_heads=2, num_queries=5, dim_feedforward=1024, query_dropout_rate=0.0, num_classes=10):
         super().__init__()
         # self.feature_extractor = CNNFeatureExtractor(input_channels=var_x_shape[-1], output_channels=features_dim,embedding_time_dim=embedding_time_dim)
-        self.feature_extractor = Backbone(input_channels=270, output_channels=preset["nn"]["d_embedding"])
+        ## "thatv" swaps the CNN Backbone for a THAT-derived encoder that returns a per-time-step token
+        ## sequence and injects temporal statistics (see src/models/that_variance.py)
+        self.var_sequence_backbone = preset["nn"].get("backbone", "default") == "thatv"
+        if self.var_sequence_backbone:
+            self.feature_extractor = THATV(var_x_shape, [preset["nn"]["d_embedding"]])
+        else:
+            self.feature_extractor = Backbone(input_channels=var_x_shape[-1],
+                                              output_channels=preset["nn"]["d_embedding"])
                                                      # embedding_time_dim=preset["cnn_embedding_time_dim"])
 
         # self.encoder = Transformer_Encoder(var_embedding_shape, num_attention_heads=n_attention_heads,
@@ -47,7 +55,10 @@ class AMAR_WO_RVQ(nn.Module):
         self.decoder.memory_pos_encoding = self.encoder.pos_encoder
     def forward(self, x):
 
-        extracted_features = self.feature_extractor(x)
+        if self.var_sequence_backbone:
+            extracted_features = self.feature_extractor.forward_sequence(x)
+        else:
+            extracted_features = self.feature_extractor(x)
 
         memory = self.encoder(extracted_features)
 

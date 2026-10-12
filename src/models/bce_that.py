@@ -44,8 +44,8 @@ class Gaussian_Position(torch.nn.Module):
         #
         ## var_embedding: shape (var_dim_k, var_dim_feature)
         var_embedding = torch.zeros([var_num_gaussian, var_dim_feature], dtype=torch.float)
-        self.var_embedding = torch.nn.Parameter(var_embedding, requires_grad=True)
-        torch.nn.init.xavier_uniform_(self.var_embedding)
+        self.var_embedding = torch.nn.Parameter(var_embedding, requires_grad=True) # add embedding to params of module 
+        torch.nn.init.xavier_uniform_(self.var_embedding) # fills tensor with values from the xavier uniform distrib. 
         #
         ## var_position: shape (var_dim_time, var_dim_k)
         var_position = torch.arange(0.0, var_dim_time).unsqueeze(1).repeat(1, var_num_gaussian)

@@ -65,6 +65,14 @@ preset = {
         ## under domain shift, so GroupNorm is the room-agnostic choice), or "layer" (GroupNorm with a
         ## single group). AMAR_ENCODER_NORM overrides this from the environment.
         "encoder_norm": "batch",
+        ## Feature extractor for the CSI models.
+        ##   "default": DensityMapNet uses THAT (src/models/bce_that.py), AMAR_WO_RVQ uses its CNN
+        ##     Backbone (src/models/modules/molecules.py). Unchanged behaviour.
+        ##   "thatv": both use THATV (src/models/that_variance.py) — a THAT-derived encoder that keeps
+        ##     per-time-step tokens, injects per-feature temporal statistics (mean/std/first-difference
+        ##     = CSI variance over time) and pools by attention instead of a global sum. Aimed at
+        ##     localization; see the module docstring.
+        "backbone": "default",
         "num_obj_queries": 6, #TODO: change this if more people
         "num_decoder_layers":6,
         "dim_FFN": 512,
