@@ -48,7 +48,8 @@
 ##     `staged_count` nor `empty_threshold` is reachable from the command line; add them to
 ##     SEARCH_SPACE (or pin them) inside sweep_density.py if you want them controlled.
 ##   * trials are isolated only in their JSON/out dir; the figure+checkpoint dirs written under
-##     visualizations/density_map/<env>/<n>/ are not redirected, so a full sweep leaves roughly
+##     visualizations/density_map/<backbone>/<env>/<n>/ (backbone is "default" here, since the sweep
+##     does not set nn.backbone) are not redirected, so a full sweep leaves roughly
 ##     20 MB per trial there. Clean that tree up between sweeps if disk matters.
 #
 set -euo pipefail

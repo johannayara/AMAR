@@ -244,6 +244,34 @@ def format_result(var_model, var_task, result):
 
 #
 ##
+def reserve_viz_dir(var_model, var_backbone, var_env):
+    """
+    [description]
+    : claim a fresh figure/checkpoint directory for one run and return it as a Path.
+    : The backbone is part of the path, mirroring the per-backbone log dir scripts/test.sh writes to,
+    : so runs that differ only in nn.backbone land in separate trees and their artifacts are
+    : attributable at a glance.
+    : The numeric leaf is claimed with mkdir() rather than an is_dir() check followed by a create.
+    : The old check-then-create raced between concurrent runs (the two SLURM array tasks of
+    : scripts/test.sh start in the same second): both saw the same leaf free, both picked it, and both
+    : wrote their checkpoint and figures into visualizations/density_map/classroom/4. mkdir() is
+    : atomic at the OS level, so exactly one run can win a leaf and the loser moves to the next.
+    : return: Path of the created directory
+    """
+    var_root = Path(f'./visualizations/{var_model}/{var_backbone}/{var_env}')
+    var_root.mkdir(parents=True, exist_ok=True)
+    var_index = 1
+    while True:
+        var_path = var_root / str(var_index)
+        try:
+            var_path.mkdir()
+            return var_path
+        except FileExistsError:
+            var_index += 1
+
+
+#
+##
 def run():
     """
     [description]
@@ -297,10 +325,9 @@ def run():
     else:
         raise Exception("Not valid name for model")   
     
-    save_path=Path(f'./visualizations/{var_model}/{var_env}/1')
-    while save_path.is_dir():
-        new_name = str((int(save_path.name)+1))
-        save_path = save_path.parent / new_name
+    ## Every run gets its own figure/checkpoint directory; see reserve_viz_dir for why the backbone
+    ## is in the path and why the numeric leaf is reserved atomically.
+    save_path = reserve_viz_dir(var_model, str(preset["nn"].get("backbone", "default")), var_env)
    
     #
     ## run WiFi-based model
