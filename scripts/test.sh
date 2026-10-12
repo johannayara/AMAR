@@ -1,34 +1,30 @@
 #!/usr/bin/env bash
 #SBATCH --cpus-per-task 1
-#SBATCH --mem 32G
+#SBATCH --mem 16G
 #SBATCH --qos normal
-#SBATCH --time 6:00:00
-#SBATCH --gres gpu:a100:2
-#SBATCH --array=0-2
+#SBATCH --time 4:00:00
+#SBATCH --gres gpu:a100:1
+#SBATCH --array=0-1
 
-#
-## Leave-one-room-out density-map cross-domain run. One array task per held-out room: train on the
-## other two rooms and test on the held-out one. The occupancy threshold is calibrated on the
-## training rooms' validation split only; the held-out room contributes no labels.
-#
 set -euo pipefail
 
 source /software/anaconda3/etc/profile.d/conda.sh
 conda activate AMAR
+# parameters
+model=density_map
+env=classroom
+backbones=(thatv default)
+backbone=${backbones[$SLURM_ARRAY_TASK_ID]}
 
-all_envs=(empty_room meeting_room classroom)
-held_out=${all_envs[$SLURM_ARRAY_TASK_ID]}
-train_envs=""
-for env in "${all_envs[@]}"; do
-    if [ "$env" != "$held_out" ]; then
-        train_envs="${train_envs:+${train_envs},}${env}"
-    fi
-done
-
-mkdir -p "./output/cd/density_map/lor_${held_out}/"
+## one directory per backbone, so the two array tasks never write over each other
+log_dir="./output/${model}/${backbone}/${env}"
+mkdir -p "${log_dir}"
 
 start=$(date +%s)
-WANDB_MODE=offline python scripts/run_cross_domain.py \
-    --model density_map --task location --repeat 5 --train_envs "$train_envs" --epochs 100 \
-    > "./output/cd/density_map/lor_${held_out}/run_$(date +%Y%m%d_%H%M%S).log" 2>&1
-echo "Total runtime held-out $held_out: $(( $(date +%s) - start )) seconds"
+echo "Start: $(date) | backbone=${backbone}"
+export WANDB_MODE=offline
+python scripts/run_main.py --model "${model}" --task location --repeat 3 \
+    --env "${env}" --hp nn.backbone="${backbone}" --epochs 50 \
+  > "${log_dir}/run_$(date +%Y%m%d_%H%M%S).log" 2>&1
+end=$(date +%s)
+echo "Total runtime: $((end - start)) seconds"
