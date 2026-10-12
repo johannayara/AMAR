@@ -194,7 +194,10 @@ Positions live in a fixed per-room `[0, 1]^2` frame built from the dataset's own
 (`src/data/hwild.py`, transcribed from `obtain_parameters.m`), so a model trained on some rooms
 predicts normalized coordinates that denormalize to meters in any room. Per-room metrics, prediction
 scatters and a training-curve plot are written under `visualizations/hwild/`, and the JSON/TXT report
-under `output/hwild/`.
+under `output/hwild/`. Each test room also gets the standard performance figures
+(`count_distributions`, `confusion_matrices`, `confusion_matrices_norm`, `error_distribution`,
+`class_errors`, `prediction_scatter`) with the room's `[0,1]^2` frame split into a fixed
+`preset["viz"]["grid"]` x `preset["viz"]["grid"]` cell grid as the "locations".
 
 Every report also prints a **constant-position baseline** (the mean training-room position). It is the
 reference a room-agnostic model must beat to show it learned a transferable CSI-to-position mapping
@@ -238,7 +241,9 @@ empty set), an H-WILD sample's is a one-element set (the person's UWB position).
 map's peaks to the true set with a Hungarian assignment, so the reported error keeps the multi-user
 structure: set error (matched distance + per-miss penalty), matched MDE, count MAE, exact-count
 accuracy and detection P/R/F1. The report prints the constant-position baseline next to every room,
-so a run that only predicts a room centre is obvious.
+so a run that only predicts a room centre is obvious. Outputs go to `output/lor_all/*.json|txt` and,
+per fold, `visualizations/lor_all/<model>/holdout_<room>/<test_room>/` (training curves, position
+scatter, and the standard per-location figures on the fixed `preset["viz"]["grid"]` cell grid).
 
 ## Available Models
 

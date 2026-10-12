@@ -37,7 +37,8 @@ from torch.utils.data import DataLoader, TensorDataset
 from configs.preset import preset
 from src.models.bce_that import THAT
 from src.models.density_map import get_cosine_schedule_with_warmup, augment_csi
-from src.utils import select_device, save_run_outputs, build_run_stem, join_envs, run_timestamp
+from src.utils import (select_device, save_run_outputs, build_run_stem, join_envs, run_timestamp,
+                       visualize_room_grid_performance)
 import wandb
 
 #
@@ -404,6 +405,11 @@ def run_localization_cross_domain(train_sets_by_room, test_sets_by_room, var_rep
         var_true_xy, var_pred_xy = var_env_last_xy[var_room]
         visualize_localization_predictions(var_true_xy, var_pred_xy, var_room,
                                            os.path.join(save_path, var_room), var_bounds[var_room])
+        ## the standard per-location figures, with the room's grid cells as locations
+        visualize_room_grid_performance([[var_t] for var_t in var_true_xy],
+                                        [[var_p] for var_p in var_pred_xy],
+                                        os.path.join(save_path, var_room),
+                                        var_grid=preset["viz"]["grid"])
         print(f"\n[{var_room}] avg over {var_repeat} repeats: "
               f"MDE {var_env_result['avg_mean_error_m']:.4f} ± {var_env_result['se_mean_error_m']:.4f} m | "
               f"RMSE {var_env_result['avg_rmse_m']:.4f} ± {var_env_result['se_rmse_m']:.4f} m | "

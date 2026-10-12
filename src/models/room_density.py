@@ -34,7 +34,8 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from configs.preset import preset
 from src.models.density_map import DensityMapNet, get_cosine_schedule_with_warmup, augment_csi
-from src.utils import select_device, save_run_outputs, build_run_stem, join_envs, run_timestamp
+from src.utils import (select_device, save_run_outputs, build_run_stem, join_envs, run_timestamp,
+                       visualize_room_grid_performance)
 import wandb
 
 #
@@ -265,12 +266,20 @@ def train_room_density(model, optimizer, data_train_set, data_valid_set, var_bat
             _, _, var_logits = model(var_x)
             var_target = render_multi_targets(var_pos, var_mask, var_grid, var_sigma)
             var_loss = F.binary_cross_entropy_with_logits(var_logits, var_target)
-            optimizer.zero_grad()
-            var_loss.backward()
-            optimizer.step()
-            var_scheduler.step()
-            var_loss_sum += float(var_loss.detach())
-            var_batches += 1
+            ## Skip a non-finite batch: one NaN step corrupts every weight and the run cannot recover.
+            if torch.isfinite(var_loss):
+                optimizer.zero_grad()
+                var_loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+                var_grad_ok = all(torch.isfinite(var_param.grad).all()
+                                  for var_param in model.parameters() if var_param.grad is not None)
+                if var_grad_ok:
+                    optimizer.step()
+                    var_scheduler.step()
+                    var_loss_sum += float(var_loss.detach())
+                    var_batches += 1
+                else:
+                    optimizer.zero_grad(set_to_none=True)
         var_train_loss = var_loss_sum / max(1, var_batches)
         #
         model.eval()
@@ -491,6 +500,9 @@ def run_room_density_cross_domain(train_sets_by_room, test_sets_by_room, var_rep
         var_true_sets, var_pred_sets = var_env_last_sets[var_room]
         visualize_room_density(var_true_sets, var_pred_sets, var_room, os.path.join(save_path, var_room),
                                var_bounds[var_room])
+        ## the standard per-location figures, with the room's grid cells as locations
+        visualize_room_grid_performance(var_true_sets, var_pred_sets, os.path.join(save_path, var_room),
+                                        var_grid=preset["viz"]["grid"])
         print(f"\n[{var_room}] avg over {var_repeat} repeats: "
               f"setErr {var_env_result['avg_mean_error_m']:.4f} ± {var_env_result['se_mean_error_m']:.4f} m | "
               f"matchedMDE {var_env_result['avg_mde_matched_m']:.4f} m | "

@@ -133,7 +133,7 @@ def run():
               f"train {var_train_rooms}\n{'=' * 88}")
         var_train = {var_room: var_sets[var_room] for var_room in var_train_rooms}
         var_test = {var_holdout: var_sets[var_holdout]}
-        var_save_path = f"./visualizations/lor_all/holdout_{var_holdout}"
+        var_save_path = f"./visualizations/lor_all/{var_args.model}/holdout_{var_holdout}"
         os.makedirs(var_save_path, exist_ok=True)
         var_runner = run_set_localization_cross_domain if var_args.model == "set" \
             else run_room_density_cross_domain

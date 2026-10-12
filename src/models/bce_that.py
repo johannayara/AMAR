@@ -7,6 +7,7 @@
 #
 ##
 import time
+import os
 import torch
 import torch.nn.functional as F
 import numpy as np
@@ -123,6 +124,31 @@ class SamePadConv1d(torch.nn.Module):
 ## ------------------------------------------------------------------------------------------ ##
 #
 ##
+def make_channel_norm(var_num_channels):
+    """
+    [description]
+    : build the channel normalization used inside the Encoder CNN branches. preset["nn"]["encoder_norm"]
+      (or AMAR_ENCODER_NORM) selects the kind: "batch" keeps the original BatchNorm1d, while "group"
+      and "layer" use GroupNorm. BatchNorm's running statistics are estimated on the training rooms, so
+      on a held-out room they apply a shift/scale calibrated to the wrong activation distribution;
+      GroupNorm normalizes within each sample and has no such cross-room mismatch.
+    : var_num_channels: number of feature channels entering the conv branch
+    : return: torch.nn.Module
+    """
+    #
+    var_kind = os.environ.get("AMAR_ENCODER_NORM", preset["nn"].get("encoder_norm", "batch"))
+    if var_kind == "layer":
+        return torch.nn.GroupNorm(1, var_num_channels)
+    if var_kind == "group":
+        ## GroupNorm requires the channel count to divide by the group count; take the largest divisor
+        ## up to 8 so e.g. 270 channels use 6 groups and 16/32/128 use 8.
+        for var_groups in range(min(8, var_num_channels), 0, -1):
+            if var_num_channels % var_groups == 0:
+                return torch.nn.GroupNorm(var_groups, var_num_channels)
+        return torch.nn.GroupNorm(1, var_num_channels)
+    return torch.nn.BatchNorm1d(var_num_channels)
+
+
 class Encoder(torch.nn.Module):
     #
     ##
@@ -152,7 +178,7 @@ class Encoder(torch.nn.Module):
             layer = torch.nn.Sequential(SamePadConv1d(var_dim_feature,
                                                       var_dim_feature,
                                                       var_size),
-                                        torch.nn.BatchNorm1d(var_dim_feature),
+                                        make_channel_norm(var_dim_feature),
                                         torch.nn.Dropout(0.1),
                                         torch.nn.LeakyReLU())
             layer_cnn.append(layer)

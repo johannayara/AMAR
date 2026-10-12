@@ -39,7 +39,8 @@ from src.models.bce_that import THAT
 from src.models.density_map import get_cosine_schedule_with_warmup, augment_csi
 from src.models.room_density import (set_localization_metrics, visualize_room_density, _resolve_spans,
                                      _resolve_bounds, _true_sets)
-from src.utils import select_device, save_run_outputs, build_run_stem, join_envs, run_timestamp
+from src.utils import (select_device, save_run_outputs, build_run_stem, join_envs, run_timestamp,
+                       visualize_room_grid_performance)
 import wandb
 
 #
@@ -98,6 +99,11 @@ def hungarian_set_loss(var_xy, var_obj, var_pos, var_mask, var_xy_weight=5.0):
     : return: scalar loss
     """
     #
+    ## A diverging batch can make the predictions non-finite; sanitize so the Hungarian assignment
+    ## never sees NaN/Inf (scipy raises on an invalid cost matrix) and the returned loss stays finite.
+    ## The trainer additionally refuses to step on a non-finite loss, so this is only a safety net.
+    var_xy = torch.nan_to_num(var_xy, nan=0.5, posinf=1.0, neginf=0.0)
+    var_obj = torch.nan_to_num(var_obj, nan=0.0, posinf=20.0, neginf=-20.0)
     var_batch, var_queries = var_xy.shape[0], var_xy.shape[1]
     var_xy_sum = var_xy.new_zeros(())
     var_obj_target = var_xy.new_zeros((var_batch, var_queries))
@@ -107,6 +113,7 @@ def hungarian_set_loss(var_xy, var_obj, var_pos, var_mask, var_xy_weight=5.0):
             continue
         var_cost = var_xy_weight * torch.cdist(var_xy[var_idx], var_true, p=1) \
             - torch.sigmoid(var_obj[var_idx]).unsqueeze(1)
+        var_cost = torch.nan_to_num(var_cost, nan=1e6, posinf=1e6, neginf=-1e6)
         var_rows, var_cols = linear_sum_assignment(var_cost.detach().cpu().numpy())
         var_xy_sum = var_xy_sum + F.l1_loss(var_xy[var_idx][var_rows], var_true[var_cols], reduction="sum")
         var_obj_target[var_idx, var_rows] = 1.0
@@ -205,13 +212,21 @@ def train_set_localizer(model, optimizer, data_train_set, data_valid_set, var_ba
             var_pos, var_mask = var_batch[1].to(device), var_batch[2].to(device)
             var_xy, var_obj = model(var_x)
             var_loss = hungarian_set_loss(var_xy, var_obj, var_pos, var_mask)
-            optimizer.zero_grad()
-            var_loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            optimizer.step()
-            var_scheduler.step()
-            var_loss_sum += float(var_loss.detach())
-            var_batches += 1
+            ## Never apply a non-finite loss or gradient: one NaN step corrupts every weight and the
+            ## run cannot recover. Skip the batch instead.
+            if torch.isfinite(var_loss):
+                optimizer.zero_grad()
+                var_loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+                var_grad_ok = all(torch.isfinite(var_param.grad).all()
+                                  for var_param in model.parameters() if var_param.grad is not None)
+                if var_grad_ok:
+                    optimizer.step()
+                    var_scheduler.step()
+                    var_loss_sum += float(var_loss.detach())
+                    var_batches += 1
+                else:
+                    optimizer.zero_grad(set_to_none=True)
         var_train_loss = var_loss_sum / max(1, var_batches)
         #
         model.eval()
@@ -401,6 +416,9 @@ def run_set_localization_cross_domain(train_sets_by_room, test_sets_by_room, var
         var_true_sets, var_pred_sets = var_env_last_sets[var_room]
         visualize_room_density(var_true_sets, var_pred_sets, var_room, os.path.join(save_path, var_room),
                                var_bounds[var_room])
+        ## the standard per-location figures, with the room's grid cells as locations
+        visualize_room_grid_performance(var_true_sets, var_pred_sets, os.path.join(save_path, var_room),
+                                        var_grid=preset["viz"]["grid"])
         print(f"\n[{var_room}] avg over {var_repeat} repeats: "
               f"setErr {var_env_result['avg_mean_error_m']:.4f} ± {var_env_result['se_mean_error_m']:.4f} m | "
               f"matchedMDE {var_env_result['avg_mde_matched_m']:.4f} m | "

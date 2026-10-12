@@ -30,6 +30,14 @@ preset = {
         "wifi_band": ["5"],                           # select WiFi band(s) (e.g., ["2.4"], ["5"], ["2.4", "5"])
         "environment": ["empty_room", "meeting_room", "classroom"],               # select environment(s) (e.g., ["classroom"], ["meeting_room"], ["empty_room"])
         "length": 3000,                                 # default length of CSI
+        ## Pad-masked CSI preprocessing (src/data/csi_preprocess.py). All off by default so the raw
+        ## pipeline is unchanged. The AMAR_CSI_PREPROCESS env var (e.g. "static,temporal,zscore")
+        ## overrides this block for shell-driven ablations.
+        "preprocess": {
+            "static_removal": False,   # subtract each sample's temporal mean per feature (static multipath)
+            "temporal_zscore": False,  # static_removal + divide by the per-feature temporal std
+            "per_room_zscore": False,  # standardize each room with its own pad-masked feature mean/std
+        },
     },
     #
     ## hyperparameters of models
@@ -52,6 +60,11 @@ preset = {
         },
         "cross_attention_temp": 1,
         "weight_decay": 2e-4,
+        ## Channel normalization inside the THAT Encoder CNN branches: "batch" (default, unchanged),
+        ## "group" (GroupNorm; BatchNorm running stats are estimated on the training rooms and shift
+        ## under domain shift, so GroupNorm is the room-agnostic choice), or "layer" (GroupNorm with a
+        ## single group). AMAR_ENCODER_NORM overrides this from the environment.
+        "encoder_norm": "batch",
         "num_obj_queries": 6, #TODO: change this if more people
         "num_decoder_layers":6,
         "dim_FFN": 512,
@@ -181,6 +194,13 @@ preset = {
         "batch_size": 32,
         "lr": 1e-3,
         "weight_decay": 2e-4,
+    },
+
+    ## Grid used by the LOR per-location visualizations (src/utils.visualize_room_grid_performance):
+    ## a room's [0,1]^2 frame is split into viz.grid x viz.grid cells, each cell acting as a
+    ## "location" for the standard count/confusion/error figures.
+    "viz": {
+        "grid": 5,
     },
 }
 

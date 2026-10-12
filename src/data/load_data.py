@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 #
 from configs.preset import preset
+from src.data.csi_preprocess import preprocess_csi
 
 #
 ##
@@ -46,14 +47,18 @@ def load_data_y(var_path_data_y,
 #
 ##
 def load_data_x(var_path_data_x, 
-                var_label_list):
+                var_label_list,
+                var_preprocess = None):
     """
     [description]
     : load CSI amplitude (*.npy)
-    : according to a label list of selected data
+    according to a label list of selected data
     [parameter]
     : var_path_data_x: string, directory of CSI amplitude files
     : var_label_list: list, selected labels
+    : var_preprocess: optional dict overriding preset["data"]["preprocess"] (see csi_preprocess); the
+      AMAR_CSI_PREPROCESS env var also overrides. When any op is enabled the returned array is
+      (N, length, feature) with the trailing axes flattened; otherwise it keeps the raw trailing shape.
     [return]
     : data_x: numpy array, CSI amplitude
     """
@@ -65,6 +70,8 @@ def load_data_x(var_path_data_x,
     # samples first would transiently hold a second full copy of the whole dataset in memory.
     var_length = preset["data"]["length"]
     data_x = None
+    ## the true frame count of every sample, needed to mask the front zero-padding in preprocessing
+    var_lengths = np.zeros(len(var_path_list), dtype = np.int64)
     #
     for var_idx, var_path in enumerate(var_path_list):
         #
@@ -73,6 +80,7 @@ def load_data_x(var_path_data_x,
         if data_x is None:
             data_x = np.zeros((len(var_path_list), var_length) + data_csi.shape[1:], dtype=np.float32)
         #
+        var_lengths[var_idx] = data_csi.shape[0]
         var_pad_length = var_length - data_csi.shape[0]
         #
         if var_pad_length < 0:
@@ -87,7 +95,7 @@ def load_data_x(var_path_data_x,
     if data_x is None:
         data_x = np.zeros((0, var_length), dtype=np.float32)
     #
-    return data_x
+    return preprocess_csi(data_x, var_lengths, var_preprocess)
 
 #
 ##

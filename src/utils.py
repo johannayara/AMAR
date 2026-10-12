@@ -838,6 +838,39 @@ def visualize_model_performance(y_pred, y_true, save_dir="./visualizations",
         'perfect_predictions': perfect_predictions
     }
 
+
+def visualize_room_grid_performance(var_true_sets, var_pred_sets, var_save_dir, var_grid=5,
+                                    var_threshold=0.5):
+    """
+    [description]
+    : grid-cell occupancy view of multi-user localization, for rooms without discrete locations. The
+      room's shared [0, 1]^2 frame is split into var_grid x var_grid cells, each cell is treated as a
+      "location", and the standard per-location figures (count_distributions, confusion matrices,
+      error_distribution, class_errors, prediction_scatter) are produced from cell occupancy: a cell
+      is occupied when a true / predicted position falls in it. This is the general analogue of
+      visualize_model_performance's per-location view for continuous rooms, so the same six figures
+      exist for every room of either dataset.
+    : var_true_sets / var_pred_sets: lists (one per sample) of (k, 2) normalized position arrays
+    : return: the dict returned by visualize_model_performance
+    """
+    #
+    var_num = len(var_true_sets)
+    var_true = np.zeros((var_num, var_grid * var_grid), dtype=np.float32)
+    var_pred = np.zeros_like(var_true)
+    for var_sets, var_out in ((var_true_sets, var_true), (var_pred_sets, var_pred)):
+        for var_idx, var_pos in enumerate(var_sets):
+            var_pos = np.asarray(var_pos, dtype=np.float64).reshape(-1, 2)
+            if var_pos.size == 0:
+                continue
+            var_row = np.clip((var_pos[:, 1] * var_grid).astype(int), 0, var_grid - 1)
+            var_col = np.clip((var_pos[:, 0] * var_grid).astype(int), 0, var_grid - 1)
+            var_out[var_idx, var_row * var_grid + var_col] = 1.0
+    var_class_names = [f"c{var_row}{var_col}"
+                       for var_row in range(var_grid) for var_col in range(var_grid)]
+    return visualize_model_performance(var_pred, var_true, save_dir=var_save_dir, var_mode="occupancy",
+                                       class_names=var_class_names, var_threshold=var_threshold)
+
+
 def log_attention_weights(model, y_pred, y_actual, epoch, var_task = "activity"):
     """
     Log averaged attention weights from all decoder layers to wandb based on count of people.
