@@ -1004,6 +1004,9 @@ def plot_training_curves(var_history, var_save_path, var_tag="training"):
         ("empty-gate threshold", "map max threshold",
          [("valid_empty_threshold", "raw", "-"),
           ("valid_empty_threshold_smoothed", "smoothed (EMA)", "--")]),
+        ("peak threshold (layout-free)", "peak value",
+         [("valid_peak_threshold", "raw", "-"),
+          ("valid_peak_threshold_smoothed", "smoothed (EMA)", "--")]),
         ("learning rate", "lr", [("learning_rate", "lr", "-")]),
     ]
     var_epochs = var_history["epoch"]
@@ -1124,6 +1127,8 @@ def train_density(model,
     #
     var_use_distillation = teacher is not None and kd_loss is not None and kd_weight > 0.0
     var_kd_value = 0.0
+    ## the count rule the checkpoint is selected under, kept in sync with the rule the runners report
+    var_count_rule = preset["density"].get("count_rule", "layout_free")
     #
     var_best_score = -np.inf
     var_best_mae = np.inf
@@ -1139,6 +1144,7 @@ def train_density(model,
     var_ema_occ_f1 = None
     var_ema_threshold = None
     var_ema_empty_threshold = None
+    var_ema_peak_threshold = None
     var_ema_decay = 0.3
     #
     ## per-epoch history, rewritten to var_save_dir after every epoch so the run can be watched live
@@ -1150,7 +1156,8 @@ def train_density(model,
         "valid_occupancy_accuracy", "valid_occupancy_accuracy_smoothed",
         "valid_occupancy_f1", "valid_occupancy_f1_smoothed",
         "valid_occupancy_threshold", "valid_occupancy_threshold_smoothed",
-        "valid_empty_threshold", "valid_empty_threshold_smoothed", "learning_rate")}
+        "valid_empty_threshold", "valid_empty_threshold_smoothed",
+        "valid_peak_threshold", "valid_peak_threshold_smoothed", "learning_rate")}
     #
     var_scheduler = get_cosine_schedule_with_warmup(
         optimizer,
@@ -1239,10 +1246,22 @@ def train_density(model,
         var_true_count = var_valid_y.sum(axis=1).round()
         var_empty_threshold, var_threshold = resolve_count_decision(
             var_valid_occupancy, var_true_count, var_valid_map_max)
+        ## Count rule. Under "layout_free" the count is the number of predicted locations: the map
+        ## peaks above a validation-calibrated absolute threshold, so the checkpoint is selected on
+        ## the same locate-then-count rule the report scores. Under "template" it stays the
+        ## per-location occupancy readout (the earlier protocol).
+        if var_count_rule == "layout_free":
+            var_valid_density_np = var_valid_density.cpu().numpy()
+            var_peak_threshold, var_mass = layout_free_calibration(
+                var_valid_density_np, var_true_count)
+            var_pred_count = layout_free_counts(
+                var_valid_density_np, var_peak_threshold, var_mass)[0]
+        else:
+            var_peak_threshold = None
+            var_pred_count = predict_counts_staged(
+                var_valid_occupancy, var_valid_map_max, var_threshold, var_empty_threshold)
         var_metrics = count_metrics(
-            var_true_count,
-            predict_counts_staged(var_valid_occupancy, var_valid_map_max, var_threshold, var_empty_threshold),
-            var_valid_y, var_valid_occupancy, var_threshold)
+            var_true_count, var_pred_count, var_valid_y, var_valid_occupancy, var_threshold)
         #
         ## smooth every logged series before comparing epochs; the checkpoint is selected on the
         ## smoothed balanced accuracy so the rare empty class counts as much as the crowded ones
@@ -1254,6 +1273,8 @@ def train_density(model,
         var_ema_occ_f1 = _ema_update(var_ema_occ_f1, var_metrics["occupancy_f1"], var_ema_decay)
         var_ema_threshold = _ema_update(var_ema_threshold, var_threshold, var_ema_decay)
         var_ema_empty_threshold = _ema_update(var_ema_empty_threshold, var_empty_threshold_log, var_ema_decay)
+        var_peak_threshold_log = _finite_or_nan(var_peak_threshold)
+        var_ema_peak_threshold = _ema_update(var_ema_peak_threshold, var_peak_threshold_log, var_ema_decay)
         #
         wandb.log({
             "epoch": var_epoch,
@@ -1268,6 +1289,7 @@ def train_density(model,
             "valid_occupancy_f1": var_metrics["occupancy_f1"],
             "valid_occupancy_threshold": var_threshold,
             "valid_empty_threshold": var_empty_threshold_log,
+            "valid_peak_threshold": var_peak_threshold_log,
             "valid_accuracy_smoothed": var_ema_accuracy,
             "valid_balanced_accuracy_smoothed": var_ema_balanced,
             "valid_mae_smoothed": var_ema_mae,
@@ -1275,6 +1297,7 @@ def train_density(model,
             "valid_occupancy_f1_smoothed": var_ema_occ_f1,
             "valid_occupancy_threshold_smoothed": var_ema_threshold,
             "valid_empty_threshold_smoothed": var_ema_empty_threshold,
+            "valid_peak_threshold_smoothed": var_ema_peak_threshold,
             "learning_rate": optimizer.param_groups[0]["lr"],
         })
         #
@@ -1285,7 +1308,8 @@ def train_density(model,
               "- Valid Bal %.4f" % var_metrics["balanced_accuracy"],
               "- Valid MAE %.4f" % var_metrics["mae"],
               "- Thr %.2f" % var_threshold,
-              "- EmptyThr %.3f" % var_empty_threshold_log)
+              "- EmptyThr %.3f" % var_empty_threshold_log,
+              "- PeakThr %.4f" % var_peak_threshold_log)
         #
         ## append the epoch to the history and rewrite the curves, so the run can be watched live
         var_history["epoch"].append(var_epoch)
@@ -1307,6 +1331,8 @@ def train_density(model,
         var_history["valid_occupancy_threshold_smoothed"].append(var_ema_threshold)
         var_history["valid_empty_threshold"].append(var_empty_threshold_log)
         var_history["valid_empty_threshold_smoothed"].append(var_ema_empty_threshold)
+        var_history["valid_peak_threshold"].append(var_peak_threshold_log)
+        var_history["valid_peak_threshold_smoothed"].append(var_ema_peak_threshold)
         var_history["learning_rate"].append(optimizer.param_groups[0]["lr"])
         plot_training_curves(var_history, var_save_dir, var_tag)
         #
@@ -1364,6 +1390,13 @@ def run_density_map(data_train_x,
     : var_loss_mode: "bce" (default) or "dem" (smooth-L1 direct error minimization)
     : return: dict, averaged count and per-location occupancy metrics with SE
     """
+    #
+    ## coordinate-regression head: one head that directly predicts user locations and counts them
+    if preset["density"].get("head", "density") == "coords":
+        var_res = run_density_map_coords({var_env: (data_train_x, data_train_y)},
+                                         {var_env: (data_test_x, data_test_y)},
+                                         var_repeat=var_repeat, save_path=save_path, var_env=var_env)
+        return var_res[var_env]
     #
     ##
     var_output_mode = "raw" if var_loss_mode == "dem" else "probability"
@@ -1616,6 +1649,11 @@ def run_density_map_cross_domain(train_sets_by_env,
     : var_loss_mode: "bce" (default) or "dem" (smooth-L1 direct error minimization)
     : return: dict, env name -> averaged count and per-location occupancy metrics with SE
     """
+    #
+    ## coordinate-regression head: one head that directly predicts user locations and counts them
+    if preset["density"].get("head", "density") == "coords":
+        return run_density_map_coords(train_sets_by_env, test_sets_by_env,
+                                      var_repeat=var_repeat, save_path=save_path)
     #
     var_output_mode = "raw" if var_loss_mode == "dem" else "probability"
     var_run_prefix = "DensityMapCDDEM" if var_loss_mode == "dem" else "DensityMapCD"
@@ -2208,4 +2246,345 @@ def run_density_map_few_shot(data_train_x,
     #
     wandb.finish()
     #
+    return results
+
+
+#
+## ---------------------------------------------------------------------------------------------- ##
+## --------------------------- coordinate-regression head (one head) ---------------------------- ##
+#
+## The alternative to the density grid: a single head that directly regresses the user locations.
+## The head emits `num_queries` coordinate hypotheses and one objectness logit each; a hypothesis is
+## a predicted user when its objectness clears the validation-calibrated threshold, so the count is
+## exactly the number of predicted locations -- no grid and no post-hoc peak extraction. The
+## architecture (SetLocalizer) and the Hungarian set loss are shared with
+## src/models/set_localization.py. Select it with preset["density"]["head"] = "coords".
+#
+##
+
+def occupancy_to_position_batch(var_occupancy, var_layout):
+    """
+    [description]
+    : turn a batch of per-location occupancy vectors into the fixed-size position set the coordinate
+      head regresses: (positions (N, K, 2) normalized to the shared frame, mask (N, K)), K the largest
+      count in the batch, unused slots masked out.
+    : var_occupancy: (N, num_locations) array of 0/1 entries
+    : var_layout: dict {letter: (x_norm, y_norm)}
+    : return: (pos (N, K, 2) float32, mask (N, K) float32)
+    """
+    #
+    var_names = sorted(var_layout)
+    var_occ = np.asarray(var_occupancy)
+    var_k = max(1, int(round(float(var_occ.sum(axis=1).max()))))
+    var_pos = np.zeros((len(var_occ), var_k, 2), dtype=np.float32)
+    var_mask = np.zeros((len(var_occ), var_k), dtype=np.float32)
+    for var_i, var_row in enumerate(var_occ):
+        var_pts = [var_layout[var_name] for var_name, var_flag in zip(var_names, var_row) if var_flag > 0.5]
+        for var_j, var_pt in enumerate(var_pts[:var_k]):
+            var_pos[var_i, var_j] = var_pt
+            var_mask[var_i, var_j] = 1.0
+    return var_pos, var_mask
+
+
+def calibrate_coord_threshold(var_obj, var_true_count, var_grid=np.linspace(0.05, 0.95, 19)):
+    """
+    [description]
+    : pick the objectness threshold whose selected-query count maximizes the balanced per-count
+      accuracy on the split, so the count decision is calibrated rather than fixed.
+    : var_obj: (N, num_queries) objectness logits
+    : return: (threshold, balanced_accuracy)
+    """
+    #
+    var_prob = 1.0 / (1.0 + np.exp(-np.asarray(var_obj, dtype=np.float64)))
+    var_true_count = np.asarray(var_true_count).astype(int)
+    var_num_classes = preset["nn"]["num_count_classes"]
+    var_best_threshold, var_best_score = float(var_grid[0]), -1.0
+    for var_threshold in var_grid:
+        var_counts = (var_prob > var_threshold).sum(axis=1)
+        var_score = _balanced_accuracy(var_true_count, var_counts, var_num_classes, 0)
+        if (var_score > var_best_score
+                or (var_score == var_best_score
+                    and abs(var_threshold - 0.5) < abs(var_best_threshold - 0.5))):
+            var_best_threshold, var_best_score = float(var_threshold), var_score
+    return var_best_threshold, var_best_score
+
+
+def coord_metrics(var_xy, var_obj, var_true_pos, var_true_mask, var_threshold):
+    """
+    [description]
+    : count and location metrics of a coordinate-head batch. A query is a predicted user when its
+      objectness probability clears var_threshold; the count is the number of such queries and the
+      predicted locations are their (x, y) in meters. The position error matches predicted to true
+      locations with a Hungarian assignment (position_error_metrics), penalizing misses and spurious
+      locations, so the localization error keeps the multi-user structure.
+    : var_xy: (N, num_queries, 2) normalized predicted positions
+    : var_obj: (N, num_queries) objectness logits
+    : var_true_pos: (N, K, 2) normalized true positions, var_true_mask: (N, K) 0/1
+    : return: metrics dict
+    """
+    #
+    var_xy = np.asarray(var_xy, dtype=np.float64)
+    var_prob = 1.0 / (1.0 + np.exp(-np.asarray(var_obj, dtype=np.float64)))
+    var_true_pos = np.asarray(var_true_pos, dtype=np.float64)
+    var_true_mask = np.asarray(var_true_mask)
+    var_true_count = var_true_mask.sum(axis=1).round().astype(int)
+    var_pred_positions, var_true_positions, var_pred_counts = [], [], []
+    for var_i in range(len(var_xy)):
+        var_sel = var_prob[var_i] > var_threshold
+        var_pred_positions.append(normalized_to_meters(var_xy[var_i][var_sel]))
+        var_pred_counts.append(int(var_sel.sum()))
+        var_true_positions.append(normalized_to_meters(var_true_pos[var_i][var_true_mask[var_i] > 0.5]))
+    var_metrics = count_metrics(var_true_count, np.asarray(var_pred_counts, dtype=int))
+    var_metrics.update(position_error_metrics(var_pred_positions, var_true_positions))
+    return var_metrics
+
+
+def _plot_coord_curves(var_history, var_save_path, var_tag="coord"):
+    """
+    [description]
+    : write the coordinate-head training history (loss, balanced count accuracy, count MAE, position
+      error) to a PNG and a CSV after every epoch.
+    """
+    if not var_save_path or not var_history.get("epoch"):
+        return None
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    os.makedirs(str(var_save_path), exist_ok=True)
+    var_panels = [("loss", "loss", [("train_loss", "train")]),
+                  ("valid balanced count accuracy", "balanced acc",
+                   [("valid_bal", "raw"), ("valid_bal_smoothed", "smoothed (EMA)")]),
+                  ("valid count MAE", "MAE",
+                   [("valid_mae", "raw"), ("valid_mae_smoothed", "smoothed (EMA)")]),
+                  ("valid position error (m)", "m", [("valid_error_m", "raw")])]
+    var_fig, var_axes = plt.subplots(1, len(var_panels), figsize=(20, 4))
+    for var_ax, (var_title, var_ylabel, var_series) in zip(var_axes, var_panels):
+        for var_key, var_label in var_series:
+            var_ax.plot(var_history["epoch"], var_history[var_key], label=var_label)
+        var_ax.set_title(var_title)
+        var_ax.set_xlabel("epoch")
+        var_ax.set_ylabel(var_ylabel)
+        var_ax.grid(alpha=0.3)
+        var_ax.legend(fontsize=8)
+    var_fig.suptitle(f"{var_tag} - coordinate head")
+    var_fig.tight_layout(rect=[0, 0, 1, 0.94])
+    var_png = os.path.join(str(var_save_path), f"{var_tag}_curves.png")
+    var_fig.savefig(var_png, dpi=110)
+    plt.close(var_fig)
+    var_csv = os.path.join(str(var_save_path), f"{var_tag}_curves.csv")
+    var_keys = ["epoch"] + [var_key for _, _, var_series in var_panels for var_key, _ in var_series]
+    with open(var_csv, "w", newline="") as var_file:
+        var_writer = csv.writer(var_file)
+        var_writer.writerow(var_keys)
+        for var_row in range(len(var_history["epoch"])):
+            var_writer.writerow([var_history[var_key][var_row] for var_key in var_keys])
+    return var_png, var_csv
+
+
+def train_coord(model, optimizer, data_train_set, data_valid_set, var_batch_size, var_epochs, device,
+                patience=150, var_save_dir=None, var_tag="coord"):
+    """
+    [description]
+    : train the coordinate head with the Hungarian set loss (shared with SetLocalizer). The count is
+      the number of queries whose objectness clears the threshold calibrated on the validation split
+      each epoch, and the checkpoint is selected on the EMA-smoothed balanced count accuracy, so model
+      selection tracks the reported locate-then-count rule.
+    : data_train_set / data_valid_set: TensorDataset of (CSI, positions (K,2) normalized, mask (K,))
+    : return: best state dict
+    """
+    from src.models.set_localization import hungarian_set_loss
+    var_train_loader = torch.utils.data.DataLoader(data_train_set, var_batch_size, shuffle=True, pin_memory=True)
+    var_valid_loader = torch.utils.data.DataLoader(data_valid_set, len(data_valid_set))
+    var_scheduler = get_cosine_schedule_with_warmup(
+        optimizer,
+        num_warmup_steps=preset["nn"]["scheduler"]["num_warmup_epochs"] * len(var_train_loader),
+        num_training_steps=var_epochs * len(var_train_loader),
+        min_lr_ratio=preset["nn"]["scheduler"]["min_lr_ratio"])
+    #
+    var_best_score, var_best_mae, var_best_weight, var_counter = -np.inf, np.inf, None, 0
+    var_ema_bal, var_ema_mae, var_ema_decay = None, None, 0.3
+    var_history = {var_key: [] for var_key in ("epoch", "train_loss", "valid_bal", "valid_bal_smoothed",
+                                               "valid_mae", "valid_mae_smoothed", "valid_error_m",
+                                               "valid_threshold")}
+    for var_epoch in range(var_epochs):
+        model.train()
+        var_loss_sum, var_batches = 0.0, 0
+        for var_batch in var_train_loader:
+            var_x, var_pos, var_mask = var_batch[0].to(device), var_batch[1].to(device), var_batch[2].to(device)
+            var_xy, var_obj = model(augment_csi(var_x))
+            var_loss = hungarian_set_loss(var_xy, var_obj, var_pos, var_mask)
+            optimizer.zero_grad()
+            var_loss.backward()
+            optimizer.step()
+            var_scheduler.step()
+            var_loss_sum += float(var_loss.detach())
+            var_batches += 1
+        var_train_loss = var_loss_sum / max(1, var_batches)
+        #
+        model.eval()
+        with torch.no_grad():
+            var_batch = next(iter(var_valid_loader))
+            var_xy, var_obj = model(var_batch[0].to(device))
+        var_true_count = var_batch[2].sum(axis=1).round().numpy()
+        var_threshold, _ = calibrate_coord_threshold(var_obj.cpu().numpy(), var_true_count)
+        var_metrics = coord_metrics(var_xy.cpu().numpy(), var_obj.cpu().numpy(),
+                                    var_batch[1].numpy(), var_batch[2].numpy(), var_threshold)
+        var_ema_bal = _ema_update(var_ema_bal, var_metrics["balanced_accuracy"], var_ema_decay)
+        var_ema_mae = _ema_update(var_ema_mae, var_metrics["mae"], var_ema_decay)
+        wandb.log({"epoch": var_epoch, "train_loss": var_train_loss,
+                   "valid_balanced_accuracy": var_metrics["balanced_accuracy"],
+                   "valid_balanced_accuracy_smoothed": var_ema_bal,
+                   "valid_mae": var_metrics["mae"], "valid_mae_smoothed": var_ema_mae,
+                   "valid_position_error_m": var_metrics["position_error_m"],
+                   "valid_objectness_threshold": var_threshold,
+                   "learning_rate": optimizer.param_groups[0]["lr"]})
+        print(f"Epoch {var_epoch}/{var_epochs} - Loss %.4f - Valid Bal %.4f - Valid MAE %.4f - "
+              "PosErr %.3f m - Thr %.2f"
+              % (var_train_loss, var_metrics["balanced_accuracy"], var_metrics["mae"],
+                 var_metrics["position_error_m"], var_threshold))
+        var_history["epoch"].append(var_epoch)
+        var_history["train_loss"].append(var_train_loss)
+        var_history["valid_bal"].append(var_metrics["balanced_accuracy"])
+        var_history["valid_bal_smoothed"].append(var_ema_bal)
+        var_history["valid_mae"].append(var_metrics["mae"])
+        var_history["valid_mae_smoothed"].append(var_ema_mae)
+        var_history["valid_error_m"].append(var_metrics["position_error_m"])
+        var_history["valid_threshold"].append(var_threshold)
+        _plot_coord_curves(var_history, var_save_dir, var_tag)
+        #
+        if (var_ema_bal > var_best_score
+                or (var_ema_bal == var_best_score and var_ema_mae < var_best_mae)):
+            var_best_score, var_best_mae = var_ema_bal, var_ema_mae
+            var_best_weight = copy.deepcopy(model.state_dict())
+            var_counter = 0
+        else:
+            var_counter += 1
+        if var_counter >= patience:
+            print(f"Early stopping triggered at epoch {var_epoch}")
+            break
+    if var_best_weight is None:
+        var_best_weight = copy.deepcopy(model.state_dict())
+    print(f"Best smoothed balanced count accuracy: {var_best_score:.6f}, smoothed count MAE: {var_best_mae:.6f}")
+    return var_best_weight
+
+
+def run_density_map_coords(train_sets_by_env, test_sets_by_env, var_repeat=3,
+                           save_path="./visualizations/coords", var_env=None):
+    """
+    [description]
+    : run the coordinate-regression head (a single head that directly regresses user locations). It
+      trains on every room in train_sets_by_env and evaluates on every room in test_sets_by_env; pass
+      one training room for the single-room protocol or two for leave-one-room-out. The count is the
+      number of queries whose objectness clears the validation-calibrated threshold, and the predicted
+      locations are reported in meters, so count and location come from the same head.
+    : train_sets_by_env: dict, env name -> (CSI amplitude, occupancy targets)
+    : test_sets_by_env: dict, env name -> (CSI amplitude, occupancy targets)
+    : var_repeat: int, number of repeated experiments
+    : var_env: optional env name used only for the run name (single-room dispatch)
+    : return: dict, env name -> averaged count/location metrics with SE
+    """
+    from src.models.set_localization import SetLocalizer
+    device = select_device()
+    print(f"Using device: {device}")
+    var_num_queries = preset["nn"]["num_obj_queries"]
+    var_train_envs = list(train_sets_by_env)
+    #
+    var_train_sets, var_valid_sets = [], []
+    for var_name in var_train_envs:
+        var_x, var_y = train_sets_by_env[var_name]
+        var_x = np.asarray(var_x, dtype=np.float32).reshape(len(var_x), var_x.shape[1], -1)
+        var_pos, var_mask = occupancy_to_position_batch(var_y, preset["layouts"][var_name])
+        var_ds = TensorDataset(torch.from_numpy(var_x), torch.from_numpy(var_pos), torch.from_numpy(var_mask))
+        var_perm = np.random.RandomState(39).permutation(len(var_ds))
+        var_n_valid = max(1, int(round(0.1 * len(var_ds))))
+        var_valid_sets.append(torch.utils.data.Subset(var_ds, var_perm[:var_n_valid].tolist()))
+        var_train_sets.append(torch.utils.data.Subset(var_ds, var_perm[var_n_valid:].tolist()))
+    var_train_set = torch.utils.data.ConcatDataset(var_train_sets)
+    var_valid_set = torch.utils.data.ConcatDataset(var_valid_sets)
+    var_x_shape = tuple(var_train_sets[0].dataset.tensors[0].shape[1:])
+    print(f"Training rooms: {var_train_envs} ({len(var_train_set)} train / {len(var_valid_set)} valid) | "
+          f"Test rooms: {list(test_sets_by_env)}")
+    #
+    var_test = {}
+    for var_name, (var_x, var_y) in test_sets_by_env.items():
+        var_x = np.asarray(var_x, dtype=np.float32).reshape(len(var_x), var_x.shape[1], -1)
+        var_pos, var_mask = occupancy_to_position_batch(var_y, preset["layouts"][var_name])
+        var_test[var_name] = (torch.from_numpy(var_x), torch.from_numpy(var_pos), torch.from_numpy(var_mask))
+    #
+    var_env_metrics = {}
+    for var_r in range(var_repeat):
+        print("Repeat", var_r)
+        wandb.init(project="density_map_coords",
+                   name=f"Coord{var_r}_" + "_".join(var_train_envs), config=preset, reinit=True)
+        torch.random.manual_seed(var_r + 39)
+        #
+        model = SetLocalizer(var_x_shape, embedding_dim=100, num_queries=var_num_queries).to(device)
+        optimizer = torch.optim.Adam(model.parameters(), lr=preset["nn"]["lr"],
+                                     weight_decay=preset["nn"]["weight_decay"])
+        var_best_weight = train_coord(model, optimizer, var_train_set, var_valid_set,
+                                      preset["nn"]["batch_size"], preset["nn"]["epoch"], device,
+                                      patience=preset["density"].get("patience", 150),
+                                      var_save_dir=save_path, var_tag=f"coord_r{var_r}")
+        model.load_state_dict(var_best_weight)
+        model.eval()
+        #
+        ## objectness threshold from the training rooms' validation split
+        with torch.no_grad():
+            var_vx, var_vpos, var_vmask = next(iter(
+                torch.utils.data.DataLoader(var_valid_set, len(var_valid_set))))
+            var_vxy, var_vobj = model(var_vx.to(device))
+        var_threshold, _ = calibrate_coord_threshold(var_vobj.cpu().numpy(),
+                                                     var_vmask.sum(axis=1).round().numpy())
+        #
+        for var_name, (var_x, var_pos, var_mask) in var_test.items():
+            with torch.no_grad():
+                var_xy, var_obj = model(var_x.to(device))
+            var_metrics = coord_metrics(var_xy.cpu().numpy(), var_obj.cpu().numpy(),
+                                        var_pos.numpy(), var_mask.numpy(), var_threshold)
+            var_metrics["threshold"] = var_threshold
+            var_env_metrics.setdefault(var_name, []).append(var_metrics)
+            wandb.log({f"test_results_per_env/{var_name}/accuracy": var_metrics["accuracy"],
+                       f"test_results_per_env/{var_name}/balanced_accuracy": var_metrics["balanced_accuracy"],
+                       f"test_results_per_env/{var_name}/mae": var_metrics["mae"],
+                       f"test_results_per_env/{var_name}/position_error_m": var_metrics["position_error_m"],
+                       f"test_results_per_env/{var_name}/threshold": var_threshold}, step=var_r + 100000)
+            print(f"  [{var_name}] COUNT Acc {var_metrics['accuracy']:.4f} - "
+                  f"Bal {var_metrics['balanced_accuracy']:.4f} - MAE {var_metrics['mae']:.4f} - "
+                  f"PosErr {var_metrics['position_error_m']:.3f} m "
+                  f"(miss {var_metrics['position_miss_rate']:.3f}, "
+                  f"fp {var_metrics['position_false_positive_rate']:.3f}) - Thr {var_threshold:.2f}")
+        #
+        del model, optimizer
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        gc.collect()
+    #
+    var_num_classes = preset["nn"]["num_count_classes"]
+    var_metric_names = ("accuracy", "balanced_accuracy", "mae", "occupancy_accuracy", "occupancy_f1",
+                        "position_error_m", "position_miss_rate", "position_false_positive_rate")
+    results = {}
+    for var_name, var_rep_list in var_env_metrics.items():
+        var_env_result = {}
+        for var_metric in var_metric_names:
+            var_arr = np.array([var_rep[var_metric] for var_rep in var_rep_list], dtype=float)
+            if np.isfinite(var_arr).any():
+                var_env_result[f"avg_{var_metric}"] = float(np.nanmean(var_arr))
+                var_std = float(np.nanstd(var_arr, ddof=1)) if len(var_arr) > 1 else 0.0
+            else:
+                ## e.g. the occupancy metrics: the coordinate head has no per-location readout
+                var_env_result[f"avg_{var_metric}"] = float("nan")
+                var_std = 0.0
+            var_env_result[f"std_{var_metric}"] = var_std
+            var_env_result[f"se_{var_metric}"] = var_std / np.sqrt(len(var_arr)) if len(var_arr) > 1 else 0.0
+        var_env_result["avg_threshold"] = float(np.mean([var_rep["threshold"] for var_rep in var_rep_list]))
+        var_env_result["per_class_accuracy"] = {
+            var_class: float(np.mean([var_rep["per_class_accuracy"][var_class] for var_rep in var_rep_list]))
+            for var_class in range(var_num_classes)}
+        results[var_name] = var_env_result
+        print(f"\n[{var_name}] avg over {var_repeat} repeats: "
+              f"count Acc {var_env_result['avg_accuracy']:.4f} ± {var_env_result['se_accuracy']:.4f} | "
+              f"MAE {var_env_result['avg_mae']:.4f} ± {var_env_result['se_mae']:.4f} | "
+              f"PosErr {var_env_result['avg_position_error_m']:.4f} ± "
+              f"{var_env_result['se_position_error_m']:.4f} m")
+    wandb.finish()
     return results

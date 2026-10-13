@@ -73,7 +73,7 @@ preset = {
         ##     = CSI variance over time) and pools by attention instead of a global sum. Aimed at
         ##     localization; see the module docstring.
         "backbone": "default",
-        "num_obj_queries": 6, #TODO: change this if more people
+        "num_obj_queries": 10, #TODO: change this if more people
         "num_decoder_layers":6,
         "dim_FFN": 512,
         "token_length": 188, 
@@ -165,6 +165,13 @@ preset = {
         ##     per-location occupancy readout clears the calibrated threshold. Kept for reproducing
         ##     the earlier protocol.
         "count_rule": "layout_free",
+        ## Which head the model uses.
+        ##   "density" (default): the continuous H x W density map; the count is read off the map
+        ##     (layout_free peaks, or the per-location template readout).
+        ##   "coords": a single head that directly regresses the user locations (x, y) and counts
+        ##     them -- count = number of predicted locations, reported in meters. Uses SetLocalizer
+        ##     (src/models/set_localization.py) with the Hungarian set loss.
+        "head": "coords",
         ## Absolute floor for peak extraction (e.g. the pcap-inference path, which has no validation
         ## split to calibrate an empty gate on). A map whose maximum is below it yields no peaks.
         "peak_abs_floor": 0.0,
