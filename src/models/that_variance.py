@@ -89,10 +89,10 @@ class THATV(nn.Module):
         var_dim_time = var_x_shape[-2]
         var_dim_output = var_y_shape[-1]
 
-        var_num_gaussian=10,
-        var_time_pool=20,
-        var_left_blocks=4,
-        var_dropout=0.5
+        var_num_gaussian = 10
+        var_time_pool = 20
+        var_left_blocks = 4
+        var_dropout = 0.5
 
         var_pooled_time = max(1, var_dim_time // var_time_pool)
         self.var_dim_feature = var_dim_feature

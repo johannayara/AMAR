@@ -2341,6 +2341,90 @@ def coord_metrics(var_xy, var_obj, var_true_pos, var_true_mask, var_threshold):
     return var_metrics
 
 
+def splat_positions(var_positions, var_grid_size, var_sigma):
+    """
+    [description]
+    : rasterize a set of normalized (x, y) positions into a (grid, grid) map by summing a
+      peak-normalized Gaussian at each point and clamping to [0, 1] -- the same convention
+      render_density_targets uses for the density head. This is the map analogue of the coordinate
+      head's point set, so the figure is comparable to visualize_density_map's panels.
+    : var_positions: (K, 2) array of normalized positions in the shared [0, 1]^2 frame
+    : return: (grid, grid) float32 array in [0, 1]
+    """
+    var_positions = np.asarray(var_positions, dtype=np.float32).reshape(-1, 2)
+    var_axis = (np.arange(var_grid_size) + 0.5) / var_grid_size
+    var_yy, var_xx = np.meshgrid(var_axis, var_axis, indexing="ij")  # rows -> y, cols -> x
+    var_map = np.zeros((var_grid_size, var_grid_size), dtype=np.float32)
+    for var_cx, var_cy in var_positions:
+        var_blob = np.exp(-((var_xx - var_cx) ** 2 + (var_yy - var_cy) ** 2) / (2 * var_sigma ** 2))
+        var_map = var_map + var_blob / max(float(var_blob.max()), 1e-12)
+    return np.clip(var_map, 0.0, 1.0)
+
+
+def visualize_coord_heatmap(var_true_sets, var_pred_sets, save_dir, var_tag="coords",
+                            var_grid_size=None, var_sigma=None, var_num_samples=6):
+    """
+    [description]
+    : density-map-style heatmap of the coordinate head's output. The head has no native field, so each
+      panel is a synthetic map: the predicted query set (queries whose objectness clears the calibrated
+      threshold) and the ground-truth position set are rasterized with splat_positions onto the same
+      grid the density head uses, with the actual points circled and annotated in meters. Rows are test
+      samples spread over the true count range, ground truth on the left, prediction on the right, one
+      shared [0, 1] colour scale.
+    : This is a rendering of the point output, not the head's own quantity: the count in each title is
+      the number of points, not a map sum, so it is the coordinate head's query count and is not the
+      same decision rule as the density head's peak/mass count.
+    : var_true_sets / var_pred_sets: lists of (K, 2) normalized position arrays, one per sample
+    : var_tag: filename suffix, normally the room name
+    : return: str, path of the saved figure
+    """
+    os.makedirs(save_dir, exist_ok=True)
+    var_grid_size = preset["density"]["grid_size"] if var_grid_size is None else var_grid_size
+    var_sigma = preset["density"]["sigma"] if var_sigma is None else var_sigma
+    var_num = min(var_num_samples, len(var_true_sets))
+    var_extent_m = (0.0, METERS_PER_UNIT, 0.0, METERS_PER_UNIT)
+    #
+    ## spread the rows over the whole count range, as visualize_density_map does
+    var_true_count = np.array([len(var_set) for var_set in var_true_sets])
+    var_order = np.argsort(var_true_count)
+    var_pick = var_order[np.linspace(0, len(var_order) - 1, var_num).astype(int)]
+    #
+    var_fig, var_axes = plt.subplots(var_num, 2, figsize=(9, 3.2 * var_num), squeeze=False)
+    var_fig.suptitle(f"Coordinate head heatmap - ground truth vs prediction (env {var_tag}, axes in meters)")
+    #
+    for var_row, var_idx in enumerate(var_pick):
+        var_true_pos_m = normalized_to_meters(var_true_sets[var_idx])
+        var_pred_pos_m = normalized_to_meters(var_pred_sets[var_idx])
+        var_panels = ((var_true_sets[var_idx], var_true_pos_m, "ground truth"),
+                      (var_pred_sets[var_idx], var_pred_pos_m, "prediction"))
+        for var_col, (var_set, var_pos_m, var_title) in enumerate(var_panels):
+            var_ax = var_axes[var_row][var_col]
+            var_ax.imshow(splat_positions(var_set, var_grid_size, var_sigma), origin="lower",
+                          cmap="viridis", vmin=0, vmax=1, extent=var_extent_m, aspect="equal")
+            var_ax.set_xticks(np.arange(0, METERS_PER_UNIT + 1, 2))
+            var_ax.set_yticks(np.arange(0, METERS_PER_UNIT + 1, 2))
+            var_ax.set_xlabel("x (m)")
+            var_ax.set_ylabel("y (m)")
+            if len(var_pos_m):
+                var_ax.scatter(var_pos_m[:, 0], var_pos_m[:, 1],
+                               s=90, facecolors="none", edgecolors="red", linewidths=1.5)
+                for var_pos in var_pos_m:
+                    var_ax.annotate(f"({var_pos[0]:.2f}, {var_pos[1]:.2f}) m",
+                                    (var_pos[0], var_pos[1]), textcoords="offset points",
+                                    xytext=(6, 6), fontsize=7, color="red")
+            var_ax.set_title(f"{var_title} - {len(var_pos_m)} "
+                             + ("point" if len(var_pos_m) == 1 else "points"))
+        #
+        print(f"  [sample {var_idx}] true {_format_positions_meters(var_true_pos_m)} m | "
+              f"pred {_format_positions_meters(var_pred_pos_m)} m")
+    #
+    var_fig.tight_layout(rect=[0, 0, 1, 0.96])
+    var_out_path = os.path.join(save_dir, f"coords_heatmap_{var_tag}.png")
+    var_fig.savefig(var_out_path, dpi=120)
+    plt.close(var_fig)
+    return var_out_path
+
+
 def _plot_coord_curves(var_history, var_save_path, var_tag="coord"):
     """
     [description]
@@ -2485,7 +2569,7 @@ def run_density_map_coords(train_sets_by_env, test_sets_by_env, var_repeat=3,
     : var_env: optional env name used only for the run name (single-room dispatch)
     : return: dict, env name -> averaged count/location metrics with SE
     """
-    from src.models.set_localization import SetLocalizer
+    from src.models.set_localization import SetLocalizer, select_sets
     device = select_device()
     print(f"Using device: {device}")
     var_num_queries = preset["nn"]["num_obj_queries"]
@@ -2555,6 +2639,17 @@ def run_density_map_coords(train_sets_by_env, test_sets_by_env, var_repeat=3,
                   f"PosErr {var_metrics['position_error_m']:.3f} m "
                   f"(miss {var_metrics['position_miss_rate']:.3f}, "
                   f"fp {var_metrics['position_false_positive_rate']:.3f}) - Thr {var_threshold:.2f}")
+            #
+            if var_r == var_repeat - 1:
+                ## heatmap analogue of the density figure: rasterize the selected query set and the
+                ## ground-truth positions onto the same grid and save it next to the curves
+                var_pred_sets = select_sets(var_xy, var_obj, var_threshold)
+                var_pos_np, var_mask_np = var_pos.numpy(), var_mask.numpy()
+                var_true_sets = [var_pos_np[var_i][var_mask_np[var_i] > 0.5]
+                                 for var_i in range(len(var_pos_np))]
+                var_fig_path = visualize_coord_heatmap(var_true_sets, var_pred_sets, save_path,
+                                                       var_tag=var_name)
+                print(f"  Figure saved to {var_fig_path}")
         #
         del model, optimizer
         if torch.cuda.is_available():

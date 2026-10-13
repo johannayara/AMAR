@@ -36,6 +36,7 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from configs.preset import preset
 from src.models.bce_that import THAT
+from src.models.that_variance import build_thatv, parse_backbone
 from src.models.density_map import get_cosine_schedule_with_warmup, augment_csi
 from src.models.room_density import (set_localization_metrics, visualize_room_density, _resolve_spans,
                                      _resolve_bounds, _true_sets)
@@ -60,7 +61,14 @@ class SetLocalizer(nn.Module):
                  num_decoder_layers=2, dim_feedforward=256, dropout=0.1):
         #
         super().__init__()
-        self.backbone = THAT(var_x_shape, [embedding_dim])
+        ## nn.backbone selects the encoder, same contract as DensityMapNet and AMAR_WO_RVQ: "default"
+        ## -> THAT, "thatv*" -> THATV. The coordinate head uses only the single-vector forward(), so
+        ## the "tokens" feature is unused here (but harmless: forward() never calls forward_sequence).
+        var_backbone = preset["nn"].get("backbone", "default")
+        var_is_thatv, _ = parse_backbone(var_backbone)
+        self.backbone = (build_thatv(var_x_shape, [embedding_dim], var_backbone)
+                         if var_is_thatv
+                         else THAT(var_x_shape, [embedding_dim]))
         self.memory_proj = nn.Linear(embedding_dim, d_model)
         self.query_embed = nn.Parameter(torch.randn(num_queries, d_model) * 0.02)
         var_layer = nn.TransformerDecoderLayer(d_model, nhead, dim_feedforward=dim_feedforward,

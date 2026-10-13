@@ -66,16 +66,19 @@ preset = {
         ## single group). AMAR_ENCODER_NORM overrides this from the environment.
         "encoder_norm": "batch",
         ## Feature extractor for the CSI models.
-        ##   "default": DensityMapNet uses THAT (src/models/bce_that.py), AMAR_WO_RVQ uses its CNN
-        ##     Backbone (src/models/modules/molecules.py). Unchanged behaviour.
-        ##   "thatv": both use THATV (src/models/that_variance.py) — a THAT-derived encoder that keeps
-        ##     per-time-step tokens, injects per-feature temporal statistics (mean/std/first-difference
-        ##     = CSI variance over time) and pools by attention instead of a global sum. Aimed at
-        ##     localization; see the module docstring.
+        ##   "default": DensityMapNet, SetLocalizer (density head="coords") and the room/H-WILD
+        ##     models use THAT (src/models/bce_that.py); AMAR_WO_RVQ uses its CNN Backbone
+        ##     (src/models/modules/molecules.py). Unchanged behaviour.
+        ##   "thatv": DensityMapNet, SetLocalizer and AMAR_WO_RVQ use THATV
+        ##     (src/models/that_variance.py) — a THAT-derived encoder that keeps per-time-step tokens,
+        ##     injects per-feature temporal statistics (mean/std/first-difference = CSI variance over
+        ##     time) and pools by attention instead of a global sum. Aimed at localization; see the
+        ##     module docstring.
         ##   "thatv-nostats" / "thatv-notokens" / "thatv-nopool": THATV with the named feature
         ##     disabled, for ablating which addition helps or hurts. Comma lists work, e.g.
         ##     "thatv-nostats,nopool". "thatv-notokens" restores THAT's valid-conv geometry and is
-        ##     single-vector-only (forward_sequence raises), so it cannot back AMAR_WO_RVQ.
+        ##     single-vector-only (forward_sequence raises), so it cannot back AMAR_WO_RVQ; the
+        ##     density and coords heads call forward(), so they accept it.
         "backbone": "default",
         "num_obj_queries": 10, #TODO: change this if more people
         "num_decoder_layers":6,
