@@ -28,6 +28,14 @@
                 dropped Exact-count accuracy from 0.62 to 0.38 and Count MAE from 0.40 to 0.78
                 (output/density_map/{default,thatv}/classroom/run_20261012_164132.log).
 
+                Each of the three features can be switched off independently for ablation. Set
+                nn.backbone to "thatv-nostats", "thatv-notokens" or "thatv-nopool" (or a comma list
+                such as "thatv-nostats,nopool") to disable the named features; "thatv" keeps all three
+                and "default" selects plain THAT. See parse_backbone. The "tokens" ablation restores
+                THAT's valid-conv geometry (the time axis shrinks and the two conv branches no longer
+                align), so it is only usable by single-vector heads: forward_sequence needs the
+                length-preserving convs and raises otherwise.
+
                 Two entry points, matching the two consumers:
                   - forward(x)          -> (B, D)          for single-vector heads (DensityMapNet)
                   - forward_sequence(x) -> (B, N, D)       for sequence heads (AMAR_WO_RVQ)
@@ -71,26 +79,37 @@ class THATV(nn.Module):
     def __init__(self,
                  var_x_shape,
                  var_y_shape,
-                 var_num_gaussian=10,
-                 var_time_pool=20,
-                 var_left_blocks=4,
-                 var_dropout=0.5):
+                 var_use_stats=True,
+                 var_use_tokens=True,
+                 var_use_pool=True):
         #
         ##
         super().__init__()
         var_dim_feature = var_x_shape[-1]
         var_dim_time = var_x_shape[-2]
         var_dim_output = var_y_shape[-1]
+
+        var_num_gaussian=10,
+        var_time_pool=20,
+        var_left_blocks=4,
+        var_dropout=0.5
+
         var_pooled_time = max(1, var_dim_time // var_time_pool)
         self.var_dim_feature = var_dim_feature
         self.var_pooled_time = var_pooled_time
         #
+        ## ablation switches for the three localization features (see module docstring / parse_backbone)
+        self.var_use_stats = var_use_stats
+        self.var_use_tokens = var_use_tokens
+        self.var_use_pool = var_use_pool
+        #
         ## ---- temporal statistics branch: raw per-feature mean / std / |first difference| ----
         ## this is where "CSI variance over time" enters the features
-        self.layer_stats = nn.Sequential(
-            nn.Linear(var_dim_feature * 3, var_dim_feature),
-            nn.LeakyReLU(),
-        )
+        if var_use_stats:
+            self.layer_stats = nn.Sequential(
+                nn.Linear(var_dim_feature * 3, var_dim_feature),
+                nn.LeakyReLU(),
+            )
         #
         ## ---- left stream: time-over-channel (tokens kept) ----
         self.layer_left_pooling = nn.AvgPool1d(var_time_pool, var_time_pool)
@@ -100,9 +119,14 @@ class THATV(nn.Module):
             for _ in range(var_left_blocks)])
         self.layer_left_norm = nn.LayerNorm(var_dim_feature, eps=1e-6)
         ## length-preserving so the two branches keep the same number of tokens (THAT could use plain
-        ## Conv1d because it summed the time axis away; we keep it)
-        self.layer_left_cnn_0 = SamePadConv1d(var_dim_feature, 128, 8)
-        self.layer_left_cnn_1 = SamePadConv1d(var_dim_feature, 128, 16)
+        ## Conv1d because it summed the time axis away; we keep it). Ablating "tokens" restores THAT's
+        ## valid-conv geometry: the time axis shrinks and the two branches no longer align.
+        if var_use_tokens:
+            self.layer_left_cnn_0 = SamePadConv1d(var_dim_feature, 128, 8)
+            self.layer_left_cnn_1 = SamePadConv1d(var_dim_feature, 128, 16)
+        else:
+            self.layer_left_cnn_0 = nn.Conv1d(var_dim_feature, 128, 8)
+            self.layer_left_cnn_1 = nn.Conv1d(var_dim_feature, 128, 16)
         self.layer_left_dropout = nn.Dropout(var_dropout)
         #
         ## ---- right stream: channel-over-time (pooled) ----
@@ -119,9 +143,11 @@ class THATV(nn.Module):
         ## ---- heads ----
         ## the single-vector head is THAT's Linear(256 + 32 -> D); the attention-pooled residual is
         ## added on top and starts at zero
-        self.layer_token_proj = nn.Linear(256, var_dim_output)
-        self.layer_pool_score = nn.Linear(var_dim_output, 1)
-        self.layer_pool_proj = nn.Linear(256, var_dim_output)
+        if var_use_pool or var_use_tokens:
+            self.layer_token_proj = nn.Linear(256, var_dim_output)
+        if var_use_pool:
+            self.layer_pool_score = nn.Linear(var_dim_output, 1)
+            self.layer_pool_proj = nn.Linear(256, var_dim_output)
         self.layer_output = nn.Linear(256 + 32, var_dim_output)
         #
         self.reset_residual_branches()
@@ -137,12 +163,14 @@ class THATV(nn.Module):
           starts from the baseline solution and adds the localization capacity only as far as it
           lowers the loss, instead of starting from a randomly-initialised different aggregation.
         """
-        nn.init.zeros_(self.layer_stats[0].weight)
-        nn.init.zeros_(self.layer_stats[0].bias)
-        nn.init.zeros_(self.layer_pool_score.weight)
-        nn.init.zeros_(self.layer_pool_score.bias)
-        nn.init.zeros_(self.layer_pool_proj.weight)
-        nn.init.zeros_(self.layer_pool_proj.bias)
+        if self.var_use_stats:
+            nn.init.zeros_(self.layer_stats[0].weight)
+            nn.init.zeros_(self.layer_stats[0].bias)
+        if self.var_use_pool:
+            nn.init.zeros_(self.layer_pool_score.weight)
+            nn.init.zeros_(self.layer_pool_score.bias)
+            nn.init.zeros_(self.layer_pool_proj.weight)
+            nn.init.zeros_(self.layer_pool_proj.bias)
 
     #
     ##
@@ -170,7 +198,7 @@ class THATV(nn.Module):
         : (var_left_0, var_left_1): (B, 128, N) each, the two length-preserving conv branches over
           the pooled time tokens, before any time aggregation.
         """
-        var_stats = self.temporal_statistics(var_input)
+        var_stats = self.temporal_statistics(var_input) if self.var_use_stats else None
         #
         var_left = self.layer_left_pooling(var_input.permute(0, 2, 1)).permute(0, 2, 1)
         var_left = self.layer_left_gaussian(var_left)
@@ -179,7 +207,9 @@ class THATV(nn.Module):
         #
         ## inject the temporal statistics AFTER the encoder's LayerNorm: added before it, the
         ## per-token normalisation would strip most of the shift again
-        var_left = self.layer_left_norm(var_left) + var_stats.unsqueeze(1)
+        var_left = self.layer_left_norm(var_left)
+        if var_stats is not None:
+            var_left = var_left + var_stats.unsqueeze(1)
         var_left = var_left.permute(0, 2, 1)
         var_left_0 = self.layer_leakyrelu(self.layer_left_cnn_0(var_left))
         var_left_1 = self.layer_leakyrelu(self.layer_left_cnn_1(var_left))
@@ -210,6 +240,10 @@ class THATV(nn.Module):
         [return]
         : tokens: (B, N, D) with N = pooled time steps, for sequence heads (AMAR_WO_RVQ).
         """
+        if not self.var_use_tokens:
+            raise RuntimeError(
+                "THATV.forward_sequence requires the length-preserving convs (feature 'tokens'); "
+                "backbone 'thatv-notokens' only supports the single-vector forward().")
         var_left_0, var_left_1 = self._left_conv(var_input)
         var_left = torch.cat([var_left_0, var_left_1], dim=1)
         var_left = self.layer_left_dropout(var_left)
@@ -232,11 +266,72 @@ class THATV(nn.Module):
         var_right = self._right_pooled(var_input)
         var_output = self.layer_output(torch.cat([var_left, var_right], dim=-1))
         #
+        if not self.var_use_pool:
+            return var_output
+        #
         ## localization residual: softmax-weighted average of the same left tokens. Scores and
         ## projection are zero-init, so this term is 0 at build time and only learns if it helps.
-        var_tokens = torch.cat([var_left_0, var_left_1], dim=1)
+        ## Crop to the common length so the two branches form one token tensor: a no-op when the convs
+        ## are length-preserving, and the alignment that the 'notokens' valid convs need otherwise.
+        var_len = min(var_left_0.shape[-1], var_left_1.shape[-1])
+        var_tokens = torch.cat([var_left_0[..., :var_len], var_left_1[..., :var_len]], dim=1)
         var_scores = self.layer_pool_score(self.layer_token_proj(var_tokens.permute(0, 2, 1)))
         var_weights = torch.softmax(var_scores.squeeze(-1), dim=1)
         var_pooled = (var_tokens * var_weights.unsqueeze(1)).sum(dim=-1)
         #
         return var_output + self.layer_pool_proj(var_pooled)
+
+
+#
+##
+## ------------------------------------------------------------------------------------------ ##
+## ------------------------------ backbone string -> THATV config --------------------------- ##
+## ------------------------------------------------------------------------------------------ ##
+#
+## the three localization features THATV adds on top of THAT, addressed by their ablation names
+THATV_FEATURES = ("stats", "tokens", "pool")
+THATV_PREFIX = "thatv-"
+
+
+def parse_backbone(var_backbone):
+    """
+    [return]
+    : (var_is_thatv, var_disabled): whether a preset `nn.backbone` string selects THATV, and the set of
+      THATV features it switches off.
+        "default"                 -> (False, set())
+        "thatv"                   -> (True,  set())
+        "thatv-nostats"           -> (True,  {"stats"})
+        "thatv-nostats,nopool"    -> (True,  {"stats", "pool"})
+    : This is the single place that decodes `nn.backbone`, so DensityMapNet and AMAR_WO_RVQ agree on
+      which backbone they built.
+    """
+    var_backbone = var_backbone or "default"
+    if var_backbone == "thatv":
+        return True, set()
+    if not var_backbone.startswith(THATV_PREFIX):
+        return False, set()
+    var_disabled = set()
+    for var_token in var_backbone[len(THATV_PREFIX):].split(","):
+        var_token = var_token.strip()
+        if not var_token:
+            continue
+        if not var_token.startswith("no") or var_token[2:] not in THATV_FEATURES:
+            raise ValueError(
+                f"nn.backbone={var_backbone!r}: expected 'no' + one of {THATV_FEATURES}, "
+                f"got {var_token!r}")
+        var_disabled.add(var_token[2:])
+    return True, var_disabled
+
+
+def build_thatv(var_x_shape, var_y_shape, var_backbone):
+    """
+    [return]
+    : a THATV with the features named in var_backbone disabled, e.g. "thatv-nostats".
+    """
+    var_is_thatv, var_disabled = parse_backbone(var_backbone)
+    if not var_is_thatv:
+        raise ValueError(f"nn.backbone={var_backbone!r} does not select THATV")
+    return THATV(var_x_shape, var_y_shape,
+                 var_use_stats="stats" not in var_disabled,
+                 var_use_tokens="tokens" not in var_disabled,
+                 var_use_pool="pool" not in var_disabled)

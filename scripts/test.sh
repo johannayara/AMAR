@@ -4,7 +4,7 @@
 #SBATCH --qos normal
 #SBATCH --time 4:00:00
 #SBATCH --gres gpu:a100:1
-#SBATCH --array=0-1
+#SBATCH --array=0-4
 
 set -euo pipefail
 
@@ -13,10 +13,11 @@ conda activate AMAR
 # parameters
 model=density_map
 env=classroom
-backbones=(thatv default)
+## default = plain THAT; thatv = all three features; the three "no*" variants each drop one feature
+backbones=(default thatv thatv-nostats thatv-notokens thatv-nopool)
 backbone=${backbones[$SLURM_ARRAY_TASK_ID]}
 
-## one directory per backbone, so the two array tasks never write over each other
+## one directory per backbone, so the array tasks never write over each other
 log_dir="./output/${model}/${backbone}/${env}"
 mkdir -p "${log_dir}"
 

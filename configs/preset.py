@@ -72,6 +72,10 @@ preset = {
         ##     per-time-step tokens, injects per-feature temporal statistics (mean/std/first-difference
         ##     = CSI variance over time) and pools by attention instead of a global sum. Aimed at
         ##     localization; see the module docstring.
+        ##   "thatv-nostats" / "thatv-notokens" / "thatv-nopool": THATV with the named feature
+        ##     disabled, for ablating which addition helps or hurts. Comma lists work, e.g.
+        ##     "thatv-nostats,nopool". "thatv-notokens" restores THAT's valid-conv geometry and is
+        ##     single-vector-only (forward_sequence raises), so it cannot back AMAR_WO_RVQ.
         "backbone": "default",
         "num_obj_queries": 10, #TODO: change this if more people
         "num_decoder_layers":6,
