@@ -11,16 +11,17 @@ source /software/anaconda3/etc/profile.d/conda.sh
 conda activate AMAR
 
 
-model=density_map_dem
-env=meeting_room
+model=density_map
+env=empty_room
 
 mkdir -p "./output/${model}/${env}"
 
 start=$(date +%s)
 echo "Start: $(date)"
 export WANDB_MODE=offline 
-python scripts/run_main.py --model "${model}" --task location --repeat 3 --env "${env}" --epochs 50\
-  > "./output/${model}/${env}/run_$(date +%Y%m%d_%H%M%S).log" 2>&1
+python scripts/run_main.py --model "${model}" --task location\
+  --repeat 3 --env "${env}" --epochs 50 --hp nn.encoder_norm=layer\
+  > "./output/${model}/${env}/run_$(date +%Y%m%d_%M%S).log" 2>&1
 end=$(date +%s)
 
 echo "Total runtime: $((end - start)) seconds"
