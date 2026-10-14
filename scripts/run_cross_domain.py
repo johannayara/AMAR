@@ -276,10 +276,8 @@ def run():
         all_envs_results = run_density_map_dem_cross_domain(train_sets_by_env, test_sets_by_env,
                                                             var_repeat, var_task, save_path)
     else:
-        data_x_train = np.concatenate([var_x for var_x, _ in train_sets_by_env.values()])
-        data_y_train = np.concatenate([var_y for _, var_y in train_sets_by_env.values()])
-        all_envs_results = run_cross_domain(data_x_train, data_y_train, test_sets_by_env,
-                                            var_repeat, var_task, "_".join(var_train_envs), save_path)
+        all_envs_results = run_cross_domain(train_sets_by_env, test_sets_by_env,
+                                            var_repeat, var_task, var_train_envs, save_path)
     #
     ##
     result = {

@@ -351,15 +351,14 @@ def run_AMAR_WO_RVQ(data_train_x,
 ## ====================================================================================================================
 # CROSS DOMAIN 
 
-def run_cross_domain(data_x_train, data_y_train, test_sets_by_env, var_repeat=10, var_task = "activity", var_env = "empty_room", save_path = "./visualizations/temp"):                    
+def run_cross_domain(train_sets_by_env, test_sets_by_env, var_repeat=10, var_task = "activity", var_env = "empty_room", save_path = "./visualizations/temp"):                    
     """
     [description]
-    : run WiFi-based model Transformer_Encoder_DECODER
+    : leave-one-room-out run of AMAR_WO_RVQ. Trains on every room in train_sets_by_env (each keeping
+      its own 90/10 validation split) and evaluates on every room in test_sets_by_env.
     [parameter]
-    : data_train_x: numpy array, CSI amplitude to train model
-    : data_train_y: numpy array, labels to train model
-    : data_test_x: numpy array, CSI amplitude to test model
-    : data_test_y: numpy array, labels to test model
+    : train_sets_by_env: dict, env name -> (CSI amplitude, labels) of a training room
+    : test_sets_by_env: dict, env name -> (CSI amplitude, labels) of a held-out room
     : var_repeat: int, number of repeated experiments
     [return]
     : result: dict, results of experiments
@@ -372,18 +371,26 @@ def run_cross_domain(data_x_train, data_y_train, test_sets_by_env, var_repeat=10
     device = select_device()
     print(f"Using device: {device}")
 
-    data_x_train, data_x_valid, data_y_train, data_y_valid = train_test_split(
-        data_x_train, data_y_train,
-        test_size=0.1, 
-        shuffle=True,
-        random_state=39
-    )
-    data_x_valid = data_x_valid.reshape(data_x_valid.shape[0], data_x_valid.shape[1], -1)
-    data_x_train = data_x_train.reshape(data_x_train.shape[0], data_x_train.shape[1], -1)
-    var_x_shape = data_x_train[0].shape
-
-    data_train_set = TensorDataset(torch.from_numpy(data_x_train), torch.from_numpy(data_y_train))
-    data_valid_set = TensorDataset(torch.from_numpy(data_x_valid), torch.from_numpy(data_y_valid))
+    ## Each training room keeps its CSI in place: torch.from_numpy shares the buffer and the 90/10
+    ## split is a Subset over indices, so a multi-room run costs no extra CSI memory beyond the rooms
+    ## themselves. Concatenating the rooms and letting train_test_split() copy the result would hold
+    ## several extra copies of ~12 GB/room and OOM the node -- the same reason
+    ## run_density_map_cross_domain uses this pattern.
+    var_train_datasets, var_valid_datasets = [], []
+    for var_env_name, (var_x_env, var_y_env) in train_sets_by_env.items():
+        var_x_env = np.asarray(var_x_env, dtype=np.float32).reshape(
+            var_x_env.shape[0], var_x_env.shape[1], -1)
+        var_y_env = np.asarray(var_y_env)
+        var_dataset = TensorDataset(torch.from_numpy(var_x_env), torch.from_numpy(var_y_env))
+        var_perm = np.random.RandomState(39).permutation(len(var_dataset))
+        var_num_valid = max(1, int(round(0.1 * len(var_dataset))))
+        var_valid_idx = np.sort(var_perm[:var_num_valid])
+        var_train_idx = np.sort(var_perm[var_num_valid:])
+        var_train_datasets.append(torch.utils.data.Subset(var_dataset, var_train_idx.tolist()))
+        var_valid_datasets.append(torch.utils.data.Subset(var_dataset, var_valid_idx.tolist()))
+    data_train_set = torch.utils.data.ConcatDataset(var_train_datasets)
+    data_valid_set = torch.utils.data.ConcatDataset(var_valid_datasets)
+    var_x_shape = tuple(var_train_datasets[0].dataset.tensors[0].shape[1:])
 
     #
     ##
