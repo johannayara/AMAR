@@ -41,6 +41,7 @@ from torch.utils.data import TensorDataset
 from ptflops import get_model_complexity_info
 
 from src.models.bce_that import THAT
+from src.models.modules.molecules import Backbone
 from src.models.that_variance import build_thatv, parse_backbone
 from src.models.losses.supervised_loss import OccupancyDistillationLoss
 from configs.preset import preset
@@ -176,9 +177,18 @@ class DensityMapNet(torch.nn.Module):
         #
         var_backbone = preset["nn"].get("backbone", "default")
         var_is_thatv, _ = parse_backbone(var_backbone)
-        self.backbone = (build_thatv(var_x_shape, [embedding_dim], var_backbone)
-                         if var_is_thatv
-                         else THAT(var_x_shape, [embedding_dim]))
+        ## "cnn" is the AMAR CNN backbone (src/models/modules/molecules.py). Unlike THAT/THATV it emits
+        ## a token sequence (B, N, D) rather than one vector, so forward() sums it over time to reach
+        ## the (B, D) the density decoder expects. The sum (not a mean) matches THAT's aggregation and
+        ## keeps the total-mass cue the count is read from.
+        if var_backbone == "cnn":
+            self.backbone = Backbone(input_channels=var_x_shape[-1], output_channels=embedding_dim)
+            self.var_pool_backbone = True
+        else:
+            self.backbone = (build_thatv(var_x_shape, [embedding_dim], var_backbone)
+                             if var_is_thatv
+                             else THAT(var_x_shape, [embedding_dim]))
+            self.var_pool_backbone = False
         self.grid_size = grid_size
         self.hidden_dim = hidden_dim
         self.dropout = dropout
@@ -221,6 +231,9 @@ class DensityMapNet(torch.nn.Module):
           the DEM objective to `density`.
         """
         var_features = self.backbone(x)
+        if self.var_pool_backbone:
+            ## CNN backbone: (B, N, D) token sequence -> (B, D) by summing over time
+            var_features = var_features.sum(dim=1)
         var_seed = self.decoder_fc(var_features).view(-1, self.hidden_dim, 4, 4)
         var_density_map = self.decoder_conv(var_seed).squeeze(1)
         if var_density_map.shape[-1] != self.grid_size:

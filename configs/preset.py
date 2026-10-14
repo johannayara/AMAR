@@ -79,6 +79,10 @@ preset = {
         ##     "thatv-nostats,nopool". "thatv-notokens" restores THAT's valid-conv geometry and is
         ##     single-vector-only (forward_sequence raises), so it cannot back AMAR_WO_RVQ; the
         ##     density and coords heads call forward(), so they accept it.
+        ##   "cnn": the AMAR CNN Backbone (src/models/modules/molecules.py) — currently DensityMapNet
+        ##     only. It emits a token sequence (B, N, D) instead of one vector, so DensityMapNet sums
+        ##     it over time to (B, D) to match THAT's aggregation. ~5.7x fewer parameters than THAT
+        ##     (0.19M vs 1.08M). Other models ignore it and fall back to THAT.
         "backbone": "default",
         "num_obj_queries": 10, #TODO: change this if more people
         "num_decoder_layers":6,
