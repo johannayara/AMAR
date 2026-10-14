@@ -95,7 +95,7 @@ run_combo() {
     python scripts/run_main.py \
         --model "${model}" --task location --repeat "${REPEAT}" --env "${ENV}"\
         --epochs "${EPOCHS}" \
-        --hp "nn.backbone=${backbone}" "${extra[@]}" --hp "nn.encoder=${encoder}"\
+        --hp "nn.backbone=${backbone}" "${extra[@]}" --hp "nn.encoder_norm=${encoder}"\
         > "${log_dir}/run_$(date +%Y%m%d_%H%M%S).log" 2>&1
 }
 

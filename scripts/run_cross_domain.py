@@ -86,8 +86,60 @@ def parse_args():
     var_args.add_argument("--epochs", default=None, type=int,
                           help="Override preset['nn']['epoch']. The cosine LR schedule is tied to "
                                "this value, so it must match the actual training length.")
+    var_args.add_argument("--hp", action="append", default=None, type=str, metavar="KEY=VALUE",
+                          help="Override a preset field, dotted path, e.g. --hp nn.backbone=thatv "
+                               "--hp nn.encoder_norm=group. Repeatable. Values are parsed as "
+                               "bool/int/float, else kept as str.")
     #
     return var_args.parse_args()
+
+
+def parse_hp_value(var_value):
+    """
+    [description]
+    : parse the right-hand side of a --hp override into a bool / int / float / str.
+    """
+    var_value = var_value.strip()
+    ## accept a quoted value, e.g. --hp path.save_dir='/tmp/x'
+    if len(var_value) >= 2 and var_value[0] == var_value[-1] and var_value[0] in ("'", '"'):
+        return var_value[1:-1]
+    var_lower = var_value.lower()
+    if var_lower in ("true", "false"):
+        return var_lower == "true"
+    if var_lower in ("none", "null"):
+        return None
+    try:
+        return int(var_value)
+    except ValueError:
+        pass
+    try:
+        return float(var_value)
+    except ValueError:
+        pass
+    return var_value
+
+
+def apply_hp_overrides(var_overrides):
+    """
+    [description]
+    : apply --hp overrides onto the module-level preset dict, in place, before any model is built.
+    : return: dict, the applied {dotted_key: value} for the result record
+    """
+    var_applied = {}
+    for var_item in var_overrides or []:
+        var_key, var_sep, var_value = var_item.partition("=")
+        if not var_sep:
+            raise ValueError(f"--hp expects KEY=VALUE, got {var_item!r}")
+        var_target = preset
+        var_parts = var_key.strip().split(".")
+        for var_part in var_parts[:-1]:
+            if var_part not in var_target:
+                raise KeyError(f"--hp path {var_key!r}: preset has no {var_part!r}")
+            var_target = var_target[var_part]
+        var_parsed = parse_hp_value(var_value)
+        var_target[var_parts[-1]] = var_parsed
+        var_applied[var_key.strip()] = var_parsed
+    return var_applied
 
 
 def format_result(var_model, var_task, result):
@@ -194,17 +246,27 @@ def run():
                       if var_args.train_envs else [var_env])
     if var_args.epochs is not None:
         preset["nn"]["epoch"] = var_args.epochs
+    var_hp_applied = apply_hp_overrides(var_args.hp)
 
     # Ensuring there is no data leakage while doing splits.
     train_sets_by_env, test_sets_by_env = master_splitter(
         preset, var_task, var_model, var_users, var_train_envs)
 
     ## the run directory is named after the training rooms so one-room and leave-one-room-out runs
-    ## do not collide
-    save_path=Path(f'./visualizations/cross_domain/{"_".join(var_train_envs)}/1')
-    while save_path.is_dir():
-        new_name = str((int(save_path.name)+1))
-        save_path = save_path.parent / new_name
+    ## do not collide. The numeric leaf is claimed with mkdir() rather than an is_dir() check
+    ## followed by a create: concurrent runs (the LoR matrix starts several combos per fold at once)
+    ## would otherwise both see the same leaf free, both pick it, and both write their checkpoints and
+    ## figures into it. mkdir() is atomic at the OS level, so exactly one run wins a leaf.
+    var_viz_root = Path(f'./visualizations/cross_domain/{"_".join(var_train_envs)}')
+    var_viz_root.mkdir(parents=True, exist_ok=True)
+    var_index = 1
+    while True:
+        save_path = var_viz_root / str(var_index)
+        try:
+            save_path.mkdir()
+            break
+        except FileExistsError:
+            var_index += 1
     #
     ## run WiFi-based model
     if var_model == "density_map":
@@ -230,6 +292,7 @@ def run():
     "epochs": preset["nn"]["epoch"],
     "data": preset["data"],
     "nn": preset["nn"],
+    "hp_overrides": var_hp_applied,
     }
 
     #
