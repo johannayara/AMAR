@@ -1,0 +1,15 @@
+Using device: cuda
+Traceback (most recent call last):
+  File "/cluster/raid/home/jajo/AMAR/scripts/run_main.py", line 360, in <module>
+    run()
+  File "/cluster/raid/home/jajo/AMAR/scripts/run_main.py", line 334, in run
+    result = run_model(data_train_x, data_train_y,
+  File "/cluster/raid/home/jajo/AMAR/src/models/density_map.py", line 1444, in run_density_map
+    DensityMapNet(var_x_shape, var_layout, grid_size=var_grid_size,
+  File "/cluster/raid/home/jajo/AMAR/src/models/density_map.py", line 179, in __init__
+    self.backbone = (build_thatv(var_x_shape, [embedding_dim], var_backbone)
+  File "/cluster/raid/home/jajo/AMAR/src/models/that_variance.py", line 334, in build_thatv
+    return THATV(var_x_shape, var_y_shape,
+  File "/cluster/raid/home/jajo/AMAR/src/models/that_variance.py", line 97, in __init__
+    var_pooled_time = max(1, var_dim_time // var_time_pool)
+TypeError: unsupported operand type(s) for //: 'int' and 'tuple'

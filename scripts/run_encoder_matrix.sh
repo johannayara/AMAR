@@ -32,9 +32,9 @@
 #
 set -euo pipefail
 
-ENV="${ENV:-classroom}"
+ENV=classroom
 REPEAT="${REPEAT:-3}"
-EPOCHS="${EPOCHS:-50}"
+EPOCHS="${EPOCHS:-30}"
 USERS="${USERS:-0,1,2,3,4,5}"
 MAX_JOBS="${MAX_JOBS:-4}"
 
@@ -78,7 +78,7 @@ if [[ "${1:-}" == "--list" ]]; then
     exit 0
 fi
 
-## the runs need the AMAR env; --list above does not
+## the runs need the AMAR env; 
 source /software/anaconda3/etc/profile.d/conda.sh
 conda activate AMAR
 
@@ -87,15 +87,15 @@ run_combo() {
     local combo="$1"
     local model head backbone encoder
     IFS='|' read -r model head backbone encoder <<< "${combo}"
-    local log_dir="./output/${model}/${head}/${backbone}/${encoder}/${ENV}"
+    local log_dir="./output/matrix/${model}/${head}/${backbone}/${encoder}/${ENV}"
     mkdir -p "${log_dir}"
     local extra=()
     if [[ "${model}" == "density_map" ]]; then extra=(--hp "density.head=${head}"); fi
     echo "=== model=${model} head=${head} backbone=${backbone} encoder_norm=${encoder} env=${ENV}"
-    AMAR_ENCODER_NORM="${encoder}" python scripts/run_main.py \
-        --model "${model}" --task location --repeat "${REPEAT}" --env "${ENV}" --users "${USERS}" \
+    python scripts/run_main.py \
+        --model "${model}" --task location --repeat "${REPEAT}" --env "${ENV}"\
         --epochs "${EPOCHS}" \
-        --hp "nn.backbone=${backbone}" "${extra[@]}" \
+        --hp "nn.backbone=${backbone}" "${extra[@]}" --hp "nn.encoder=${encoder}"\
         > "${log_dir}/run_$(date +%Y%m%d_%H%M%S).log" 2>&1
 }
 

@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "/cluster/raid/home/jajo/AMAR/scripts/run_main.py", line 360, in <module>
+    run()
+  File "/cluster/raid/home/jajo/AMAR/scripts/run_main.py", line 303, in run
+    data_train_x, data_test_x, data_train_y, data_test_y = master_splitter(preset, var_task, var_model, var_users, var_env, var_args.train_samples)
+  File "/cluster/raid/home/jajo/AMAR/scripts/run_main.py", line 35, in master_splitter
+    raise ValueError(
+ValueError: no annotation rows for environment='/software/modules-4.8.0/init/profile.sh', wifi_band=['5'], users=['0', '1', '2', '3', '4', '5']. Check the room name against dataset/annotation.csv and the preset['data'] filters.
