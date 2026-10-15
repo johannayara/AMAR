@@ -20,7 +20,7 @@ start=$(date +%s)
 echo "Start: $(date)"
 export WANDB_MODE=offline 
 python scripts/run_main.py --model "${model}" --task location\
-  --repeat 3 --env "${env}" --epochs 50 --hp nn.encoder_norm=layer\
+  --repeat 3 --env "${env}" --epochs 50 --hp nn.encoder_norm=layer --hp nn.backbone=cnn\
   > "./output/${model}/${env}/run_$(date +%Y%m%d_%M%S).log" 2>&1
 end=$(date +%s)
 

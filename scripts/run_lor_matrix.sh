@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #SBATCH --cpus-per-task 1
-#SBATCH --mem 16G
+#SBATCH --mem 32G
 #SBATCH --qos normal
 #SBATCH --time 12:00:00
 #SBATCH --gres gpu:a100:1
@@ -13,37 +13,9 @@
 ## room contributes no labels), via scripts/run_cross_domain.py.
 ##
 ##   * model      : AMAR_WO_RVQ | density_map   (the real AMAR_WO_RVQ set-prediction model)
-##   * backbone   : nn.backbone           default | thatv-nostats   <- the two relevant ones
-##   * encoder    : nn.encoder_norm       batch                     <- see note below
+##   * backbone   : nn.backbone           default | thatv-nostats   
+##   * encoder    : nn.encoder_norm       batch
 ##   * fold       : held-out room         empty_room | meeting_room | classroom
-##
-## Which combos are "relevant" is taken from output/matrix (the single-room matrix runs):
-##   * AMAR_WO_RVQ: default (err 0.610) and thatv-nostats (err 1.145) dominate; thatv (3.167) and
-##     thatv-nopool (5.591) collapse, and thatv-notokens cannot back AMAR_WO_RVQ at all
-##     (forward_sequence needs the length-preserving convs). Kept: default, thatv-nostats.
-##   * density_map (density head): default (countMAE 0.478) and thatv-nostats (0.455) are the two
-##     non-dominated backbones. Kept: default, thatv-nostats.
-##   * encoder: the single-room matrix's `batch|group|layer` axis was a no-op — it passed
-##     `--hp nn.encoder=...`, but the code reads `nn.encoder_norm` / $AMAR_ENCODER_NORM
-##     (src/models/bce_that.py), so every triple was bit-identical. This script passes the real key
-##     (`--hp nn.encoder_norm=...`), defaulting to the preset value `batch`; set ENCODERS="batch group"
-##     to turn it into a live room-agnostic-norm axis.
-##
-## Two ways to run, both parallel:
-##   * SLURM array (one combo per task, spreads across nodes): the `--array=0-11` above equals the
-##     combo count minus one (see `--list`). Submit with `sbatch scripts/run_lor_matrix.sh`, or
-##     override the range: `sbatch --array=0-3 scripts/run_lor_matrix.sh`.
-##   * locally (bounded background parallelism): `MAX_JOBS=4 ./scripts/run_lor_matrix.sh`.
-##
-## Each combo is isolated in output/lor_matrix/<model>/<backbone>/<encoder>/holdout_<room>/ and
-## visualizations/cross_domain/<train_rooms>/<n>/ (run_cross_domain claims the numeric leaf
-## atomically, so concurrent runs cannot collide).
-##
-## Examples:
-##   ./scripts/run_lor_matrix.sh --list                     # print combos + array range, run nothing
-##   EPOCHS=50 REPEAT=3 MAX_JOBS=4 ./scripts/run_lor_matrix.sh
-##   ENCODERS="batch group" MAX_JOBS=6 ./scripts/run_lor_matrix.sh
-##   sbatch scripts/run_lor_matrix.sh
 #
 set -euo pipefail
 
@@ -52,7 +24,7 @@ EPOCHS="${EPOCHS:-30}"
 USERS="${USERS:-0,1,2,3,4,5}"
 MAX_JOBS="${MAX_JOBS:-4}"
 
-models=(${MODELS:-AMAR_WO_RVQ density_map})
+models=(${MODELS:-AMAR_WO_RVQ})
 backbones=(${BACKBONES:-default thatv-nostats})
 encoders=(${ENCODERS:-batch})
 all_envs=(${ENVS:-empty_room meeting_room classroom})
