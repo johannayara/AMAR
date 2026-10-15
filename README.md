@@ -245,6 +245,40 @@ so a run that only predicts a room centre is obvious. Outputs go to `output/lor_
 per fold, `visualizations/lor_all/<model>/holdout_<room>/<test_room>/` (training curves, position
 scatter, and the standard per-location figures on the fixed `preset["viz"]["grid"]` cell grid).
 
+### 5. H-WILD → WiMANS transfer in a shared transmitter-anchored frame
+
+`scripts/run_hwild_to_wimans.py` trains the single-target `RoomLocalizer` on H-WILD and evaluates it
+on the WiMANS locations, reporting the error in meters. The two datasets have no shared room origin,
+so both are placed in one **transmitter-anchored frame**: origin at the transmitter, `+y` along the
+boresight ("away from the transmitter"), `+x` to the right, units of meters.
+
+- WiMANS is already in this frame — `preset["layouts"]` is transmitter-anchored, so the positions
+  come straight out as meters from the transmitter (`load_wimans_room_targets`, single-occupant
+  frames only, since the localizer predicts one position).
+- H-WILD is mapped into it by `src/data/hwild.tx_frame_xy`, using the AP geometry (`ap_location`,
+  `ap_toward`) transcribed from the dataset's `obtain_parameters.m` into `HWILD_ROOMS`.
+  `load_hwild_room(var_frame="tx")` returns those positions; the default `var_frame="room"` keeps the
+  original per-room `[0,1]^2` UWB grid that `run_hwild.py` uses.
+
+One rectangle over every loaded position then normalises both datasets for the `RoomLocalizer`
+harness, so the reported error is a plain Euclidean distance in meters (the per-room span convention
+is not used here). `--standardize window` (default) z-scores each CSI window, removing the
+per-capture gain/AGC scale that otherwise differs between the two datasets; `--standardize none`
+feeds raw amplitude.
+
+```bash
+python scripts/run_hwild_to_wimans.py --repeat 2 --epochs 40 --max_files 3 --standardize window
+python scripts/run_hwild_to_wimans.py --standardize none     # raw-amplitude ablation
+```
+
+Reports go to `output/hwild_to_wimans/*.json|txt` and figures to
+`visualizations/hwild_to_wimans/<train_rooms>/<test_room>/`. Every report carries the
+constant-position baseline; a run that does not beat it has not learned a transferable mapping. The
+current model fits H-WILD validation (≈1.5 m) but does not transfer to WiMANS (test MDE ≈9 m vs a
+≈8.4 m constant baseline) — the H-WILD channel is a device link (the person holds the transmitter),
+while WiMANS is passive scattering, so a range/position cue learned on one need not survive on the
+other.
+
 ## Available Models
 
 | Model | Type | Description | Reference |

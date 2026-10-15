@@ -27,9 +27,7 @@ class AMAR_WO_RVQ(nn.Module):
                  temp_cross=1, n_attention_heads=2, num_queries=5, dim_feedforward=1024, query_dropout_rate=0.0, num_classes=10):
         super().__init__()
         # self.feature_extractor = CNNFeatureExtractor(input_channels=var_x_shape[-1], output_channels=features_dim,embedding_time_dim=embedding_time_dim)
-        ## a "thatv*" backbone swaps the CNN Backbone for a THAT-derived encoder that returns a
-        ## per-time-step token sequence and injects temporal statistics (src/models/that_variance.py);
-        ## the "thatv-no*" suffixes disable individual features for ablation
+      
         var_backbone = preset["nn"].get("backbone", "default")
         self.var_sequence_backbone, _ = parse_backbone(var_backbone)
         if self.var_sequence_backbone:

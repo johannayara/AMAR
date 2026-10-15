@@ -20,11 +20,12 @@
 set -euo pipefail
 
 REPEAT="${REPEAT:-3}"
-EPOCHS="${EPOCHS:-30}"
+EPOCHS="${EPOCHS:-50}"
 USERS="${USERS:-0,1,2,3,4,5}"
 MAX_JOBS="${MAX_JOBS:-4}"
+HEADS=(coords density)
 
-models=(${MODELS:-AMAR_WO_RVQ})
+models=(${MODELS:-density_map})
 backbones=(${BACKBONES:-default thatv-nostats})
 encoders=(${ENCODERS:-batch})
 all_envs=(${ENVS:-empty_room meeting_room classroom})
@@ -37,16 +38,17 @@ add_combo() { combos+=("$1|$2|$3|$4|$5"); }
 
 for model in "${models[@]}"; do
     for backbone in "${backbones[@]}"; do
-        ## AMAR_WO_RVQ's default CNN Backbone ignores the channel norm, so one encoder is enough there
-        for encoder in "${encoders[@]}"; do
-            for holdout in "${all_envs[@]}"; do
-                train_envs=""
-                for env in "${all_envs[@]}"; do
-                    if [[ "${env}" != "${holdout}" ]]; then
-                        train_envs="${train_envs:+${train_envs},}${env}"
-                    fi
+        for head in "${head[@]}";do 
+            for encoder in "${encoders[@]}"; do
+                for holdout in "${all_envs[@]}"; do
+                    train_envs=""
+                    for env in "${all_envs[@]}"; do
+                        if [[ "${env}" != "${holdout}" ]]; then
+                            train_envs="${train_envs:+${train_envs},}${env}"
+                        fi
+                    done
+                    add_combo "${model}" "${backbone}" "${encoder}" "${holdout}" "${train_envs}" "${head}"
                 done
-                add_combo "${model}" "${backbone}" "${encoder}" "${holdout}" "${train_envs}"
             done
         done
     done

@@ -956,6 +956,41 @@ def _dataset_count_classes(data_set):
     return data_set.tensors[1].sum(axis=1).round().long().numpy()
 
 
+def set_count_sampling_weights(data_set):
+    """
+    [description]
+    : per-sample sampling weight that equalizes the count classes (0..num_count_classes-1) for the
+      coordinate/set head. The same measure as count_class_sampling_weights, which applies it to the
+      density head: WiMANS has only 5.3% count-0 frames per room, so a plain shuffle lets the set head
+      pay almost no price for never predicting an empty room. Inverse-frequency weighting fixes that
+      without discarding data.
+    : data_set: TensorDataset of (CSI, positions, mask) or (CSI, positions, mask, room), or a Subset /
+      ConcatDataset of one. The mask is the per-sample slot-validity vector, so its sum is the count.
+    : return: numpy array (N,) of non-negative sampling weights
+    """
+    var_count = _set_count_classes(data_set)
+    var_num_classes = preset["nn"]["num_count_classes"]
+    var_freq = np.bincount(var_count, minlength=var_num_classes).astype(np.float64)
+    var_inverse = np.where(var_freq > 0, 1.0 / np.maximum(var_freq, 1.0), 0.0)
+    #
+    return var_inverse[var_count]
+
+
+def _set_count_classes(data_set):
+    """
+    [description]
+    : count class (0..5) of every sample in a TensorDataset, Subset or ConcatDataset of them carrying
+      the set head's (CSI, positions, mask[, room]) tuple. Mirrors _dataset_count_classes, which reads
+      the density head's occupancy vector instead.
+    : return: numpy array (N,) of ints
+    """
+    if isinstance(data_set, torch.utils.data.ConcatDataset):
+        return np.concatenate([_set_count_classes(var_part) for var_part in data_set.datasets])
+    if isinstance(data_set, torch.utils.data.Subset):
+        return _set_count_classes(data_set.dataset)[data_set.indices]
+    return data_set.tensors[2].sum(axis=1).round().long().numpy()
+
+
 def save_density_checkpoint(model, var_x_shape, var_env, save_path, var_tag="model"):
     """
     [description]
@@ -2301,11 +2336,15 @@ def occupancy_to_position_batch(var_occupancy, var_layout):
     return var_pos, var_mask
 
 
-def calibrate_coord_threshold(var_obj, var_true_count, var_grid=np.linspace(0.05, 0.95, 19)):
+def calibrate_coord_threshold(var_obj, var_true_count, var_grid=np.linspace(0.05, 0.95, 19),
+                              var_nonempty_only=False):
     """
     [description]
-    : pick the objectness threshold whose selected-query count maximizes the balanced per-count
-      accuracy on the split, so the count decision is calibrated rather than fixed.
+    : pick the objectness threshold (stage 2) whose selected-query count maximizes the balanced
+      per-count accuracy on the split, so the count decision is calibrated rather than fixed. With
+      var_nonempty_only the empty frames are excluded, because stage 1 already decides those, leaving
+      the threshold free to separate counts 1..num_queries. Ties go to the threshold closest to the
+      neutral 0.5, so a small validation split cannot drag the decision boundary to an extreme.
     : var_obj: (N, num_queries) objectness logits
     : return: (threshold, balanced_accuracy)
     """
@@ -2313,10 +2352,15 @@ def calibrate_coord_threshold(var_obj, var_true_count, var_grid=np.linspace(0.05
     var_prob = 1.0 / (1.0 + np.exp(-np.asarray(var_obj, dtype=np.float64)))
     var_true_count = np.asarray(var_true_count).astype(int)
     var_num_classes = preset["nn"]["num_count_classes"]
+    var_min_class = 1 if var_nonempty_only else 0
+    var_sel = var_true_count >= var_min_class
+    if not var_sel.any():
+        return 0.5, 0.0
+    var_prob_sel, var_true_sel = var_prob[var_sel], var_true_count[var_sel]
     var_best_threshold, var_best_score = float(var_grid[0]), -1.0
     for var_threshold in var_grid:
-        var_counts = (var_prob > var_threshold).sum(axis=1)
-        var_score = _balanced_accuracy(var_true_count, var_counts, var_num_classes, 0)
+        var_counts = (var_prob_sel > var_threshold).sum(axis=1)
+        var_score = _balanced_accuracy(var_true_sel, var_counts, var_num_classes, var_min_class)
         if (var_score > var_best_score
                 or (var_score == var_best_score
                     and abs(var_threshold - 0.5) < abs(var_best_threshold - 0.5))):
@@ -2324,17 +2368,105 @@ def calibrate_coord_threshold(var_obj, var_true_count, var_grid=np.linspace(0.05
     return var_best_threshold, var_best_score
 
 
-def coord_metrics(var_xy, var_obj, var_true_pos, var_true_mask, var_threshold):
+def coord_objectness_maxima(var_obj):
+    """
+    [description]
+    : per-sample maximum objectness probability, the statistic the coordinate head's empty gate fires
+      on. The analogue of density_map_maxima for the density head's map maximum.
+    : var_obj: (N, num_queries) objectness logits
+    : return: numpy array (N,)
+    """
+    var_prob = 1.0 / (1.0 + np.exp(-np.asarray(var_obj, dtype=np.float64)))
+    return var_prob.max(axis=1)
+
+
+def calibrate_coord_empty_threshold(var_obj, var_true_count, var_grid=None):
+    """
+    [description]
+    : pick the empty-gate threshold (stage 1) of the coordinate head: a sample is predicted empty when
+      the maximum objectness probability over its queries is below the threshold. Candidate thresholds
+      are swept over the observed maxima and the one maximizing the balanced accuracy of the empty /
+      non-empty decision is kept. Mirrors calibrate_empty_threshold, which does this on the density-map
+      maximum; calibrating on a single pooled statistic, rather than on the per-query readouts, is what
+      makes the gate robust to the objectness scale drifting between rooms.
+    : return: (threshold, balanced_accuracy). With no empty (or no non-empty) frames in the split the
+      threshold degenerates to -inf (gate never fires) or +inf (always empty) and the score is 0.0.
+    """
+    #
+    var_obj_max = coord_objectness_maxima(var_obj)
+    var_is_empty = np.asarray(var_true_count).astype(int) == 0
+    if not var_is_empty.any():
+        return -np.inf, 0.0
+    if var_is_empty.all():
+        return np.inf, 0.0
+    if var_grid is None:
+        var_lo, var_hi = float(var_obj_max.min()), float(var_obj_max.max())
+        var_grid = np.linspace(var_lo, var_hi, 201)
+    var_best_threshold, var_best_score, var_best_margin = float(var_grid[0]), -1.0, -1.0
+    for var_threshold in var_grid:
+        var_pred_empty = var_obj_max < var_threshold
+        var_score = 0.5 * (np.mean(var_pred_empty[var_is_empty])
+                           + np.mean(~var_pred_empty[~var_is_empty]))
+        ## among the thresholds that separate equally well, keep the one furthest from any sample, so
+        ## the gate sits in the middle of the gap instead of on its edge
+        var_margin = float(np.min(np.abs(var_obj_max - var_threshold)))
+        if (var_score > var_best_score
+                or (var_score == var_best_score and var_margin > var_best_margin)):
+            var_best_threshold, var_best_score, var_best_margin = (
+                float(var_threshold), float(var_score), var_margin)
+    return var_best_threshold, var_best_score
+
+
+def resolve_coord_count_decision(var_obj, var_true_count):
+    """
+    [description]
+    : the two-stage count decision of the coordinate head: (empty-gate threshold or None, objectness
+      threshold). preset["density"]["eval_threshold"] and ["empty_threshold"] pin the two thresholds;
+      otherwise they are calibrated on the given split with the balanced objective.
+      preset["density"]["staged_count"] disables the gate and falls back to the single objectness
+      threshold calibrated on every frame. Pinning matters for hyperparameter search: calibrating on
+      the split that is then scored is optimistic and lets a config win by fitting the sweep rather
+      than the model. Mirrors resolve_count_decision, so the coordinate head follows the same counting
+      protocol as the density head.
+    : var_obj: (N, num_queries) objectness logits
+    : return: (empty_threshold or None, objectness_threshold)
+    """
+    #
+    var_true_count = np.asarray(var_true_count).astype(int)
+    var_staged = preset["density"].get("staged_count", True)
+    #
+    var_fixed_count = preset["density"].get("eval_threshold")
+    if var_fixed_count is not None:
+        var_count_threshold = float(var_fixed_count)
+    else:
+        var_count_threshold = calibrate_coord_threshold(
+            var_obj, var_true_count, var_nonempty_only=var_staged)[0]
+    #
+    var_empty_threshold = None
+    if var_staged:
+        var_fixed_empty = preset["density"].get("empty_threshold")
+        if var_fixed_empty is not None:
+            var_empty_threshold = float(var_fixed_empty)
+        else:
+            var_empty_threshold = calibrate_coord_empty_threshold(var_obj, var_true_count)[0]
+    return var_empty_threshold, var_count_threshold
+
+
+def coord_metrics(var_xy, var_obj, var_true_pos, var_true_mask, var_threshold,
+                  var_empty_threshold=None):
     """
     [description]
     : count and location metrics of a coordinate-head batch. A query is a predicted user when its
       objectness probability clears var_threshold; the count is the number of such queries and the
-      predicted locations are their (x, y) in meters. The position error matches predicted to true
-      locations with a Hungarian assignment (position_error_metrics), penalizing misses and spurious
-      locations, so the localization error keeps the multi-user structure.
+      predicted locations are their (x, y) in meters. Stage 1 (empty gate): a sample whose maximum
+      objectness probability is below var_empty_threshold is predicted empty whatever its queries say,
+      which decouples "is the room empty" from "how many people are in it". The position error matches
+      predicted to true locations with a Hungarian assignment (position_error_metrics), penalizing
+      misses and spurious locations, so the localization error keeps the multi-user structure.
     : var_xy: (N, num_queries, 2) normalized predicted positions
     : var_obj: (N, num_queries) objectness logits
     : var_true_pos: (N, K, 2) normalized true positions, var_true_mask: (N, K) 0/1
+    : var_empty_threshold: optional stage-1 gate; None disables it
     : return: metrics dict
     """
     #
@@ -2343,9 +2475,12 @@ def coord_metrics(var_xy, var_obj, var_true_pos, var_true_mask, var_threshold):
     var_true_pos = np.asarray(var_true_pos, dtype=np.float64)
     var_true_mask = np.asarray(var_true_mask)
     var_true_count = var_true_mask.sum(axis=1).round().astype(int)
+    var_obj_max = var_prob.max(axis=1) if var_prob.size else np.zeros(len(var_prob))
     var_pred_positions, var_true_positions, var_pred_counts = [], [], []
     for var_i in range(len(var_xy)):
         var_sel = var_prob[var_i] > var_threshold
+        if var_empty_threshold is not None and var_obj_max[var_i] < var_empty_threshold:
+            var_sel = np.zeros_like(var_sel)
         var_pred_positions.append(normalized_to_meters(var_xy[var_i][var_sel]))
         var_pred_counts.append(int(var_sel.sum()))
         var_true_positions.append(normalized_to_meters(var_true_pos[var_i][var_true_mask[var_i] > 0.5]))
@@ -2442,7 +2577,9 @@ def _plot_coord_curves(var_history, var_save_path, var_tag="coord"):
     """
     [description]
     : write the coordinate-head training history (loss, balanced count accuracy, count MAE, position
-      error) to a PNG and a CSV after every epoch.
+      error, and the raw vs EMA-smoothed count-decision thresholds) to a PNG and a CSV after every
+      epoch. The threshold panel is what makes the per-epoch jitter of the calibrated thresholds, and
+      the smoothing that damps it, visible.
     """
     if not var_save_path or not var_history.get("epoch"):
         return None
@@ -2455,8 +2592,13 @@ def _plot_coord_curves(var_history, var_save_path, var_tag="coord"):
                    [("valid_bal", "raw"), ("valid_bal_smoothed", "smoothed (EMA)")]),
                   ("valid count MAE", "MAE",
                    [("valid_mae", "raw"), ("valid_mae_smoothed", "smoothed (EMA)")]),
-                  ("valid position error (m)", "m", [("valid_error_m", "raw")])]
-    var_fig, var_axes = plt.subplots(1, len(var_panels), figsize=(20, 4))
+                  ("valid position error (m)", "m", [("valid_error_m", "raw")]),
+                  ("count decision thresholds", "probability",
+                   [("valid_threshold", "objectness (raw)"),
+                    ("valid_threshold_smoothed", "objectness (EMA)"),
+                    ("valid_empty_threshold", "empty gate (raw)"),
+                    ("valid_empty_threshold_smoothed", "empty gate (EMA)")])]
+    var_fig, var_axes = plt.subplots(1, len(var_panels), figsize=(25, 4))
     for var_ax, (var_title, var_ylabel, var_series) in zip(var_axes, var_panels):
         for var_key, var_label in var_series:
             var_ax.plot(var_history["epoch"], var_history[var_key], label=var_label)
@@ -2484,15 +2626,31 @@ def train_coord(model, optimizer, data_train_set, data_valid_set, var_batch_size
                 patience=150, var_save_dir=None, var_tag="coord"):
     """
     [description]
-    : train the coordinate head with the Hungarian set loss (shared with SetLocalizer). The count is
-      the number of queries whose objectness clears the threshold calibrated on the validation split
-      each epoch, and the checkpoint is selected on the EMA-smoothed balanced count accuracy, so model
-      selection tracks the reported locate-then-count rule.
+    : train the coordinate head with the Hungarian set loss (shared with SetLocalizer). The count uses
+      the same two-stage decision as the density head: an empty gate on the maximum objectness
+      probability, then the number of queries whose objectness clears the stage-2 threshold. Both
+      thresholds are resolved on the validation split each epoch (or pinned by
+      preset["density"]["eval_threshold"] / ["empty_threshold"]), smoothed with an EMA, and the epoch's
+      metric is computed with the smoothed values so a threshold re-fit on a small validation batch
+      cannot make model selection track its jitter. The checkpoint is selected on the EMA-smoothed
+      balanced count accuracy, so model selection tracks the reported locate-then-count rule.
     : data_train_set / data_valid_set: TensorDataset of (CSI, positions (K,2) normalized, mask (K,))
     : return: best state dict
     """
     from src.models.set_localization import hungarian_set_loss
-    var_train_loader = torch.utils.data.DataLoader(data_train_set, var_batch_size, shuffle=True, pin_memory=True)
+    ## Class balance, the same measure the density head applies (preset["density"]["balance_empty_class"]):
+    ## WiMANS has only 5.3% count-0 frames per room (99 of 1881), so a plain shuffle lets the set head
+    ## ignore the empty case. Draw every count class equally often instead, without discarding data.
+    if preset["density"].get("balance_empty_class", False):
+        var_sample_weights = set_count_sampling_weights(data_train_set)
+        var_sampler = torch.utils.data.WeightedRandomSampler(
+            torch.as_tensor(var_sample_weights, dtype=torch.double),
+            num_samples=len(data_train_set), replacement=True)
+        var_train_loader = torch.utils.data.DataLoader(
+            data_train_set, var_batch_size, sampler=var_sampler, pin_memory=True)
+    else:
+        var_train_loader = torch.utils.data.DataLoader(
+            data_train_set, var_batch_size, shuffle=True, pin_memory=True)
     var_valid_loader = torch.utils.data.DataLoader(data_valid_set, len(data_valid_set))
     var_scheduler = get_cosine_schedule_with_warmup(
         optimizer,
@@ -2502,9 +2660,11 @@ def train_coord(model, optimizer, data_train_set, data_valid_set, var_batch_size
     #
     var_best_score, var_best_mae, var_best_weight, var_counter = -np.inf, np.inf, None, 0
     var_ema_bal, var_ema_mae, var_ema_decay = None, None, 0.3
+    var_ema_threshold, var_ema_empty_threshold = None, None
     var_history = {var_key: [] for var_key in ("epoch", "train_loss", "valid_bal", "valid_bal_smoothed",
                                                "valid_mae", "valid_mae_smoothed", "valid_error_m",
-                                               "valid_threshold")}
+                                               "valid_threshold", "valid_threshold_smoothed",
+                                               "valid_empty_threshold", "valid_empty_threshold_smoothed")}
     for var_epoch in range(var_epochs):
         model.train()
         var_loss_sum, var_batches = 0.0, 0
@@ -2525,22 +2685,36 @@ def train_coord(model, optimizer, data_train_set, data_valid_set, var_batch_size
             var_batch = next(iter(var_valid_loader))
             var_xy, var_obj = model(var_batch[0].to(device))
         var_true_count = var_batch[2].sum(axis=1).round().numpy()
-        var_threshold, _ = calibrate_coord_threshold(var_obj.cpu().numpy(), var_true_count)
+        var_empty_threshold, var_threshold = resolve_coord_count_decision(
+            var_obj.cpu().numpy(), var_true_count)
+        ## Smooth both thresholds: a threshold re-fit on a small validation batch every epoch jitters,
+        ## and the metric that selects the checkpoint must not chase that jitter. The epoch's metric is
+        ## computed with the smoothed values; the raw ones are still logged. _ema_update ignores the
+        ## degenerate +-inf empty-gate values (no empty or no occupied frame in the split).
+        var_ema_threshold = _ema_update(var_ema_threshold, var_threshold, var_ema_decay)
+        var_ema_empty_threshold = _ema_update(
+            var_ema_empty_threshold, _finite_or_nan(var_empty_threshold), var_ema_decay)
         var_metrics = coord_metrics(var_xy.cpu().numpy(), var_obj.cpu().numpy(),
-                                    var_batch[1].numpy(), var_batch[2].numpy(), var_threshold)
+                                    var_batch[1].numpy(), var_batch[2].numpy(),
+                                    var_ema_threshold, var_ema_empty_threshold)
         var_ema_bal = _ema_update(var_ema_bal, var_metrics["balanced_accuracy"], var_ema_decay)
         var_ema_mae = _ema_update(var_ema_mae, var_metrics["mae"], var_ema_decay)
+        var_empty_threshold_log = _finite_or_nan(var_empty_threshold)
         wandb.log({"epoch": var_epoch, "train_loss": var_train_loss,
                    "valid_balanced_accuracy": var_metrics["balanced_accuracy"],
                    "valid_balanced_accuracy_smoothed": var_ema_bal,
                    "valid_mae": var_metrics["mae"], "valid_mae_smoothed": var_ema_mae,
                    "valid_position_error_m": var_metrics["position_error_m"],
                    "valid_objectness_threshold": var_threshold,
+                   "valid_objectness_threshold_smoothed": var_ema_threshold,
+                   "valid_empty_threshold": var_empty_threshold_log,
+                   "valid_empty_threshold_smoothed": var_ema_empty_threshold,
                    "learning_rate": optimizer.param_groups[0]["lr"]})
         print(f"Epoch {var_epoch}/{var_epochs} - Loss %.4f - Valid Bal %.4f - Valid MAE %.4f - "
-              "PosErr %.3f m - Thr %.2f"
+              "PosErr %.3f m - Thr %.2f (smooth %.2f) - EmptyThr %.3f (smooth %.3f)"
               % (var_train_loss, var_metrics["balanced_accuracy"], var_metrics["mae"],
-                 var_metrics["position_error_m"], var_threshold))
+                 var_metrics["position_error_m"], var_threshold, var_ema_threshold,
+                 var_empty_threshold_log, var_ema_empty_threshold))
         var_history["epoch"].append(var_epoch)
         var_history["train_loss"].append(var_train_loss)
         var_history["valid_bal"].append(var_metrics["balanced_accuracy"])
@@ -2549,6 +2723,9 @@ def train_coord(model, optimizer, data_train_set, data_valid_set, var_batch_size
         var_history["valid_mae_smoothed"].append(var_ema_mae)
         var_history["valid_error_m"].append(var_metrics["position_error_m"])
         var_history["valid_threshold"].append(var_threshold)
+        var_history["valid_threshold_smoothed"].append(var_ema_threshold)
+        var_history["valid_empty_threshold"].append(var_empty_threshold_log)
+        var_history["valid_empty_threshold_smoothed"].append(var_ema_empty_threshold)
         _plot_coord_curves(var_history, var_save_dir, var_tag)
         #
         if (var_ema_bal > var_best_score
@@ -2627,36 +2804,50 @@ def run_density_map_coords(train_sets_by_env, test_sets_by_env, var_repeat=3,
         model.load_state_dict(var_best_weight)
         model.eval()
         #
-        ## objectness threshold from the training rooms' validation split
+        ## two-stage count decision from the training rooms' validation split: the empty gate and the
+        ## objectness threshold (or the pinned preset values). Both are reported so a run is
+        ## self-describing.
         with torch.no_grad():
             var_vx, var_vpos, var_vmask = next(iter(
                 torch.utils.data.DataLoader(var_valid_set, len(var_valid_set))))
             var_vxy, var_vobj = model(var_vx.to(device))
-        var_threshold, _ = calibrate_coord_threshold(var_vobj.cpu().numpy(),
-                                                     var_vmask.sum(axis=1).round().numpy())
+        var_empty_threshold, var_threshold = resolve_coord_count_decision(
+            var_vobj.cpu().numpy(), var_vmask.sum(axis=1).round().numpy())
         #
         for var_name, (var_x, var_pos, var_mask) in var_test.items():
             with torch.no_grad():
                 var_xy, var_obj = model(var_x.to(device))
             var_metrics = coord_metrics(var_xy.cpu().numpy(), var_obj.cpu().numpy(),
-                                        var_pos.numpy(), var_mask.numpy(), var_threshold)
+                                        var_pos.numpy(), var_mask.numpy(), var_threshold,
+                                        var_empty_threshold)
             var_metrics["threshold"] = var_threshold
+            var_metrics["empty_threshold"] = _finite_or_nan(var_empty_threshold)
             var_env_metrics.setdefault(var_name, []).append(var_metrics)
             wandb.log({f"test_results_per_env/{var_name}/accuracy": var_metrics["accuracy"],
                        f"test_results_per_env/{var_name}/balanced_accuracy": var_metrics["balanced_accuracy"],
                        f"test_results_per_env/{var_name}/mae": var_metrics["mae"],
                        f"test_results_per_env/{var_name}/position_error_m": var_metrics["position_error_m"],
-                       f"test_results_per_env/{var_name}/threshold": var_threshold}, step=var_r + 100000)
+                       f"test_results_per_env/{var_name}/threshold": var_threshold,
+                       f"test_results_per_env/{var_name}/empty_threshold":
+                           _finite_or_nan(var_empty_threshold)}, step=var_r + 100000)
             print(f"  [{var_name}] COUNT Acc {var_metrics['accuracy']:.4f} - "
                   f"Bal {var_metrics['balanced_accuracy']:.4f} - MAE {var_metrics['mae']:.4f} - "
                   f"PosErr {var_metrics['position_error_m']:.3f} m "
                   f"(miss {var_metrics['position_miss_rate']:.3f}, "
-                  f"fp {var_metrics['position_false_positive_rate']:.3f}) - Thr {var_threshold:.2f}")
+                  f"fp {var_metrics['position_false_positive_rate']:.3f}) - "
+                  f"Thr {var_threshold:.2f} - EmptyThr {_finite_or_nan(var_empty_threshold):.3f}")
             #
             if var_r == var_repeat - 1:
                 ## heatmap analogue of the density figure: rasterize the selected query set and the
-                ## ground-truth positions onto the same grid and save it next to the curves
+                ## ground-truth positions onto the same grid and save it next to the curves. The empty
+                ## gate is applied to the rendered sets too, so the figure shows the same decision the
+                ## metrics score.
                 var_pred_sets = select_sets(var_xy, var_obj, var_threshold)
+                if var_empty_threshold is not None:
+                    var_obj_max = coord_objectness_maxima(var_obj.cpu())
+                    var_pred_sets = [var_set if var_obj_max[var_i] >= var_empty_threshold
+                                     else np.zeros((0, 2), dtype=var_set.dtype)
+                                     for var_i, var_set in enumerate(var_pred_sets)]
                 var_pos_np, var_mask_np = var_pos.numpy(), var_mask.numpy()
                 var_true_sets = [var_pos_np[var_i][var_mask_np[var_i] > 0.5]
                                  for var_i in range(len(var_pos_np))]
@@ -2687,6 +2878,9 @@ def run_density_map_coords(train_sets_by_env, test_sets_by_env, var_repeat=3,
             var_env_result[f"std_{var_metric}"] = var_std
             var_env_result[f"se_{var_metric}"] = var_std / np.sqrt(len(var_arr)) if len(var_arr) > 1 else 0.0
         var_env_result["avg_threshold"] = float(np.mean([var_rep["threshold"] for var_rep in var_rep_list]))
+        var_empty_values = np.array([var_rep["empty_threshold"] for var_rep in var_rep_list])
+        var_env_result["avg_empty_threshold"] = (float(np.nanmean(var_empty_values))
+                                                 if np.isfinite(var_empty_values).any() else float("nan"))
         var_env_result["per_class_accuracy"] = {
             var_class: float(np.mean([var_rep["per_class_accuracy"][var_class] for var_rep in var_rep_list]))
             for var_class in range(var_num_classes)}

@@ -36,6 +36,12 @@ from configs.preset import preset
 ## folder, "prefix" the room token inside the file names (e.g. Conference files start with "Con"),
 ## "x_range"/"y_range" the UWB coordinate grid of the room in meters, and "aps" the access points
 ## with captures (the lounge swaps sRE22 for sRE4). All values are raw dataset metadata.
+##
+## "ap_location"/"ap_toward" are the AP geometry from obtain_parameters.m, keyed by AP name so the
+## ordering of "aps" never has to be trusted. ap_location[ap] is the AP's (x, y) in the same UWB
+## meter frame as uwb_coordinate_x/y; ap_toward[ap] is the AP boresight heading in degrees, with the
+## convention orientation_xy.m implements: 0 -> +x, 90 -> +y, 180 -> -x, -90 -> -y. Together they
+## define the transmitter-anchored frame tx_frame_xy() maps a capture into.
 HWILD_ROOMS = {
     "Conference": {
         "dir": "Conference",
@@ -43,6 +49,9 @@ HWILD_ROOMS = {
         "x_range": (-3.0, 7.0),
         "y_range": (-3.0, 7.0),
         "aps": ("sRE22", "sRE5", "sRE6", "sRE7"),
+        "ap_location": {"sRE22": (-1.7, 3.0), "sRE5": (2.0, -0.6),
+                        "sRE6": (4.6, 3.4), "sRE7": (2.0, 6.6)},
+        "ap_toward": {"sRE22": 180.0, "sRE5": 90.0, "sRE6": 180.0, "sRE7": 90.0},
     },
     "Laboratory": {
         "dir": "Laboratory",
@@ -50,6 +59,9 @@ HWILD_ROOMS = {
         "x_range": (-2.0, 10.0),
         "y_range": (-2.0, 10.0),
         "aps": ("sRE22", "sRE5", "sRE6", "sRE7"),
+        "ap_location": {"sRE22": (-1.7, 3.0), "sRE5": (2.0, -1.1),
+                        "sRE6": (6.0, 3.0), "sRE7": (2.0, 6.3)},
+        "ap_toward": {"sRE22": 180.0, "sRE5": 90.0, "sRE6": 180.0, "sRE7": -90.0},
     },
     "Office": {
         "dir": "Office",
@@ -57,6 +69,9 @@ HWILD_ROOMS = {
         "x_range": (-3.0, 7.0),
         "y_range": (-4.0, 12.0),
         "aps": ("sRE22", "sRE5", "sRE6", "sRE7"),
+        "ap_location": {"sRE22": (5.7, 3.4), "sRE5": (1.4, 9.2),
+                        "sRE6": (3.2, -0.3), "sRE7": (-1.5, 4.8)},
+        "ap_toward": {"sRE22": 0.0, "sRE5": -90.0, "sRE6": 90.0, "sRE7": 0.0},
     },
     "Lounge": {
         "dir": "Lounge",
@@ -64,6 +79,9 @@ HWILD_ROOMS = {
         "x_range": (-4.0, 12.0),
         "y_range": (-2.0, 14.0),
         "aps": ("sRE4", "sRE5", "sRE6", "sRE7"),
+        "ap_location": {"sRE4": (-0.8, 5.6), "sRE5": (7.2, 6.4),
+                        "sRE6": (4.0, 0.0), "sRE7": (1.6, 9.6)},
+        "ap_toward": {"sRE4": 0.0, "sRE5": 180.0, "sRE6": 90.0, "sRE7": -90.0},
     },
 }
 
@@ -113,6 +131,28 @@ def denormalize_xy(var_xy, var_room):
     var_out[..., 0] = var_out[..., 0] * (var_x_range[1] - var_x_range[0]) + var_x_range[0]
     var_out[..., 1] = var_out[..., 1] * (var_y_range[1] - var_y_range[0]) + var_y_range[0]
     return var_out
+
+
+def tx_frame_xy(var_xy_m, var_room, var_ap):
+    """
+    [description]
+    : map raw UWB (x, y) in meters into the transmitter-anchored frame of one capture: the origin is
+      the capture's AP (ap_location) and +y runs along the AP boresight (ap_toward), so +y is "away
+      from the transmitter" and +x is "to the right" -- the convention preset["layouts"] states for
+      WiMANS. This is the frame the two datasets can share; the per-room UWB grid normalize_xy uses
+      has no counterpart in WiMANS.
+    : var_xy_m: numpy array (..., 2) of raw UWB coordinates in meters
+    : var_ap: the AP name of the capture, e.g. "sRE22" (parse_hwild_name gives it)
+    : return: same shape, (x, y) in meters relative to the AP, rotated to the boresight
+    """
+    var_ax, var_ay = HWILD_ROOMS[var_room]["ap_location"][var_ap]
+    var_theta = np.deg2rad(HWILD_ROOMS[var_room]["ap_toward"][var_ap])
+    var_dx = np.asarray(var_xy_m, dtype=np.float64)[..., 0] - var_ax
+    var_dy = np.asarray(var_xy_m, dtype=np.float64)[..., 1] - var_ay
+    var_cos, var_sin = np.cos(var_theta), np.sin(var_theta)
+    ## rotate by (90 - theta) so the boresight becomes +y; right-handed, matching WiMANS' x right.
+    return np.stack([var_dx * var_sin - var_dy * var_cos,
+                     var_dx * var_cos + var_dy * var_sin], axis=-1).astype(np.float32)
 
 
 def parse_hwild_name(var_path):
@@ -219,14 +259,19 @@ def list_hwild_files(var_room, var_root=None, var_aps=None, var_users=None, var_
 
 
 def load_hwild_room(var_room, var_root=None, var_aps=None, var_users=None, var_interference=None,
-                    var_window=None, var_stride=None, var_max_files=None, var_max_windows=None):
+                    var_window=None, var_stride=None, var_max_files=None, var_max_windows=None,
+                    var_frame="room"):
     """
     [description]
     : load one H-WILD room as a windowed (CSI, position) set.
     : var_window / var_stride: window length and hop in packets (defaults from preset["hwild"])
-    : var_max_files: int or None, keep only the first N captures (quick runs / smoke tests)
-    : var_max_windows: int or None, cap the number of windows per room
-    : return: (X (num_windows, window, 90) float32, XY (num_windows, 2) float32 normalized, meta dict)
+    : var_max_files: int | None, keep only the first N captures (quick runs / smoke tests)
+    : var_max_windows: int | None, cap the number of windows per room
+    : var_frame: "room" -> per-room [0, 1]^2 UWB grid (normalize_xy); "tx" -> the shared
+      transmitter-anchored metric frame of tx_frame_xy (meters from the capture's AP, +y boresight).
+      Use "tx" for anything that must line up with another dataset (WiMANS); "room" is the original
+      behaviour the H-WILD leave-one-room-out harness uses.
+    : return: (X (num_windows, window, 90) float32, XY (num_windows, 2) float32 in var_frame, meta dict)
     """
     #
     ##
@@ -244,8 +289,13 @@ def load_hwild_room(var_room, var_root=None, var_aps=None, var_users=None, var_i
     var_x_list, var_y_list, var_names = [], [], []
     for var_path in var_paths:
         var_amp, var_xy = _read_hwild_mat(var_path)
-        var_xy_norm = normalize_xy(var_xy, var_room)
-        var_x, var_y = build_windows(var_amp, var_xy_norm, var_window, var_stride)
+        if var_frame == "tx":
+            var_xy = tx_frame_xy(var_xy, var_room, parse_hwild_name(var_path)["ap"])
+        elif var_frame == "room":
+            var_xy = normalize_xy(var_xy, var_room)
+        else:
+            raise ValueError(f"unknown var_frame {var_frame!r}; choose 'room' or 'tx'")
+        var_x, var_y = build_windows(var_amp, var_xy, var_window, var_stride)
         if var_x is None:
             continue
         var_x_list.append(var_x)

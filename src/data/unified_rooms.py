@@ -163,6 +163,29 @@ def load_wimans_room(var_room, var_max_samples=None, var_length=None, var_band=N
     return var_x, var_pos, var_mask
 
 
+def load_wimans_room_targets(var_room, var_max_samples=None, var_length=None, var_band=None,
+                             var_users=None):
+    """
+    [description]
+    : load one WiMANS room as single-target (X, XY) samples in the transmitter-anchored metric frame,
+      for the single-target localizer (RoomLocalizer). A WiMANS frame labels up to six users, which a
+      one-position model cannot consume, so only the frames with exactly one occupant are kept.
+    : The frame is the one preset["layouts"] states: origin at the transmitter, +x right, +y away,
+      in meters. That is the same physical frame tx_frame_xy() puts an H-WILD capture in, so a model
+      trained on H-WILD can be evaluated on these positions with no per-room re-normalisation.
+    : var_max_samples / var_length / var_band / var_users: as load_wimans_room
+    : return: (X (N, length, 90) float32, Y (N, 2) float32 meters from the transmitter)
+    """
+    var_x, var_pos, var_mask = load_wimans_room(var_room, var_max_samples=var_max_samples,
+                                                var_length=var_length, var_band=var_band,
+                                                var_users=var_users)
+    var_single = np.where(var_mask.sum(axis=1).round().astype(int) == 1)[0]
+    ## var_pos is normalised into WIMANS_BOUNDS, whose origin is the transmitter, so scaling by the
+    ## room extent returns meters measured from the transmitter.
+    var_y = var_pos[var_single, 0] * np.asarray(WIMANS_EXTENT_M, dtype=np.float32)
+    return var_x[var_single], var_y
+
+
 def _hwild_room_sets(var_room, var_length=None, var_max_samples=None, **kwargs):
     """
     [description]

@@ -182,7 +182,7 @@ preset = {
         ##   "coords": a single head that directly regresses the user locations (x, y) and counts
         ##     them -- count = number of predicted locations, reported in meters. Uses SetLocalizer
         ##     (src/models/set_localization.py) with the Hungarian set loss.
-        "head": "coords",
+        "head": "density",
         ## Absolute floor for peak extraction (e.g. the pcap-inference path, which has no validation
         ## split to calibrate an empty gate on). A map whose maximum is below it yields no peaks.
         "peak_abs_floor": 0.0,
@@ -209,7 +209,7 @@ preset = {
         ## "empty_threshold" None => calibrate the gate on the validation split; set False to disable
         ## the gate entirely (single-threshold behaviour, calibrated on every frame).
         "staged_count": True,
-        "empty_threshold": None,
+        "empty_threshold": None,#TODO: figure out what this does 
     },
 
     ## H-WILD human-held-device localization (src/data/hwild.py). "path" is the dataset root holding
@@ -239,4 +239,4 @@ preset = {
 }
 
 preset["nn"]["num_classes"] = 6 if preset["task"] in ("location", "count") else 10
-preset["nn"]["num_count_classes"] = 6  # group-count task: 0..5 people
+preset["nn"]["num_count_classes"] = 6 #TODO check why this is used
