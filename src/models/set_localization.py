@@ -36,6 +36,7 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from configs.preset import preset
 from src.models.bce_that import THAT
+from src.models.modules.molecules import Backbone
 from src.models.that_variance import build_thatv, parse_backbone
 from src.models.density_map import get_cosine_schedule_with_warmup, augment_csi
 from src.models.room_density import (set_localization_metrics, visualize_room_density, _resolve_spans,
@@ -61,14 +62,23 @@ class SetLocalizer(nn.Module):
                  num_decoder_layers=2, dim_feedforward=256, dropout=0.1):
         #
         super().__init__()
-        ## nn.backbone selects the encoder, same contract as DensityMapNet and AMAR_WO_RVQ: "default"
-        ## -> THAT, "thatv*" -> THATV. The coordinate head uses only the single-vector forward(), so
-        ## the "tokens" feature is unused here (but harmless: forward() never calls forward_sequence).
+        ## nn.backbone selects the encoder, the same contract as DensityMapNet and AMAR_WO_RVQ:
+        ## "default" -> THAT, "thatv*" -> THATV, "cnn" -> the AMAR CNN Backbone. The coordinate head
+        ## uses only the single-vector forward(), so the "tokens" feature is unused here (but harmless:
+        ## forward() never calls forward_sequence). The CNN backbone emits a token sequence (B, N, D)
+        ## instead of one vector, so forward() sums it over time to reach the (B, D) memory_proj
+        ## expects; the sum matches DensityMapNet's aggregation of the same encoder. Note that the CNN
+        ## backbone hardcodes BatchNorm1d, so nn.encoder_norm has no effect when it is selected.
         var_backbone = preset["nn"].get("backbone", "default")
         var_is_thatv, _ = parse_backbone(var_backbone)
-        self.backbone = (build_thatv(var_x_shape, [embedding_dim], var_backbone)
-                         if var_is_thatv
-                         else THAT(var_x_shape, [embedding_dim]))
+        if var_backbone == "cnn":
+            self.backbone = Backbone(input_channels=var_x_shape[-1], output_channels=embedding_dim)
+            self.var_pool_backbone = True
+        else:
+            self.backbone = (build_thatv(var_x_shape, [embedding_dim], var_backbone)
+                             if var_is_thatv
+                             else THAT(var_x_shape, [embedding_dim]))
+            self.var_pool_backbone = False
         self.memory_proj = nn.Linear(embedding_dim, d_model)
         self.query_embed = nn.Parameter(torch.randn(num_queries, d_model) * 0.02)
         var_layer = nn.TransformerDecoderLayer(d_model, nhead, dim_feedforward=dim_feedforward,
@@ -87,6 +97,9 @@ class SetLocalizer(nn.Module):
         : obj: (batch, num_queries) objectness logits
         """
         var_feat = self.backbone(x)
+        if self.var_pool_backbone:
+            ## CNN backbone: (B, N, D) token sequence -> (B, D) by summing over time
+            var_feat = var_feat.sum(dim=1)
         var_memory = self.memory_proj(var_feat).unsqueeze(1)
         var_queries = self.query_embed.unsqueeze(0).expand(x.size(0), -1, -1)
         var_out = self.decoder(var_queries, var_memory)
