@@ -279,6 +279,37 @@ current model fits H-WILD validation (≈1.5 m) but does not transfer to WiMANS 
 while WiMANS is passive scattering, so a range/position cue learned on one need not survive on the
 other.
 
+### 6. H-WILD → WiMANS few-shot knowledge distillation
+
+`scripts/run_few_shot_hwild_to_wimans.py` turns the transfer run above into a few-shot distillation,
+mirroring the repo's other few-shot harnesses (`run_few_shot.py`, `run_AMAR_WO_RVQ_few_shot`,
+`run_density_map_few_shot`):
+
+- **Teacher** — `RoomLocalizer` trained on every H-WILD room, then frozen.
+- **Student** — `RoomLocalizer` warm-started from the teacher and fine-tuned on `--few_shot_ratio` of
+  the WiMANS pool with the supervised Huber position loss plus `--kd_weight` × a smooth-L1 match to
+  the frozen teacher on the same support windows. `RoomLocalizer` is a single-target regressor, so the
+  distillation term is a plain element-wise match — no Hungarian assignment, unlike
+  `SetDistillationLoss` (`src/models/losses/supervised_loss.py`).
+- **Test** — the WiMANS frames held out of both the support set and the student's validation slice.
+  Teacher and constant-position baseline are reported alongside.
+
+Both datasets sit in the shared transmitter-anchored frame, so positions are comparable in meters.
+
+```bash
+python scripts/run_few_shot_hwild_to_wimans.py --few_shot_ratio 0.05 --kd_weight 1.0
+python scripts/run_few_shot_hwild_to_wimans.py --few_shot_ratio 0.05 --kd_weight 0    # ablation
+```
+
+**Read the `--kd_weight 0` run as the honest reference.** The teacher's own WiMANS error is *worse*
+than the constant baseline (H-WILD's device-link channel does not transfer to WiMANS passive
+scattering — see section 5), so the distillation term pulls the student toward weak targets. Run both
+weights and compare the student column; if `kd_weight 1.0` does not beat `0`, the teacher is dead
+weight and the few-shot gain is coming from the WiMANS support set alone.
+
+Reports go to `output/few_shot_hwild_to_wimans/*.json|txt`; curves to
+`visualizations/few_shot_hwild_to_wimans/<train_rooms>/`.
+
 ## Available Models
 
 | Model | Type | Description | Reference |
