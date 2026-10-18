@@ -351,6 +351,14 @@ def run():
     ## write the JSON and the human-readable report to auto-named files, so concurrent or repeated
     ## runs never collide and never have to be renamed by hand
     formatted = format_result(var_model, var_task, result)
+    save_dir = preset["path"].get("save_dir", "output")
+    sample_tag = "all" if not var_args.train_samples else str(var_args.train_samples)
+    var_stem = build_run_stem(var_model, var_task, f"env-{var_env}", f"n{sample_tag}",
+                              f"r{var_repeat}", f"e{preset['nn']['epoch']}", run_timestamp())
+    var_json_path, var_txt_path = save_run_outputs(save_dir, "single", var_stem, result, formatted)
+
+    print(f"Results saved to: {var_json_path}")
+    print(f"Report saved to:  {var_txt_path}")
     print(formatted)
 
 

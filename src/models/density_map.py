@@ -733,8 +733,10 @@ def layout_free_counts(var_density, var_peak_threshold, var_mass, var_empty_thre
     [description]
     : the two layout-free counts of a batch, plus the predicted peak positions.
       - peak count: number of map peaks whose value is strictly above var_peak_threshold.
-      - mass count: round(map_sum / per_person_mass), forced to 0 when the map maximum is below the
-        empty gate (the same map-max gate the template rule uses).
+      - mass count: round(map_sum / per_person_mass).
+      Both counts are forced to 0, and the predicted positions emptied, when the map maximum is below
+      var_empty_threshold (the same map-max gate the template rule uses), so the reported count and the
+      "where" stay consistent: a frame the gate declares empty has neither a count nor a position.
     : var_density: numpy (N, H, W) predicted maps
     : var_peak_threshold: absolute peak value threshold from layout_free_calibration
     : var_mass: per-person map mass from layout_free_calibration
@@ -751,7 +753,11 @@ def layout_free_counts(var_density, var_peak_threshold, var_mass, var_empty_thre
     var_peak_counts = np.asarray(var_peak_counts, dtype=int)
     var_mass_counts = np.asarray(var_mass_counts, dtype=int)
     if var_empty_threshold is not None:
-        var_mass_counts = np.where(density_map_maxima(var_density) < var_empty_threshold, 0, var_mass_counts)
+        var_is_empty = density_map_maxima(var_density) < var_empty_threshold
+        var_peak_counts = np.where(var_is_empty, 0, var_peak_counts)
+        var_mass_counts = np.where(var_is_empty, 0, var_mass_counts)
+        var_positions = [np.zeros((0, 2), dtype=np.float32) if var_empty else var_pos
+                         for var_empty, var_pos in zip(var_is_empty, var_positions)]
     return var_peak_counts, var_mass_counts, var_positions
 
 
@@ -765,7 +771,8 @@ def evaluate_count_rule(var_rule, var_pred_density, var_true_y, var_layout, var_
         clears var_occ_threshold (the original rule; needs the layout).
       "layout_free": count = number of map peaks above var_peak_threshold, with the mass count and the
         position error reported alongside; the per-location occupancy readout is still reported as an
-        auxiliary metric but plays no part in the count.
+        auxiliary metric but plays no part in the count. The empty gate (var_empty_threshold) zeroes
+        both counts and drops the predicted positions of a frame it declares empty.
     : var_pred_density: numpy (N, H, W) predicted maps
     : var_true_y: (N, num_locations) 0/1 occupancy targets (ground truth, for scoring only)
     : var_layout: dict of the room, used to score positions (never fed to the model)
@@ -1305,7 +1312,7 @@ def train_density(model,
             var_peak_threshold, var_mass = layout_free_calibration(
                 var_valid_density_np, var_true_count)
             var_pred_count = layout_free_counts(
-                var_valid_density_np, var_peak_threshold, var_mass)[0]
+                var_valid_density_np, var_peak_threshold, var_mass, var_empty_threshold)[0]
         else:
             var_peak_threshold = None
             var_pred_count = predict_counts_staged(
@@ -1487,6 +1494,7 @@ def run_density_map(data_train_x,
     #
     result_per_class = []
     var_rep_metrics = []
+    var_valid_rep_metrics = []
     #
     var_macs, var_params = get_model_complexity_info(
         DensityMapNet(var_x_shape, var_layout, grid_size=var_grid_size,
@@ -1567,6 +1575,14 @@ def run_density_map(data_train_x,
             var_threshold, var_empty_threshold, var_peak_threshold, var_mass)
         var_occupancy = var_extra["occupancy"]
         #
+        ## the identical decision scored on the validation split, so a pinned threshold can be chosen
+        ## on held-out data instead of on the split it is then reported on (scripts/sweep_density.sh).
+        ## Reported as valid_avg_* / se_valid_* alongside the test metrics.
+        var_valid_metrics, _ = evaluate_count_rule(
+            var_count_rule, var_valid_density.cpu().numpy(), data_valid_y, var_layout,
+            model_density.kernels.cpu(), var_threshold, var_empty_threshold,
+            var_peak_threshold, var_mass)
+        #
         var_empty_threshold_log = _finite_or_nan(var_empty_threshold)
         var_metric_logs = {}
         if "mass_accuracy" in var_count_metrics:
@@ -1625,6 +1641,7 @@ def run_density_map(data_train_x,
             print(f"  Figure saved to {var_fig_path}")
         #
         var_rep_metrics.append(var_count_metrics)
+        var_valid_rep_metrics.append(var_valid_metrics)
         result_per_class.append(var_count_metrics["per_class_accuracy"])
         #
         if var_r != var_repeat - 1:
@@ -1653,6 +1670,11 @@ def run_density_map(data_train_x,
             var_mean, var_se = mean_se([var_rep[var_name] for var_rep in var_rep_metrics])
             results[f"avg_{var_name}"] = var_mean
             results[f"se_{var_name}"] = var_se
+        ## the same aggregation on the validation split, under the valid_ prefix
+        if all(var_name in var_rep for var_rep in var_valid_rep_metrics):
+            var_mean, var_se = mean_se([var_rep[var_name] for var_rep in var_valid_rep_metrics])
+            results[f"valid_avg_{var_name}"] = var_mean
+            results[f"se_valid_{var_name}"] = var_se
     results["per_class_accuracy"] = {
         var_class: float(np.mean([var_rep[var_class] for var_rep in result_per_class]))
         for var_class in range(var_num_classes)
