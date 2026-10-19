@@ -2,20 +2,6 @@
 [file]          run_hwild_to_wimans.py
 [description]   Train the single-target (x, y) localizer (RoomLocalizer) on the H-WILD dataset and
                 evaluate it on the WiMANS locations, reporting the error in meters.
-
-                Both datasets are placed in one shared transmitter-anchored frame: origin at the
-                transmitter (the H-WILD capture's AP, the WiMANS room corner), +y along the boresight
-                ("away from the transmitter"), +x to the right, units of meters. WiMANS is already in
-                this frame (preset["layouts"] is transmitter-anchored); H-WILD is mapped into it by
-                src.data.hwild.tx_frame_xy using the AP geometry from obtain_parameters.m.
-
-                A single shared rectangle over both datasets then normalises the positions for the
-                RoomLocalizer harness, so the per-room [0, 1]^2 convention (which has no shared
-                origin) is not used here; the reported error is a plain Euclidean distance in meters.
-
-                Example:
-                    python scripts/run_hwild_to_wimans.py --repeat 2 --epochs 40 --max_files 2
-                    python scripts/run_hwild_to_wimans.py --standardize none
 """
 #
 ##
@@ -105,13 +91,10 @@ def run():
                        if var_args.train_rooms else hwild_room_names())
     var_test_rooms = ([var_room.strip() for var_room in var_args.test_rooms.split(',')]
                       if var_args.test_rooms else list(WIMANS_ROOMS))
-    for var_room in var_train_rooms:
-        if var_room not in HWILD_ROOMS:
-            raise ValueError(f"unknown H-WILD room {var_room!r}; choose from {hwild_room_names()}")
-    for var_room in var_test_rooms:
-        if var_room not in WIMANS_ROOMS:
-            raise ValueError(f"unknown WiMANS room {var_room!r}; choose from {WIMANS_ROOMS}")
-    #
+    # check no overlap between train and test rooms
+    if set(var_train_rooms) & set(var_test_rooms):
+        raise ValueError(f"train rooms {var_train_rooms} and test rooms {var_test_rooms} overlap")
+  
     if var_args.window is not None:
         preset["hwild"]["window"] = var_args.window
     if var_args.stride is not None:
@@ -130,20 +113,35 @@ def run():
                        "var_interference": var_interference, "var_max_files": var_args.max_files}
     train_sets_by_room, test_sets_by_room = {}, {}
     for var_room in var_train_rooms:
-        var_x, var_y, var_meta = load_hwild_room(var_room, var_frame="tx", **var_load_kwargs)
-        train_sets_by_room[var_room] = (var_x, var_y)
-        print(f"[train] {var_room:12s} X {var_x.shape} XY {var_y.shape} "
-              f"({var_meta['num_files']} captures)")
+        if var_room in hwild_room_names():
+            var_x, var_y, var_meta = load_hwild_room(var_room, var_frame="tx", **var_load_kwargs)
+            train_sets_by_room[var_room] = (var_x, var_y)
+            print(f"[train] {var_room:12s} X {var_x.shape} XY {var_y.shape} "
+                f"({var_meta['num_files']} captures)")
+        elif var_room in WIMANS_ROOMS:
+            var_x, var_y = load_wimans_room_targets(var_room, var_max_samples=var_args.max_samples,
+                                                    var_length=preset["hwild"]["window"])
+            if len(var_x) == 0:
+                raise ValueError(f"no single-occupant WiMANS frames for {var_room!r}")
+            train_sets_by_room[var_room] = (var_x, var_y)
+            print(f"[train] {var_room:12s} X {var_x.shape} XY {var_y.shape} "
+                  f"({len(np.unique(var_y.round(3), axis=0))} distinct positions)")
     ## WiMANS positions are already meters from the transmitter (preset["layouts"]); only the
     ## single-occupant frames are kept, since the localizer predicts one position.
     for var_room in var_test_rooms:
-        var_x, var_y = load_wimans_room_targets(var_room, var_max_samples=var_args.max_samples,
-                                                var_length=preset["hwild"]["window"])
-        if len(var_x) == 0:
-            raise ValueError(f"no single-occupant WiMANS frames for {var_room!r}")
-        test_sets_by_room[var_room] = (var_x, var_y)
-        print(f"[test]  {var_room:12s} X {var_x.shape} XY {var_y.shape} "
-              f"({len(np.unique(var_y.round(3), axis=0))} distinct positions)")
+        if var_room in hwild_room_names():
+            var_x, var_y, var_meta = load_hwild_room(var_room, var_frame="tx", **var_load_kwargs)
+            test_sets_by_room[var_room] = (var_x, var_y)
+            print(f"[test]  {var_room:12s} X {var_x.shape} XY {var_y.shape} "
+                f"({var_meta['num_files']} captures)")
+        elif var_room in WIMANS_ROOMS:
+            var_x, var_y = load_wimans_room_targets(var_room, var_max_samples=var_args.max_samples,
+                                                    var_length=preset["hwild"]["window"])
+            if len(var_x) == 0:
+                raise ValueError(f"no single-occupant WiMANS frames for {var_room!r}")
+            test_sets_by_room[var_room] = (var_x, var_y)
+            print(f"[test]  {var_room:12s} X {var_x.shape} XY {var_y.shape} "
+                f"({len(np.unique(var_y.round(3), axis=0))} distinct positions)")
     #
     ## ------------------------------------ shared frame --------------------------------------------
     ## One rectangle over every loaded position defines the frame both datasets are normalised into,
