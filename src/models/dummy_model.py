@@ -23,9 +23,11 @@ class DUMMY(nn.Module):
     def __init__(self, var_x_shape, var_y_shape):
         super(DUMMY, self).__init__()
 
-        # Keep only the dimensions needed for the deterministic 2-stage logic
-        self.num_features = int(np.prod(var_x_shape[1:])) if isinstance(var_x_shape, tuple) else int(var_x_shape[-1])
-        self.num_classes = int(np.prod(var_y_shape)) if isinstance(var_y_shape, (list, tuple)) else int(var_y_shape)
+        # The input is flattened to one vector per sample (see forward), so every non-batch axis
+        # contributes: (N, 3000, 3, 3, 30) -> 3000*3*3*30 = 810000 features. Using var_x_shape[1:]
+        # dropped one axis (270 = 3*3*30) and never matched the flattened input.
+        self.num_features = int(np.prod(var_x_shape))
+        self.num_classes = int(np.prod(var_y_shape))
 
         # Stage-1 gate: empty vs non-empty
         self.empty_head = nn.Linear(self.num_features, 1)
@@ -37,10 +39,10 @@ class DUMMY(nn.Module):
         2) if non-empty: output vector with a,b = 1
         """
         empty_threshold = 0.04
-        # Flatten sequence into one vector per sample
-        x = var_input
-        if x.dim() == 3:
-            x = x.reshape(x.size(0), -1)
+        # Flatten every non-batch axis into one vector per sample. The CSI input is 5-D
+        # (N, length, 3, 3, 30); the old `if x.dim() == 3` never fired, so Linear got the raw
+        # (N, 3000, 3, 3, 30) and failed on the trailing 30 vs num_features.
+        x = var_input.reshape(var_input.size(0), -1)
 
         # Stage 1: empty score
         empty_score = torch.sigmoid(self.empty_head(x)).squeeze(-1)
@@ -88,7 +90,11 @@ def run_DUMMY(data_train_x,
         data_train_y = data_train_y[:, None]
 
     var_x_shape = data_train_x.shape[1:]
-    var_y_shape = [data_train_y.shape[1]]
+    ## The head emits one value per location. The metric compares it against the per-location
+    ## occupancy, i.e. the per-user location one-hots summed over users: (N, 6, 5) -> (N, 5). The old
+    ## var_y_shape = [data_train_y.shape[1]] took the *user* axis (6) and mismatched that target.
+    var_y_shape = ([data_train_y.sum(axis=1).shape[1]] if data_train_y.ndim == 3
+                   else [data_train_y.shape[1]])
 
     result = {}
     result_accuracy = []
