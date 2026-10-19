@@ -70,8 +70,8 @@ def run_DUMMY(data_train_x,
               data_train_y,
               data_test_x,
               data_test_y,
-              var_repeat=10):
-
+              var_repeat=10, var_task="location", var_env="empty_room", save_path="./visualizations/temp"):
+    #
     device = select_device()
 
     data_train_x = np.asarray(data_train_x)

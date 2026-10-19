@@ -321,6 +321,8 @@ def run():
     elif var_model == "density_map": run_model = run_density_map
 
     elif var_model == "density_map_dem": run_model = run_density_map_dem
+    
+    elif var_model == "dummy_model": run_model = run_DUMMY
 
     else:
         raise Exception("Not valid name for model")   
