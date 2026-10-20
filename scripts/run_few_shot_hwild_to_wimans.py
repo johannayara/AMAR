@@ -119,6 +119,10 @@ def run():
                        if var_args.train_rooms else hwild_room_names())
     var_test_rooms = ([var_room.strip() for var_room in var_args.test_rooms.split(',')]
                       if var_args.test_rooms else list(WIMANS_ROOMS))
+    ## the teacher's data and the student's support/query pool must be disjoint, or the "held-out"
+    ## query frames would be frames the teacher was trained on
+    if set(var_train_rooms) & set(var_test_rooms):
+        raise ValueError(f"train rooms {var_train_rooms} and test rooms {var_test_rooms} overlap")
     for var_room in var_train_rooms:
         if var_room not in HWILD_ROOMS:
             raise ValueError(f"unknown H-WILD room {var_room!r}; choose from {hwild_room_names()}")
@@ -172,8 +176,8 @@ def run():
                 f"({len(np.unique(var_y.round(3), axis=0))} distinct positions)")
     #
     ## ------------------------------------ shared frame --------------------------------------------
-    var_all_xy = np.concatenate([var_y for _, var_y in list(hwild_sets_by_room.values())
-                                 + list(wimans_sets_by_room.values())])
+    var_all_xy = np.concatenate([var_y for _, var_y in list(train_sets_by_room.values())
+                                 + list(test_sets_by_room.values())])
     var_margin = 0.5
     var_rect = (float(var_all_xy[:, 0].min() - var_margin), float(var_all_xy[:, 0].max() + var_margin),
                 float(var_all_xy[:, 1].min() - var_margin), float(var_all_xy[:, 1].max() + var_margin))
@@ -182,7 +186,7 @@ def run():
           f"(span {var_rect[1] - var_rect[0]:.2f} x {var_rect[3] - var_rect[2]:.2f} m)")
     #
     if var_args.standardize == "window":
-        for var_sets in (hwild_sets_by_room, wimans_sets_by_room):
+        for var_sets in (train_sets_by_room, test_sets_by_room):
             for var_room, (var_x, var_y) in var_sets.items():
                 var_sets[var_room] = (standardize_windows(var_x), var_y)
         print("CSI: per-window z-score (gain/AGC removed)")
