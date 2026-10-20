@@ -194,9 +194,14 @@ def run():
         "interference": var_interference,
         "standardize": var_args.standardize,
         "tx_frame_rect_m": var_rect,
-        "ap_geometry": {var_room: {"ap_location": HWILD_ROOMS[var_room]["ap_location"],
-                                   "ap_toward": HWILD_ROOMS[var_room]["ap_toward"]}
-                        for var_room in var_train_rooms},
+        "ap_geometry": {
+            var_room: ({"ap_location": HWILD_ROOMS[var_room]["ap_location"],
+                        "ap_toward": HWILD_ROOMS[var_room]["ap_toward"]}
+                    if var_room in hwild_room_names()
+                    else {"ap_location": (0.0, 0.0), "ap_toward": (0.0, 0.0)})
+            for var_room in var_train_rooms
+        },
+
         "per_env": var_results,
     }
     #

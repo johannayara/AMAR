@@ -1,5 +1,5 @@
 """
-[file]          DUMMY.py
+[file]          dummy_model.py
 """
 #
 ##
@@ -168,6 +168,12 @@ def run_DUMMY(data_train_x,
         'avg_train_time': float(np.mean(result_time_train)),
         'avg_test_time': float(np.mean(result_time_test)),
     }
+    viz_stats = visualize_model_performance(
+        y_pred=last_layer_predictions,
+        y_true=data_test_y,
+        var_mode=var_mode,
+        save_dir=save_path
+    )
 
     if wandb.run is not None:
         wandb.log({

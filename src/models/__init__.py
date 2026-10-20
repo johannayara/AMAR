@@ -16,7 +16,7 @@ from .density_map_dem import (run_density_map_dem, run_density_map_dem_cross_dom
 from .AMAR import run_AMAR
 from .room_localization import (run_localization_cross_domain, load_room_model, predict_room_xy)
 from .room_density import run_room_density_cross_domain
-from .dummy_model import DUMMY
+from .dummy_model import run_DUMMY
 
 #
 ##
