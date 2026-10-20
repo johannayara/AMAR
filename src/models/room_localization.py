@@ -666,8 +666,11 @@ def run_few_shot_localization(hwild_sets_by_room, wimans_sets_by_room, var_few_s
                 var_student_xy = var_student(var_q_x).cpu().numpy()
                 var_teacher_xy = var_teacher(var_q_x).cpu().numpy()
             var_student_metrics = localization_metrics(var_student_xy, var_q_y, var_span)
-            var_student_metrics["const_mean_error_m"] = localization_metrics(
-                np.tile(var_const_baseline, (len(var_q_y), 1)), var_q_y, var_span)["mean_error_m"]
+            var_const_metrics = localization_metrics(
+                np.tile(var_const_baseline, (len(var_q_y), 1)), var_q_y, var_span)
+            var_student_metrics["const_mean_error_m"] = var_const_metrics["mean_error_m"]
+            var_student_metrics["const_rmse_m"] = var_const_metrics["rmse_m"]
+            var_student_metrics["const_median_error_m"] = var_const_metrics["median_error_m"]
             var_student_query_metrics.setdefault(var_room, []).append(var_student_metrics)
             var_teacher_query_metrics.setdefault(var_room, []).append(
                 localization_metrics(var_teacher_xy, var_q_y, var_span))
@@ -701,8 +704,12 @@ def run_few_shot_localization(hwild_sets_by_room, wimans_sets_by_room, var_few_s
                 float(var_student_arr.std(ddof=1) / np.sqrt(len(var_student_arr)))
                 if len(var_student_arr) > 1 else 0.0)
             var_env_result[f"avg_teacher_{var_name}"] = float(var_teacher_arr.mean())
-        var_env_result["avg_const_mean_error_m"] = float(
-            np.mean([var_rep["const_mean_error_m"] for var_rep in var_student_list]))
+            var_env_result[f"se_teacher_{var_name}"] = (
+                float(var_teacher_arr.std(ddof=1) / np.sqrt(len(var_teacher_arr)))
+                if len(var_teacher_arr) > 1 else 0.0)
+        for var_name in ("mean_error_m", "rmse_m", "median_error_m"):
+            var_env_result[f"avg_const_{var_name}"] = float(
+                np.mean([var_rep[f"const_{var_name}"] for var_rep in var_student_list]))
         results[var_room] = var_env_result
         var_true_xy, var_pred_xy = var_env_last_xy[var_room]
         visualize_localization_predictions(var_true_xy, var_pred_xy, var_room,
@@ -730,14 +737,24 @@ def format_few_shot_result(var_few_shot_ratio, var_kd_weight, results):
                  f"H-WILD -> WiMANS FEW-SHOT LOCALIZATION (support {var_few_shot_ratio:.2%}, "
                  f"kd_weight {var_kd_weight})",
                  "=" * 80]
+    var_metric_labels = (("mean_error_m", "MDE"), ("rmse_m", "RMSE"), ("median_error_m", "Median"))
     for var_room, var_env_result in results.items():
         var_lines.append(f"\n{var_room}:")
-        var_lines.append(f"  Student MDE:          {var_env_result['avg_student_mean_error_m']:.4f} "
-                         f"± {var_env_result['se_student_mean_error_m']:.4f} m (SE)")
-        var_lines.append(f"  Teacher MDE:          {var_env_result['avg_teacher_mean_error_m']:.4f} m "
-                         f"(H-WILD teacher, no WiMANS fine-tuning)")
-        var_lines.append(f"  Constant-baseline:    {var_env_result['avg_const_mean_error_m']:.4f} m "
-                         f"(mean support position; beat this to show the few-shot step learned anything)")
+        var_student = " | ".join(
+            f"{var_label} {var_env_result[f'avg_student_{var_name}']:.4f} ± "
+            f"{var_env_result[f'se_student_{var_name}']:.4f} m (SE)"
+            for var_name, var_label in var_metric_labels)
+        var_lines.append(f"  Student   {var_student}")
+        var_teacher = " | ".join(
+            f"{var_label} {var_env_result[f'avg_teacher_{var_name}']:.4f} ± "
+            f"{var_env_result[f'se_teacher_{var_name}']:.4f} m (SE)"
+            for var_name, var_label in var_metric_labels)
+        var_lines.append(f"  Teacher   {var_teacher}  (H-WILD teacher, no WiMANS fine-tuning)")
+        var_const = " | ".join(
+            f"{var_label} {var_env_result[f'avg_const_{var_name}']:.4f} m"
+            for var_name, var_label in var_metric_labels)
+        var_lines.append(f"  Constant  {var_const}  (mean support position; beat this to show the "
+                         f"few-shot step learned anything)")
     return "\n".join(var_lines)
 
 
