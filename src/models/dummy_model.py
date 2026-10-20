@@ -41,7 +41,7 @@ class DUMMY(nn.Module):
 
         output = torch.zeros(
             x.size(0),
-            self.num_classes,
+            self.num_classes, #5 for localization
             device=x.device,
             dtype=x.dtype
         )
@@ -152,12 +152,7 @@ def run_DUMMY(data_train_x,
         'avg_train_time': float(np.mean(result_time_train)),
         'avg_test_time': float(np.mean(result_time_test)),
     }
-    viz_stats = visualize_model_performance(
-        y_pred=last_layer_predictions,
-        y_true=data_test_y,
-        var_mode=var_mode,
-        save_dir=save_path
-    )
+
 
     ## The head emits a per-location count vector (N, num_locations), exactly the target the
     ## count_classification metric scored above, so the figures must use the same mode and the same
