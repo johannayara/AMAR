@@ -56,10 +56,10 @@ def parse_args():
     ##
     var_args = argparse.ArgumentParser()
     var_args.add_argument("--train_rooms", default=None, type=str,
-                          help="comma-separated H-WILD teacher rooms (default: all four)")
+                          help="comma-separated teacher rooms (default: H-WILD)")
     var_args.add_argument("--test_rooms", default=None, type=str,
-                          help="comma-separated WiMANS rooms forming the support/query pool "
-                               "(default: all three)")
+                          help="comma-separated rooms forming the support/query pool "
+                               "(default: WiMANS)")
     var_args.add_argument("--few_shot_ratio", default=0.05, type=float,
                           help="fraction of the WiMANS pool used to fine-tune the student")
     var_args.add_argument("--kd_weight", default=1.0, type=float,
@@ -139,20 +139,37 @@ def run():
     ## --------------------------- load both datasets in the TX frame -------------------------------
     var_load_kwargs = {"var_root": var_args.data_root, "var_users": var_users,
                        "var_interference": var_interference, "var_max_files": var_args.max_files}
-    hwild_sets_by_room, wimans_sets_by_room = {}, {}
+    train_sets_by_room, test_sets_by_room = {}, {}
     for var_room in var_train_rooms:
-        var_x, var_y, var_meta = load_hwild_room(var_room, var_frame="tx", **var_load_kwargs)
-        hwild_sets_by_room[var_room] = (var_x, var_y)
-        print(f"[teacher] {var_room:12s} X {var_x.shape} XY {var_y.shape} "
-              f"({var_meta['num_files']} captures)")
+        if var_room in hwild_room_names():
+            var_x, var_y, var_meta = load_hwild_room(var_room, var_frame="tx", **var_load_kwargs)
+            train_sets_by_room[var_room] = (var_x, var_y)
+            print(f"[train] {var_room:12s} X {var_x.shape} XY {var_y.shape} "
+                f"({var_meta['num_files']} captures)")
+        elif var_room in WIMANS_ROOMS:
+            var_x, var_y = load_wimans_room_targets(var_room, var_max_samples=var_args.max_samples,
+                                                    var_length=preset["hwild"]["window"])
+            if len(var_x) == 0:
+                raise ValueError(f"no single-occupant WiMANS frames for {var_room!r}")
+            train_sets_by_room[var_room] = (var_x, var_y)
+            print(f"[train] {var_room:12s} X {var_x.shape} XY {var_y.shape} "
+                  f"({len(np.unique(var_y.round(3), axis=0))} distinct positions)")
+    ## WiMANS positions are already meters from the transmitter (preset["layouts"]); only the
+    ## single-occupant frames are kept, since the localizer predicts one position.
     for var_room in var_test_rooms:
-        var_x, var_y = load_wimans_room_targets(var_room, var_max_samples=var_args.max_samples,
-                                                var_length=preset["hwild"]["window"])
-        if len(var_x) == 0:
-            raise ValueError(f"no single-occupant WiMANS frames for {var_room!r}")
-        wimans_sets_by_room[var_room] = (var_x, var_y)
-        print(f"[pool]    {var_room:12s} X {var_x.shape} XY {var_y.shape} "
-              f"({len(np.unique(var_y.round(3), axis=0))} distinct positions)")
+        if var_room in hwild_room_names():
+            var_x, var_y, var_meta = load_hwild_room(var_room, var_frame="tx", **var_load_kwargs)
+            test_sets_by_room[var_room] = (var_x, var_y)
+            print(f"[test]  {var_room:12s} X {var_x.shape} XY {var_y.shape} "
+                f"({var_meta['num_files']} captures)")
+        elif var_room in WIMANS_ROOMS:
+            var_x, var_y = load_wimans_room_targets(var_room, var_max_samples=var_args.max_samples,
+                                                    var_length=preset["hwild"]["window"])
+            if len(var_x) == 0:
+                raise ValueError(f"no single-occupant WiMANS frames for {var_room!r}")
+            test_sets_by_room[var_room] = (var_x, var_y)
+            print(f"[test]  {var_room:12s} X {var_x.shape} XY {var_y.shape} "
+                f"({len(np.unique(var_y.round(3), axis=0))} distinct positions)")
     #
     ## ------------------------------------ shared frame --------------------------------------------
     var_all_xy = np.concatenate([var_y for _, var_y in list(hwild_sets_by_room.values())
@@ -172,7 +189,7 @@ def run():
     else:
         print("CSI: raw amplitude")
     #
-    for var_sets in (hwild_sets_by_room, wimans_sets_by_room):
+    for var_sets in (train_sets_by_room, test_sets_by_room):
         for var_room, (var_x, var_y) in var_sets.items():
             var_sets[var_room] = (var_x, normalize_xy_meters(var_y, var_rect))
     #
@@ -180,7 +197,7 @@ def run():
     var_save_path = f"./visualizations/few_shot_hwild_to_wimans/{'_'.join(var_train_rooms)}"
     os.makedirs(var_save_path, exist_ok=True)
     var_results = run_few_shot_localization(
-        hwild_sets_by_room, wimans_sets_by_room,
+        train_sets_by_room, test_sets_by_room,
         var_few_shot_ratio=var_args.few_shot_ratio, var_kd_weight=var_args.kd_weight,
         var_repeat=var_args.repeat, var_teacher_epochs=var_args.teacher_epochs,
         var_student_epochs=var_args.student_epochs,
@@ -207,9 +224,13 @@ def run():
         "interference": var_interference,
         "standardize": var_args.standardize,
         "tx_frame_rect_m": var_rect,
-        "ap_geometry": {var_room: {"ap_location": HWILD_ROOMS[var_room]["ap_location"],
-                                   "ap_toward": HWILD_ROOMS[var_room]["ap_toward"]}
-                        for var_room in var_train_rooms},
+        "ap_geometry": {
+            var_room: ({"ap_location": HWILD_ROOMS[var_room]["ap_location"],
+                        "ap_toward": HWILD_ROOMS[var_room]["ap_toward"]}
+                    if var_room in hwild_room_names()
+                    else {"ap_location": (0.0, 0.0), "ap_toward": (0.0, 0.0)})
+            for var_room in var_train_rooms
+        },
         "per_env": var_results,
     }
     #

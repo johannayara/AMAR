@@ -175,7 +175,7 @@ preset = {
         ##   "template": the original rule, count = number of the room's known locations whose
         ##     per-location occupancy readout clears the calibrated threshold. Kept for reproducing
         ##     the earlier protocol.
-        "count_rule": "layout_free",
+        "count_rule": "template",
         ## Which head the model uses.
         ##   "density" (default): the continuous H x W density map; the count is read off the map
         ##     (layout_free peaks, or the per-location template readout).

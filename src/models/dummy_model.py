@@ -19,6 +19,12 @@ from configs.preset import preset
 from src.utils import *
 import wandb
 
+import random
+
+# Returns True 50% of the time. 
+def fifty_fifty():
+    return random.random() < .5
+
 class DUMMY(nn.Module):
     def __init__(self, var_x_shape, var_y_shape):
         super(DUMMY, self).__init__()
@@ -46,8 +52,8 @@ class DUMMY(nn.Module):
             dtype=x.dtype
         )
         if self.num_classes >= 2:
-            output[:, 0] = 1.0
-            output[:, 1] = 1.0
+            output[:, 0] = 1.0 if fifty_fifty() else 0.0
+            output[:, 1] = 1.0 if fifty_fifty() else 0.0
 
         return output
 #

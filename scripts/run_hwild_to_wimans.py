@@ -201,7 +201,6 @@ def run():
                     else {"ap_location": (0.0, 0.0), "ap_toward": (0.0, 0.0)})
             for var_room in var_train_rooms
         },
-
         "per_env": var_results,
     }
     #
