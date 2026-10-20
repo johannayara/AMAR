@@ -633,6 +633,9 @@ def run_few_shot_localization(hwild_sets_by_room, wimans_sets_by_room, var_few_s
     #
     ## --------------------------------------- student & test ----------------------------------------
     var_student_query_metrics, var_teacher_query_metrics = {}, {}
+    ## last repeat's query predictions per room, kept for the prediction figures, as in
+    ## run_localization_cross_domain
+    var_env_last_xy = {}
     var_const_baseline = var_w_y[var_few_idx].mean(axis=0)
     for var_r in range(var_repeat):
         print(f"\n--- student repeat {var_r} ---")
@@ -668,6 +671,7 @@ def run_few_shot_localization(hwild_sets_by_room, wimans_sets_by_room, var_few_s
             var_student_query_metrics.setdefault(var_room, []).append(var_student_metrics)
             var_teacher_query_metrics.setdefault(var_room, []).append(
                 localization_metrics(var_teacher_xy, var_q_y, var_span))
+            var_env_last_xy[var_room] = (var_q_y, var_student_xy)
             wandb.log({f"query/{var_room}/student_mean_error_m": var_student_metrics["mean_error_m"],
                        f"query/{var_room}/teacher_mean_error_m":
                            var_teacher_query_metrics[var_room][-1]["mean_error_m"],
@@ -700,6 +704,14 @@ def run_few_shot_localization(hwild_sets_by_room, wimans_sets_by_room, var_few_s
         var_env_result["avg_const_mean_error_m"] = float(
             np.mean([var_rep["const_mean_error_m"] for var_rep in var_student_list]))
         results[var_room] = var_env_result
+        var_true_xy, var_pred_xy = var_env_last_xy[var_room]
+        visualize_localization_predictions(var_true_xy, var_pred_xy, var_room,
+                                           os.path.join(save_path, var_room), var_bounds)
+        ## the standard per-location figures, with the room's grid cells as locations
+        visualize_room_grid_performance([[var_t] for var_t in var_true_xy],
+                                        [[var_p] for var_p in var_pred_xy],
+                                        os.path.join(save_path, var_room),
+                                        var_grid=preset["viz"]["grid"])
         print(f"\n[{var_room}] student {var_env_result['avg_student_mean_error_m']:.4f} ± "
               f"{var_env_result['se_student_mean_error_m']:.4f} m | teacher "
               f"{var_env_result['avg_teacher_mean_error_m']:.4f} m | constant baseline "
