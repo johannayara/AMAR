@@ -34,36 +34,20 @@ class DUMMY(nn.Module):
 
     def forward(self, var_input):
         """
-        Deterministic 2-stage logic:
-        1) empty vs non-empty gate
-        2) if non-empty: output vector with a,b = 1
+        Deterministic logic output vector with a,b = 1
         """
-        empty_threshold = 0.04
-        # Flatten every non-batch axis into one vector per sample. The CSI input is 5-D
-        # (N, length, 3, 3, 30); the old `if x.dim() == 3` never fired, so Linear got the raw
-        # (N, 3000, 3, 3, 30) and failed on the trailing 30 vs num_features.
+       
         x = var_input.reshape(var_input.size(0), -1)
 
-        # Stage 1: empty score
-        empty_score = torch.sigmoid(self.empty_head(x)).squeeze(-1)
-        empty_mask = empty_score >= empty_threshold
-
-        # Stage 2: output vector for non-empty samples
         output = torch.zeros(
             x.size(0),
             self.num_classes,
             device=x.device,
             dtype=x.dtype
         )
-
-        # If the output vector is meant to represent classes a and b,
-        # use these two indices. Adjust if your actual labels are different.
         if self.num_classes >= 2:
             output[:, 0] = 1.0
             output[:, 1] = 1.0
-
-        # Empty samples get zero vector
-        output[empty_mask] = 0.0
 
         return output
 #
@@ -88,11 +72,11 @@ def run_DUMMY(data_train_x,
 
     if data_train_y.ndim == 1:
         data_train_y = data_train_y[:, None]
+    if data_test_y.ndim == 1:
+        data_test_y = data_test_y[:, None]
 
     var_x_shape = data_train_x.shape[1:]
-    ## The head emits one value per location. The metric compares it against the per-location
-    ## occupancy, i.e. the per-user location one-hots summed over users: (N, 6, 5) -> (N, 5). The old
-    ## var_y_shape = [data_train_y.shape[1]] took the *user* axis (6) and mismatched that target.
+
     var_y_shape = ([data_train_y.sum(axis=1).shape[1]] if data_train_y.ndim == 3
                    else [data_train_y.shape[1]])
 
@@ -172,6 +156,17 @@ def run_DUMMY(data_train_x,
         y_pred=last_layer_predictions,
         y_true=data_test_y,
         var_mode=var_mode,
+        save_dir=save_path
+    )
+
+    ## The head emits a per-location count vector (N, num_locations), exactly the target the
+    ## count_classification metric scored above, so the figures must use the same mode and the same
+    ## summed target. multi_head expects 3-D per-layer one-hot predictions (y_pred[-1] unpacked as
+    ## batch x heads x classes) and crashed on the 2-D count vector.
+    visualize_model_performance(
+        y_pred=predict_test_y,
+        y_true=data_test_y_c,
+        var_mode="count_classification",
         save_dir=save_path
     )
 
