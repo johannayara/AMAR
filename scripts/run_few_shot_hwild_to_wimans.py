@@ -123,12 +123,6 @@ def run():
     ## query frames would be frames the teacher was trained on
     if set(var_train_rooms) & set(var_test_rooms):
         raise ValueError(f"train rooms {var_train_rooms} and test rooms {var_test_rooms} overlap")
-    for var_room in var_train_rooms:
-        if var_room not in HWILD_ROOMS:
-            raise ValueError(f"unknown H-WILD room {var_room!r}; choose from {hwild_room_names()}")
-    for var_room in var_test_rooms:
-        if var_room not in WIMANS_ROOMS:
-            raise ValueError(f"unknown WiMANS room {var_room!r}; choose from {WIMANS_ROOMS}")
     #
     if var_args.window is not None:
         preset["hwild"]["window"] = var_args.window

@@ -35,14 +35,14 @@ conda activate AMAR
 ## NOTE: --train_envs expects a comma-separated *string*. A bash array passed as "$train_envs"
 ## expands to its first element only ("meeting_room"), which silently ran the one-room protocol
 ## instead of LOR. Keep this a string.
-train_envs="meeting_room,classroom"
-held_out="empty_room"
+train_envs="empty_room,classroom"
+held_out="meeting_room"
 
 mkdir -p "./output/cd/density_map/lor_${held_out}/"
 
 start=$(date +%s)
 WANDB_MODE=offline python scripts/run_cross_domain.py \
-    --model density_map --task location --repeat 5 --train_envs "$train_envs" --epochs 100 \
-    > "./output/cd/density_map/lor_${held_out}/run_$(date +%Y%m%d_%H%M%S).log" 2>&1
+    --model density_map --task location --repeat 5 --train_envs "$train_envs" --epochs 150 --hp density.count_rule=layout_free\
+    > "./output/cd/density_map/lor_${held_out}/run_$(date +%Y%m%d_%H%M).log" 2>&1
 echo "Total runtime held-out $held_out: $(( $(date +%s) - start )) seconds"
 
