@@ -21,8 +21,8 @@ export WANDB_MODE=offline
 ## python scripts/run_hwild_to_wimans.py --repeat 3 --epochs 200 --train_rooms "Conference, Laboratory, empty_room, classroom" --test_rooms "meeting_room, Lounge, Office" > "./output/hwild_wimans/run_$(date +%Y%m%d_%H%M).log" 2>&1
 python scripts/run_few_shot_hwild_to_wimans.py --repeat 3 \
   --teacher_epochs 200 --student_epochs 200 \
-  --train_rooms "Conference, Laboratory, empty_room, classroom" \
-  --test_rooms "meeting_room, Lounge, Office" \
+  --train_rooms "Conference, Laboratory, classroom" \
+  --test_rooms "meeting_room, Lounge, Office, empty_room" \
   --few_shot_ratio 0.05 --kd_weight 1.0 > "./output/few_shot_hwild_wimans/run_$(date +%Y%m%d_%H%M).log" 2>&1
 
 end=$(date +%s)

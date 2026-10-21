@@ -15,7 +15,7 @@ mkdir -p "./output/cd/density_map/${env}/"
 start=$(date +%s)
 
 export WANDB_MODE=offline 
-python scripts/run_cross_domain.py --model density_map --task location --train_envs meeting_room,classroom --hp nn.backbone=cnn
+python scripts/run_cross_domain.py --model density_map --task location --train_envs empty_room,classroom --hp density.count_rule=layout_free --epochs 150 > "./output/density_map/${env}/run_$(date +%Y%m%d_%H%M).log" 2>&1 #--hp nn.backbone=cnn
 #python scripts/run_cross_domain.py --model density_map --task location --repeat 5 --env "$env" --epochs 50 > "./output/density_map/${env}/test_2_cd.txt" 2>&1
 end=$(date +%s)
 echo "Total runtime: $((end - start)) seconds"
