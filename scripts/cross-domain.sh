@@ -10,7 +10,7 @@ set -euo pipefail
 
 source /software/anaconda3/etc/profile.d/conda.sh
 conda activate AMAR
-env=empty_room
+env=meeting_room
 mkdir -p "./output/cd/density_map/${env}/"
 start=$(date +%s)
 
