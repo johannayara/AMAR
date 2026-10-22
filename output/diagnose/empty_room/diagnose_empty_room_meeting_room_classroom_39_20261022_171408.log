@@ -1,0 +1,19 @@
+Model: nn.backbone=thatv-nostats nn.encoder_norm=group
+Room empty_room: 600 frames, feature shape (3000, 270), preprocessing {'static_removal': False, 'temporal_zscore': False, 'per_room_zscore': False} (env AMAR_CSI_PREPROCESS=none)
+
+INPUT DEPENDENCE (mean |map(condition) - map(real)|, and /|map(real)|):
+  shuffled                             abs=0.06890  rel=0.731  count_corr=0.021
+/cluster/raid/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/numpy/lib/function_base.py:2691: RuntimeWarning: invalid value encountered in true_divide
+  c /= stddev[:, None]
+/cluster/raid/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/numpy/lib/function_base.py:2692: RuntimeWarning: invalid value encountered in true_divide
+  c /= stddev[None, :]
+  zeroed                               abs=0.06755  rel=0.717  count_corr=nan
+  mean predicted map (room marginal)   abs=0.05225  rel=0.554  count_corr=nan
+  rel near 0 => the map barely depends on the input (the marginal-map shortcut).
+
+EMPTY GATE: 32 empty / 568 occupied frames
+  map max empty    0.7711 +- 0.0066
+  map max occupied 0.8640 +- 0.0932
+  best gate threshold=0.7825  balanced empty/occupied acc=0.923 (fitted on these frames, so an upper bound; 0.5 is chance, 1.0 is cleanly separable)
+
+Figure: visualizations/diagnose/empty_room/diagnose_empty_room_39_20261022_171408.png

@@ -1,0 +1,730 @@
+[train] Conference   X (396, 400, 90) XY (396, 2) (36 captures)
+[train] Laboratory   X (464, 400, 90) XY (464, 2) (40 captures)
+[train] classroom    X (594, 400, 90) XY (594, 2) (5 distinct positions)
+[test]  meeting_room X (594, 400, 90) XY (594, 2) (5 distinct positions)
+[test]  Lounge       X (752, 400, 90) XY (752, 2) (56 captures)
+[test]  Office       X (464, 400, 90) XY (464, 2) (40 captures)
+[test]  empty_room   X (594, 400, 90) XY (594, 2) (5 distinct positions)
+
+Transmitter-anchored frame rectangle (m): x [-6.75, 5.95], y [-6.90, 11.42]  (span 12.71 x 18.32 m)
+CSI: per-window z-score (gain/AGC removed)
+Using device: cuda
+H-WILD teacher: 1454 windows (1309 train / 145 valid)
+WiMANS pool: 2404 frames -> support 120 (5.00%) | student validation 228 | query 2056
+kd_weight 0.1 | init_from_teacher False
+
+--- teacher (H-WILD) ---
+wandb: Using wandb-core as the SDK backend. Please refer to https://wandb.me/wandb-core for more information.
+wandb: Tracking run with wandb version 0.18.3
+wandb: W&B syncing is set to `offline` in this directory.  
+wandb: Run `wandb online` or set WANDB_MODE=online to enable cloud syncing.
+Epoch 0/200 - 1.88s - Loss 0.107729 - ValidLoss 0.031710 - ValidErr 5.2965 m - Smooth 5.2965 m
+Epoch 1/200 - 1.01s - Loss 0.019912 - ValidLoss 0.014061 - ValidErr 3.4228 m - Smooth 4.7344 m
+Epoch 2/200 - 1.03s - Loss 0.014288 - ValidLoss 0.022959 - ValidErr 4.5168 m - Smooth 4.6691 m
+Epoch 3/200 - 0.93s - Loss 0.010829 - ValidLoss 0.016453 - ValidErr 3.7101 m - Smooth 4.3814 m
+Epoch 4/200 - 0.93s - Loss 0.009510 - ValidLoss 0.012241 - ValidErr 3.1779 m - Smooth 4.0204 m
+Epoch 5/200 - 0.93s - Loss 0.008211 - ValidLoss 0.010119 - ValidErr 2.9596 m - Smooth 3.7022 m
+Epoch 6/200 - 0.92s - Loss 0.008467 - ValidLoss 0.010903 - ValidErr 3.0314 m - Smooth 3.5009 m
+Epoch 7/200 - 0.98s - Loss 0.007211 - ValidLoss 0.009796 - ValidErr 2.8347 m - Smooth 3.3011 m
+Epoch 8/200 - 1.03s - Loss 0.006705 - ValidLoss 0.010200 - ValidErr 2.8861 m - Smooth 3.1766 m
+Epoch 9/200 - 1.03s - Loss 0.006192 - ValidLoss 0.011506 - ValidErr 3.2021 m - Smooth 3.1843 m
+Epoch 10/200 - 1.03s - Loss 0.005522 - ValidLoss 0.009403 - ValidErr 2.8869 m - Smooth 3.0950 m
+Epoch 11/200 - 1.05s - Loss 0.004900 - ValidLoss 0.006049 - ValidErr 2.1472 m - Smooth 2.8107 m
+Epoch 12/200 - 1.04s - Loss 0.004708 - ValidLoss 0.004913 - ValidErr 2.0022 m - Smooth 2.5681 m
+Epoch 13/200 - 1.04s - Loss 0.004602 - ValidLoss 0.007902 - ValidErr 2.6650 m - Smooth 2.5972 m
+Epoch 14/200 - 1.05s - Loss 0.004735 - ValidLoss 0.007478 - ValidErr 2.4897 m - Smooth 2.5650 m
+Epoch 15/200 - 1.04s - Loss 0.004862 - ValidLoss 0.005170 - ValidErr 1.9367 m - Smooth 2.3765 m
+Epoch 16/200 - 0.93s - Loss 0.004225 - ValidLoss 0.007541 - ValidErr 2.4435 m - Smooth 2.3966 m
+Epoch 17/200 - 0.93s - Loss 0.003814 - ValidLoss 0.005402 - ValidErr 1.9732 m - Smooth 2.2696 m
+Epoch 18/200 - 0.92s - Loss 0.003760 - ValidLoss 0.004997 - ValidErr 1.9346 m - Smooth 2.1691 m
+Epoch 19/200 - 0.94s - Loss 0.003605 - ValidLoss 0.004133 - ValidErr 1.7941 m - Smooth 2.0566 m
+Epoch 20/200 - 1.00s - Loss 0.003456 - ValidLoss 0.004373 - ValidErr 1.8391 m - Smooth 1.9914 m
+Epoch 21/200 - 1.03s - Loss 0.003622 - ValidLoss 0.004267 - ValidErr 1.8374 m - Smooth 1.9452 m
+Epoch 22/200 - 1.03s - Loss 0.003231 - ValidLoss 0.004232 - ValidErr 1.8484 m - Smooth 1.9161 m
+Epoch 23/200 - 1.03s - Loss 0.003271 - ValidLoss 0.003428 - ValidErr 1.6294 m - Smooth 1.8301 m
+Epoch 24/200 - 1.03s - Loss 0.003003 - ValidLoss 0.003612 - ValidErr 1.6482 m - Smooth 1.7755 m
+Epoch 25/200 - 1.03s - Loss 0.003038 - ValidLoss 0.003476 - ValidErr 1.5945 m - Smooth 1.7212 m
+Epoch 26/200 - 1.03s - Loss 0.003054 - ValidLoss 0.002630 - ValidErr 1.4037 m - Smooth 1.6260 m
+Epoch 27/200 - 1.03s - Loss 0.003022 - ValidLoss 0.004115 - ValidErr 1.7595 m - Smooth 1.6660 m
+Epoch 28/200 - 1.02s - Loss 0.003174 - ValidLoss 0.005484 - ValidErr 1.9343 m - Smooth 1.7465 m
+Epoch 29/200 - 0.93s - Loss 0.003136 - ValidLoss 0.003137 - ValidErr 1.5150 m - Smooth 1.6770 m
+Epoch 30/200 - 0.93s - Loss 0.002995 - ValidLoss 0.003055 - ValidErr 1.5029 m - Smooth 1.6248 m
+Epoch 31/200 - 0.93s - Loss 0.002880 - ValidLoss 0.003176 - ValidErr 1.5301 m - Smooth 1.5964 m
+Epoch 32/200 - 0.94s - Loss 0.002747 - ValidLoss 0.002789 - ValidErr 1.3384 m - Smooth 1.5190 m
+Epoch 33/200 - 0.96s - Loss 0.002838 - ValidLoss 0.002759 - ValidErr 1.3850 m - Smooth 1.4788 m
+Epoch 34/200 - 1.02s - Loss 0.002632 - ValidLoss 0.004071 - ValidErr 1.6439 m - Smooth 1.5283 m
+Epoch 35/200 - 1.03s - Loss 0.002952 - ValidLoss 0.002473 - ValidErr 1.2979 m - Smooth 1.4592 m
+Epoch 36/200 - 1.04s - Loss 0.003014 - ValidLoss 0.004268 - ValidErr 1.6319 m - Smooth 1.5110 m
+Epoch 37/200 - 1.04s - Loss 0.003087 - ValidLoss 0.002339 - ValidErr 1.2898 m - Smooth 1.4447 m
+Epoch 38/200 - 1.04s - Loss 0.002626 - ValidLoss 0.002654 - ValidErr 1.3173 m - Smooth 1.4064 m
+Epoch 39/200 - 1.03s - Loss 0.002610 - ValidLoss 0.002706 - ValidErr 1.3511 m - Smooth 1.3899 m
+Epoch 40/200 - 1.03s - Loss 0.002720 - ValidLoss 0.002625 - ValidErr 1.3504 m - Smooth 1.3780 m
+Epoch 41/200 - 1.05s - Loss 0.002668 - ValidLoss 0.002564 - ValidErr 1.3595 m - Smooth 1.3725 m
+Epoch 42/200 - 0.93s - Loss 0.002971 - ValidLoss 0.002809 - ValidErr 1.3196 m - Smooth 1.3566 m
+Epoch 43/200 - 0.93s - Loss 0.002773 - ValidLoss 0.002242 - ValidErr 1.2303 m - Smooth 1.3187 m
+Epoch 44/200 - 0.92s - Loss 0.002605 - ValidLoss 0.003391 - ValidErr 1.4988 m - Smooth 1.3727 m
+Epoch 45/200 - 0.92s - Loss 0.002937 - ValidLoss 0.002702 - ValidErr 1.3388 m - Smooth 1.3625 m
+Epoch 46/200 - 0.95s - Loss 0.002696 - ValidLoss 0.004068 - ValidErr 1.5112 m - Smooth 1.4071 m
+Epoch 47/200 - 1.03s - Loss 0.002853 - ValidLoss 0.002450 - ValidErr 1.2630 m - Smooth 1.3639 m
+Epoch 48/200 - 1.21s - Loss 0.002950 - ValidLoss 0.003303 - ValidErr 1.5085 m - Smooth 1.4073 m
+Epoch 49/200 - 1.04s - Loss 0.002652 - ValidLoss 0.002243 - ValidErr 1.2590 m - Smooth 1.3628 m
+Epoch 50/200 - 1.04s - Loss 0.002604 - ValidLoss 0.002728 - ValidErr 1.3174 m - Smooth 1.3492 m
+Epoch 51/200 - 1.03s - Loss 0.002572 - ValidLoss 0.002261 - ValidErr 1.2389 m - Smooth 1.3161 m
+Epoch 52/200 - 1.04s - Loss 0.002765 - ValidLoss 0.006751 - ValidErr 2.0231 m - Smooth 1.5282 m
+Epoch 53/200 - 1.02s - Loss 0.002828 - ValidLoss 0.002689 - ValidErr 1.2961 m - Smooth 1.4586 m
+Epoch 54/200 - 1.03s - Loss 0.002601 - ValidLoss 0.003380 - ValidErr 1.4742 m - Smooth 1.4633 m
+Epoch 55/200 - 0.97s - Loss 0.002909 - ValidLoss 0.002441 - ValidErr 1.3053 m - Smooth 1.4159 m
+Epoch 56/200 - 0.94s - Loss 0.002496 - ValidLoss 0.002653 - ValidErr 1.3556 m - Smooth 1.3978 m
+Epoch 57/200 - 0.92s - Loss 0.002810 - ValidLoss 0.002939 - ValidErr 1.3425 m - Smooth 1.3812 m
+Epoch 58/200 - 0.94s - Loss 0.002677 - ValidLoss 0.002301 - ValidErr 1.2528 m - Smooth 1.3427 m
+Epoch 59/200 - 1.00s - Loss 0.002592 - ValidLoss 0.003441 - ValidErr 1.4284 m - Smooth 1.3684 m
+Epoch 60/200 - 1.23s - Loss 0.002609 - ValidLoss 0.002810 - ValidErr 1.3040 m - Smooth 1.3491 m
+Epoch 61/200 - 1.05s - Loss 0.002607 - ValidLoss 0.002401 - ValidErr 1.3099 m - Smooth 1.3373 m
+Epoch 62/200 - 1.03s - Loss 0.002640 - ValidLoss 0.002988 - ValidErr 1.3869 m - Smooth 1.3522 m
+Epoch 63/200 - 1.03s - Loss 0.002744 - ValidLoss 0.002418 - ValidErr 1.3007 m - Smooth 1.3368 m
+Epoch 64/200 - 1.03s - Loss 0.002756 - ValidLoss 0.002510 - ValidErr 1.3341 m - Smooth 1.3360 m
+Epoch 65/200 - 1.04s - Loss 0.002672 - ValidLoss 0.002148 - ValidErr 1.2318 m - Smooth 1.3047 m
+Epoch 66/200 - 1.03s - Loss 0.002591 - ValidLoss 0.002460 - ValidErr 1.2471 m - Smooth 1.2874 m
+Epoch 67/200 - 1.00s - Loss 0.002642 - ValidLoss 0.003314 - ValidErr 1.4636 m - Smooth 1.3403 m
+Epoch 68/200 - 0.93s - Loss 0.002492 - ValidLoss 0.002400 - ValidErr 1.2795 m - Smooth 1.3220 m
+Epoch 69/200 - 0.92s - Loss 0.002585 - ValidLoss 0.002071 - ValidErr 1.1742 m - Smooth 1.2777 m
+Epoch 70/200 - 0.93s - Loss 0.002570 - ValidLoss 0.002195 - ValidErr 1.2369 m - Smooth 1.2654 m
+Epoch 71/200 - 0.95s - Loss 0.002790 - ValidLoss 0.002750 - ValidErr 1.3209 m - Smooth 1.2821 m
+Epoch 72/200 - 1.03s - Loss 0.002479 - ValidLoss 0.002604 - ValidErr 1.2846 m - Smooth 1.2828 m
+Epoch 73/200 - 1.04s - Loss 0.002586 - ValidLoss 0.003266 - ValidErr 1.3994 m - Smooth 1.3178 m
+Epoch 74/200 - 1.04s - Loss 0.002642 - ValidLoss 0.004017 - ValidErr 1.5662 m - Smooth 1.3923 m
+Epoch 75/200 - 1.05s - Loss 0.002521 - ValidLoss 0.001851 - ValidErr 1.1329 m - Smooth 1.3145 m
+Epoch 76/200 - 1.04s - Loss 0.002523 - ValidLoss 0.002577 - ValidErr 1.3212 m - Smooth 1.3165 m
+Epoch 77/200 - 1.05s - Loss 0.002496 - ValidLoss 0.001936 - ValidErr 1.1423 m - Smooth 1.2643 m
+Epoch 78/200 - 1.04s - Loss 0.002450 - ValidLoss 0.002504 - ValidErr 1.2513 m - Smooth 1.2604 m
+Epoch 79/200 - 1.06s - Loss 0.002459 - ValidLoss 0.002800 - ValidErr 1.3334 m - Smooth 1.2823 m
+Epoch 80/200 - 0.93s - Loss 0.002389 - ValidLoss 0.002970 - ValidErr 1.3760 m - Smooth 1.3104 m
+Epoch 81/200 - 0.93s - Loss 0.002578 - ValidLoss 0.002593 - ValidErr 1.2930 m - Smooth 1.3052 m
+Epoch 82/200 - 0.91s - Loss 0.002655 - ValidLoss 0.001976 - ValidErr 1.1629 m - Smooth 1.2625 m
+Epoch 83/200 - 0.93s - Loss 0.002397 - ValidLoss 0.002095 - ValidErr 1.1822 m - Smooth 1.2384 m
+Epoch 84/200 - 1.02s - Loss 0.002358 - ValidLoss 0.002692 - ValidErr 1.3065 m - Smooth 1.2588 m
+Epoch 85/200 - 1.04s - Loss 0.002476 - ValidLoss 0.002320 - ValidErr 1.2408 m - Smooth 1.2534 m
+Epoch 86/200 - 1.04s - Loss 0.002454 - ValidLoss 0.001906 - ValidErr 1.1261 m - Smooth 1.2152 m
+Epoch 87/200 - 1.05s - Loss 0.002508 - ValidLoss 0.001850 - ValidErr 1.1610 m - Smooth 1.1990 m
+Epoch 88/200 - 1.04s - Loss 0.002350 - ValidLoss 0.001717 - ValidErr 1.0993 m - Smooth 1.1690 m
+Epoch 89/200 - 1.05s - Loss 0.002479 - ValidLoss 0.002127 - ValidErr 1.2057 m - Smooth 1.1800 m
+Epoch 90/200 - 1.03s - Loss 0.002401 - ValidLoss 0.002805 - ValidErr 1.3345 m - Smooth 1.2264 m
+Epoch 91/200 - 1.05s - Loss 0.002460 - ValidLoss 0.001986 - ValidErr 1.1768 m - Smooth 1.2115 m
+Epoch 92/200 - 0.94s - Loss 0.002497 - ValidLoss 0.003262 - ValidErr 1.4290 m - Smooth 1.2768 m
+Epoch 93/200 - 0.93s - Loss 0.002399 - ValidLoss 0.002054 - ValidErr 1.1691 m - Smooth 1.2445 m
+Epoch 94/200 - 0.92s - Loss 0.002369 - ValidLoss 0.002472 - ValidErr 1.2294 m - Smooth 1.2399 m
+Epoch 95/200 - 0.93s - Loss 0.002191 - ValidLoss 0.001953 - ValidErr 1.1411 m - Smooth 1.2103 m
+Epoch 96/200 - 0.97s - Loss 0.002376 - ValidLoss 0.002123 - ValidErr 1.2068 m - Smooth 1.2092 m
+Epoch 97/200 - 1.23s - Loss 0.002454 - ValidLoss 0.001787 - ValidErr 1.1019 m - Smooth 1.1770 m
+Epoch 98/200 - 1.03s - Loss 0.002305 - ValidLoss 0.001856 - ValidErr 1.1155 m - Smooth 1.1586 m
+Epoch 99/200 - 1.04s - Loss 0.002382 - ValidLoss 0.002594 - ValidErr 1.2803 m - Smooth 1.1951 m
+Epoch 100/200 - 1.04s - Loss 0.002310 - ValidLoss 0.001669 - ValidErr 1.0787 m - Smooth 1.1602 m
+Epoch 101/200 - 1.04s - Loss 0.002304 - ValidLoss 0.003604 - ValidErr 1.4748 m - Smooth 1.2546 m
+Epoch 102/200 - 1.03s - Loss 0.002396 - ValidLoss 0.002562 - ValidErr 1.2761 m - Smooth 1.2610 m
+Epoch 103/200 - 1.03s - Loss 0.002228 - ValidLoss 0.001928 - ValidErr 1.1272 m - Smooth 1.2209 m
+Epoch 104/200 - 1.06s - Loss 0.002170 - ValidLoss 0.001576 - ValidErr 1.0437 m - Smooth 1.1677 m
+Epoch 105/200 - 0.93s - Loss 0.002202 - ValidLoss 0.001837 - ValidErr 1.1335 m - Smooth 1.1575 m
+Epoch 106/200 - 0.93s - Loss 0.002356 - ValidLoss 0.004018 - ValidErr 1.5743 m - Smooth 1.2825 m
+Epoch 107/200 - 0.92s - Loss 0.002438 - ValidLoss 0.001874 - ValidErr 1.1232 m - Smooth 1.2347 m
+Epoch 108/200 - 0.93s - Loss 0.002237 - ValidLoss 0.001862 - ValidErr 1.1293 m - Smooth 1.2031 m
+Epoch 109/200 - 0.98s - Loss 0.002335 - ValidLoss 0.001769 - ValidErr 1.0995 m - Smooth 1.1720 m
+Epoch 110/200 - 1.21s - Loss 0.002382 - ValidLoss 0.001758 - ValidErr 1.1048 m - Smooth 1.1519 m
+Epoch 111/200 - 1.03s - Loss 0.002172 - ValidLoss 0.001672 - ValidErr 1.0694 m - Smooth 1.1271 m
+Epoch 112/200 - 1.04s - Loss 0.002140 - ValidLoss 0.001996 - ValidErr 1.1751 m - Smooth 1.1415 m
+Epoch 113/200 - 1.04s - Loss 0.002227 - ValidLoss 0.001649 - ValidErr 1.0502 m - Smooth 1.1141 m
+Epoch 114/200 - 1.04s - Loss 0.002181 - ValidLoss 0.002062 - ValidErr 1.1725 m - Smooth 1.1316 m
+Epoch 115/200 - 1.06s - Loss 0.002043 - ValidLoss 0.001751 - ValidErr 1.0854 m - Smooth 1.1177 m
+Epoch 116/200 - 1.03s - Loss 0.002079 - ValidLoss 0.002300 - ValidErr 1.2281 m - Smooth 1.1508 m
+Epoch 117/200 - 0.97s - Loss 0.002204 - ValidLoss 0.001891 - ValidErr 1.1419 m - Smooth 1.1482 m
+Epoch 118/200 - 0.93s - Loss 0.002164 - ValidLoss 0.002215 - ValidErr 1.1671 m - Smooth 1.1538 m
+Epoch 119/200 - 0.94s - Loss 0.002134 - ValidLoss 0.001814 - ValidErr 1.0986 m - Smooth 1.1373 m
+Epoch 120/200 - 0.92s - Loss 0.002018 - ValidLoss 0.002293 - ValidErr 1.1957 m - Smooth 1.1548 m
+Epoch 121/200 - 0.97s - Loss 0.002201 - ValidLoss 0.001610 - ValidErr 1.0595 m - Smooth 1.1262 m
+Epoch 122/200 - 1.03s - Loss 0.001967 - ValidLoss 0.002058 - ValidErr 1.1918 m - Smooth 1.1459 m
+Epoch 123/200 - 1.05s - Loss 0.002076 - ValidLoss 0.002073 - ValidErr 1.1547 m - Smooth 1.1485 m
+Epoch 124/200 - 1.04s - Loss 0.001996 - ValidLoss 0.001729 - ValidErr 1.0956 m - Smooth 1.1327 m
+Epoch 125/200 - 1.04s - Loss 0.002008 - ValidLoss 0.001490 - ValidErr 1.0214 m - Smooth 1.0993 m
+Epoch 126/200 - 1.04s - Loss 0.001934 - ValidLoss 0.001966 - ValidErr 1.1375 m - Smooth 1.1108 m
+Epoch 127/200 - 1.05s - Loss 0.002025 - ValidLoss 0.001692 - ValidErr 1.0549 m - Smooth 1.0940 m
+Epoch 128/200 - 1.04s - Loss 0.002016 - ValidLoss 0.001682 - ValidErr 1.0842 m - Smooth 1.0910 m
+Epoch 129/200 - 0.99s - Loss 0.001969 - ValidLoss 0.001760 - ValidErr 1.0913 m - Smooth 1.0911 m
+Epoch 130/200 - 0.93s - Loss 0.002024 - ValidLoss 0.001720 - ValidErr 1.0583 m - Smooth 1.0813 m
+Epoch 131/200 - 0.92s - Loss 0.001977 - ValidLoss 0.001869 - ValidErr 1.1322 m - Smooth 1.0966 m
+Epoch 132/200 - 0.93s - Loss 0.002102 - ValidLoss 0.001591 - ValidErr 1.0477 m - Smooth 1.0819 m
+Epoch 133/200 - 0.96s - Loss 0.002045 - ValidLoss 0.001677 - ValidErr 1.0869 m - Smooth 1.0834 m
+Epoch 134/200 - 1.03s - Loss 0.001892 - ValidLoss 0.001640 - ValidErr 1.0468 m - Smooth 1.0724 m
+Epoch 135/200 - 1.03s - Loss 0.001771 - ValidLoss 0.001599 - ValidErr 1.0330 m - Smooth 1.0606 m
+Epoch 136/200 - 1.05s - Loss 0.001860 - ValidLoss 0.001525 - ValidErr 1.0299 m - Smooth 1.0514 m
+Epoch 137/200 - 1.04s - Loss 0.001895 - ValidLoss 0.001933 - ValidErr 1.1346 m - Smooth 1.0763 m
+Epoch 138/200 - 1.04s - Loss 0.001912 - ValidLoss 0.002148 - ValidErr 1.1948 m - Smooth 1.1119 m
+Epoch 139/200 - 1.03s - Loss 0.001899 - ValidLoss 0.001659 - ValidErr 1.0551 m - Smooth 1.0948 m
+Epoch 140/200 - 1.03s - Loss 0.001828 - ValidLoss 0.002069 - ValidErr 1.1524 m - Smooth 1.1121 m
+Epoch 141/200 - 1.03s - Loss 0.001719 - ValidLoss 0.001413 - ValidErr 1.0049 m - Smooth 1.0799 m
+Epoch 142/200 - 0.92s - Loss 0.001810 - ValidLoss 0.001808 - ValidErr 1.0879 m - Smooth 1.0823 m
+Epoch 143/200 - 0.93s - Loss 0.001782 - ValidLoss 0.001569 - ValidErr 1.0377 m - Smooth 1.0690 m
+Epoch 144/200 - 0.92s - Loss 0.001791 - ValidLoss 0.001784 - ValidErr 1.1016 m - Smooth 1.0788 m
+Epoch 145/200 - 0.94s - Loss 0.001705 - ValidLoss 0.001579 - ValidErr 1.0419 m - Smooth 1.0677 m
+Epoch 146/200 - 0.97s - Loss 0.001758 - ValidLoss 0.001447 - ValidErr 1.0077 m - Smooth 1.0497 m
+Epoch 147/200 - 1.03s - Loss 0.001758 - ValidLoss 0.001778 - ValidErr 1.0716 m - Smooth 1.0563 m
+Epoch 148/200 - 1.24s - Loss 0.001813 - ValidLoss 0.001825 - ValidErr 1.0881 m - Smooth 1.0658 m
+Epoch 149/200 - 1.05s - Loss 0.001755 - ValidLoss 0.001406 - ValidErr 0.9975 m - Smooth 1.0453 m
+Epoch 150/200 - 1.01s - Loss 0.001693 - ValidLoss 0.001616 - ValidErr 1.0255 m - Smooth 1.0394 m
+Epoch 151/200 - 1.03s - Loss 0.001737 - ValidLoss 0.001556 - ValidErr 1.0312 m - Smooth 1.0369 m
+Epoch 152/200 - 1.02s - Loss 0.001739 - ValidLoss 0.001409 - ValidErr 0.9960 m - Smooth 1.0247 m
+Epoch 153/200 - 1.05s - Loss 0.001647 - ValidLoss 0.001472 - ValidErr 0.9977 m - Smooth 1.0166 m
+Epoch 154/200 - 1.05s - Loss 0.001712 - ValidLoss 0.002094 - ValidErr 1.1506 m - Smooth 1.0568 m
+Epoch 155/200 - 0.92s - Loss 0.001717 - ValidLoss 0.001487 - ValidErr 1.0084 m - Smooth 1.0423 m
+Epoch 156/200 - 0.92s - Loss 0.001619 - ValidLoss 0.001809 - ValidErr 1.0850 m - Smooth 1.0551 m
+Epoch 157/200 - 0.92s - Loss 0.001676 - ValidLoss 0.001337 - ValidErr 0.9745 m - Smooth 1.0309 m
+Epoch 158/200 - 0.93s - Loss 0.001634 - ValidLoss 0.001387 - ValidErr 0.9742 m - Smooth 1.0139 m
+Epoch 159/200 - 0.97s - Loss 0.001640 - ValidLoss 0.001551 - ValidErr 1.0287 m - Smooth 1.0183 m
+Epoch 160/200 - 1.01s - Loss 0.001557 - ValidLoss 0.001381 - ValidErr 0.9806 m - Smooth 1.0070 m
+Epoch 161/200 - 1.03s - Loss 0.001589 - ValidLoss 0.001437 - ValidErr 1.0091 m - Smooth 1.0076 m
+Epoch 162/200 - 1.04s - Loss 0.001555 - ValidLoss 0.001367 - ValidErr 0.9758 m - Smooth 0.9981 m
+Epoch 163/200 - 1.03s - Loss 0.001545 - ValidLoss 0.001830 - ValidErr 1.1068 m - Smooth 1.0307 m
+Epoch 164/200 - 1.04s - Loss 0.001531 - ValidLoss 0.001451 - ValidErr 0.9943 m - Smooth 1.0198 m
+Epoch 165/200 - 1.03s - Loss 0.001555 - ValidLoss 0.001457 - ValidErr 1.0030 m - Smooth 1.0147 m
+Epoch 166/200 - 1.03s - Loss 0.001525 - ValidLoss 0.001495 - ValidErr 0.9963 m - Smooth 1.0092 m
+Epoch 167/200 - 1.03s - Loss 0.001532 - ValidLoss 0.001603 - ValidErr 1.0273 m - Smooth 1.0146 m
+Epoch 168/200 - 1.00s - Loss 0.001562 - ValidLoss 0.001805 - ValidErr 1.0793 m - Smooth 1.0340 m
+Epoch 169/200 - 0.92s - Loss 0.001522 - ValidLoss 0.001826 - ValidErr 1.0922 m - Smooth 1.0515 m
+Epoch 170/200 - 0.92s - Loss 0.001635 - ValidLoss 0.001422 - ValidErr 0.9805 m - Smooth 1.0302 m
+Epoch 171/200 - 0.92s - Loss 0.001563 - ValidLoss 0.001438 - ValidErr 0.9851 m - Smooth 1.0167 m
+Epoch 172/200 - 0.97s - Loss 0.001568 - ValidLoss 0.001501 - ValidErr 0.9988 m - Smooth 1.0113 m
+Epoch 173/200 - 1.03s - Loss 0.001581 - ValidLoss 0.001372 - ValidErr 0.9697 m - Smooth 0.9988 m
+Epoch 174/200 - 1.03s - Loss 0.001595 - ValidLoss 0.001704 - ValidErr 1.0664 m - Smooth 1.0191 m
+Epoch 175/200 - 1.03s - Loss 0.001551 - ValidLoss 0.001641 - ValidErr 1.0650 m - Smooth 1.0329 m
+Epoch 176/200 - 1.03s - Loss 0.001590 - ValidLoss 0.001426 - ValidErr 0.9856 m - Smooth 1.0187 m
+Epoch 177/200 - 1.03s - Loss 0.001531 - ValidLoss 0.001527 - ValidErr 1.0105 m - Smooth 1.0162 m
+Epoch 178/200 - 1.03s - Loss 0.001597 - ValidLoss 0.001763 - ValidErr 1.0590 m - Smooth 1.0291 m
+Epoch 179/200 - 1.05s - Loss 0.001550 - ValidLoss 0.001546 - ValidErr 1.0113 m - Smooth 1.0237 m
+Epoch 180/200 - 1.03s - Loss 0.001491 - ValidLoss 0.001618 - ValidErr 1.0382 m - Smooth 1.0281 m
+Epoch 181/200 - 0.93s - Loss 0.001522 - ValidLoss 0.001725 - ValidErr 1.0599 m - Smooth 1.0376 m
+Epoch 182/200 - 0.93s - Loss 0.001514 - ValidLoss 0.001452 - ValidErr 0.9853 m - Smooth 1.0219 m
+Early stopping triggered at epoch 182
+Epoch that the model was saved 162 - best smoothed error 0.9981 m
+wandb: - 0.000 MB of 0.000 MB uploadedwandb:                                                                                
+wandb: 
+wandb: Run history:
+wandb:                  epoch ▁▁▁▂▂▂▂▂▃▃▃▃▃▃▃▄▄▄▄▄▅▅▅▅▅▆▆▆▆▆▇▇▇▇▇▇████
+wandb:          learning_rate ████████▇▇▇▇▇▇▇▆▆▅▅▅▄▄▄▄▃▃▃▃▃▂▂▂▁▁▁▁▁▁▁▁
+wandb:             train_loss █▃▃▂▂▂▂▁▂▁▁▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:          valid_error_m █▄▃▃▂▂▂▂▂▂▂▂▂▁▂▂▂▁▂▂▁▁▁▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb: valid_error_m_smoothed █▅▄▄▃▃▃▂▂▂▂▂▂▂▂▂▂▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:             valid_loss █▄▄▄▂▁▂▁▂▁▁▁▁▂▂▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb: 
+wandb: Run summary:
+wandb:                  epoch 182
+wandb:          learning_rate 0.0001
+wandb:             train_loss 0.00151
+wandb:          valid_error_m 0.98533
+wandb: valid_error_m_smoothed 1.02193
+wandb:             valid_loss 0.00145
+wandb: 
+wandb: You can sync this run to the cloud by running:
+wandb: wandb sync /cluster/raid/home/jajo/AMAR/wandb/offline-run-20261022_175709-rbzpey0w
+wandb: Find logs at: ./wandb/offline-run-20261022_175709-rbzpey0w/logs
+
+--- student repeat 0 ---
+wandb: Tracking run with wandb version 0.18.3
+wandb: W&B syncing is set to `offline` in this directory.  
+wandb: Run `wandb online` or set WANDB_MODE=online to enable cloud syncing.
+Epoch 0/200 - Loss 0.207069 (sup 0.188270, kd 0.187984) - ValidErr 7.2312 m - Smooth 7.2312 m
+Epoch 1/200 - Loss 0.124204 (sup 0.112752, kd 0.114528) - ValidErr 8.1128 m - Smooth 7.4957 m
+Epoch 2/200 - Loss 0.102996 (sup 0.093464, kd 0.095318) - ValidErr 5.1533 m - Smooth 6.7930 m
+Epoch 3/200 - Loss 0.062004 (sup 0.056892, kd 0.051120) - ValidErr 8.0971 m - Smooth 7.1842 m
+Epoch 4/200 - Loss 0.057344 (sup 0.052282, kd 0.050618) - ValidErr 5.9360 m - Smooth 6.8098 m
+Epoch 5/200 - Loss 0.036832 (sup 0.033209, kd 0.036226) - ValidErr 5.8443 m - Smooth 6.5201 m
+Epoch 6/200 - Loss 0.038947 (sup 0.035127, kd 0.038193) - ValidErr 6.7902 m - Smooth 6.6012 m
+Epoch 7/200 - Loss 0.031266 (sup 0.028628, kd 0.026385) - ValidErr 6.3213 m - Smooth 6.5172 m
+Epoch 8/200 - Loss 0.028292 (sup 0.025495, kd 0.027967) - ValidErr 4.9233 m - Smooth 6.0390 m
+Epoch 9/200 - Loss 0.026134 (sup 0.023488, kd 0.026461) - ValidErr 5.3279 m - Smooth 5.8257 m
+Epoch 10/200 - Loss 0.026326 (sup 0.023874, kd 0.024525) - ValidErr 5.2476 m - Smooth 5.6523 m
+Epoch 11/200 - Loss 0.026269 (sup 0.023657, kd 0.026120) - ValidErr 5.0633 m - Smooth 5.4756 m
+Epoch 12/200 - Loss 0.020520 (sup 0.018622, kd 0.018983) - ValidErr 5.3702 m - Smooth 5.4440 m
+Epoch 13/200 - Loss 0.020180 (sup 0.018315, kd 0.018648) - ValidErr 4.9778 m - Smooth 5.3041 m
+Epoch 14/200 - Loss 0.020010 (sup 0.017971, kd 0.020396) - ValidErr 5.4014 m - Smooth 5.3333 m
+Epoch 15/200 - Loss 0.018136 (sup 0.016177, kd 0.019588) - ValidErr 4.6770 m - Smooth 5.1364 m
+Epoch 16/200 - Loss 0.021117 (sup 0.019024, kd 0.020924) - ValidErr 5.8618 m - Smooth 5.3540 m
+Epoch 17/200 - Loss 0.016078 (sup 0.014402, kd 0.016759) - ValidErr 4.3905 m - Smooth 5.0650 m
+Epoch 18/200 - Loss 0.019093 (sup 0.016753, kd 0.023402) - ValidErr 4.8676 m - Smooth 5.0058 m
+Epoch 19/200 - Loss 0.017334 (sup 0.015824, kd 0.015096) - ValidErr 5.7565 m - Smooth 5.2310 m
+Epoch 20/200 - Loss 0.016673 (sup 0.015098, kd 0.015750) - ValidErr 3.5149 m - Smooth 4.7162 m
+Epoch 21/200 - Loss 0.015489 (sup 0.013337, kd 0.021516) - ValidErr 4.6309 m - Smooth 4.6906 m
+Epoch 22/200 - Loss 0.016788 (sup 0.015081, kd 0.017072) - ValidErr 5.1639 m - Smooth 4.8326 m
+Epoch 23/200 - Loss 0.016926 (sup 0.015184, kd 0.017420) - ValidErr 3.5776 m - Smooth 4.4561 m
+Epoch 24/200 - Loss 0.015304 (sup 0.013652, kd 0.016522) - ValidErr 4.3317 m - Smooth 4.4188 m
+Epoch 25/200 - Loss 0.016746 (sup 0.014939, kd 0.018075) - ValidErr 4.8895 m - Smooth 4.5600 m
+Epoch 26/200 - Loss 0.012786 (sup 0.011337, kd 0.014492) - ValidErr 4.4396 m - Smooth 4.5239 m
+Epoch 27/200 - Loss 0.013771 (sup 0.012125, kd 0.016459) - ValidErr 4.5829 m - Smooth 4.5416 m
+Epoch 28/200 - Loss 0.013933 (sup 0.012393, kd 0.015398) - ValidErr 5.0153 m - Smooth 4.6837 m
+Epoch 29/200 - Loss 0.012845 (sup 0.011499, kd 0.013468) - ValidErr 3.9993 m - Smooth 4.4784 m
+Epoch 30/200 - Loss 0.013966 (sup 0.012406, kd 0.015599) - ValidErr 4.8944 m - Smooth 4.6032 m
+Epoch 31/200 - Loss 0.013667 (sup 0.012237, kd 0.014299) - ValidErr 4.2247 m - Smooth 4.4896 m
+Epoch 32/200 - Loss 0.014145 (sup 0.012441, kd 0.017047) - ValidErr 4.2104 m - Smooth 4.4059 m
+Epoch 33/200 - Loss 0.010481 (sup 0.009261, kd 0.012202) - ValidErr 4.6544 m - Smooth 4.4804 m
+Epoch 34/200 - Loss 0.010065 (sup 0.009024, kd 0.010408) - ValidErr 3.5333 m - Smooth 4.1963 m
+Epoch 35/200 - Loss 0.012553 (sup 0.011089, kd 0.014634) - ValidErr 4.0943 m - Smooth 4.1657 m
+Epoch 36/200 - Loss 0.011811 (sup 0.010533, kd 0.012785) - ValidErr 4.1905 m - Smooth 4.1731 m
+Epoch 37/200 - Loss 0.010828 (sup 0.009225, kd 0.016032) - ValidErr 4.4106 m - Smooth 4.2444 m
+Epoch 38/200 - Loss 0.009848 (sup 0.008645, kd 0.012029) - ValidErr 4.1371 m - Smooth 4.2122 m
+Epoch 39/200 - Loss 0.011161 (sup 0.009682, kd 0.014790) - ValidErr 3.7649 m - Smooth 4.0780 m
+Epoch 40/200 - Loss 0.010928 (sup 0.009588, kd 0.013400) - ValidErr 4.5723 m - Smooth 4.2263 m
+Epoch 41/200 - Loss 0.013867 (sup 0.012088, kd 0.017790) - ValidErr 4.5823 m - Smooth 4.3331 m
+Epoch 42/200 - Loss 0.011550 (sup 0.010128, kd 0.014220) - ValidErr 4.4490 m - Smooth 4.3679 m
+Epoch 43/200 - Loss 0.011470 (sup 0.010094, kd 0.013764) - ValidErr 3.9054 m - Smooth 4.2291 m
+Epoch 44/200 - Loss 0.009930 (sup 0.008474, kd 0.014560) - ValidErr 4.7454 m - Smooth 4.3840 m
+Epoch 45/200 - Loss 0.010321 (sup 0.009134, kd 0.011862) - ValidErr 4.3075 m - Smooth 4.3610 m
+Epoch 46/200 - Loss 0.008470 (sup 0.007210, kd 0.012594) - ValidErr 4.0353 m - Smooth 4.2633 m
+Epoch 47/200 - Loss 0.010371 (sup 0.009079, kd 0.012925) - ValidErr 4.5723 m - Smooth 4.3560 m
+Epoch 48/200 - Loss 0.011131 (sup 0.009975, kd 0.011561) - ValidErr 4.3166 m - Smooth 4.3442 m
+Epoch 49/200 - Loss 0.009108 (sup 0.007821, kd 0.012875) - ValidErr 3.5648 m - Smooth 4.1104 m
+Epoch 50/200 - Loss 0.011127 (sup 0.009756, kd 0.013711) - ValidErr 4.4456 m - Smooth 4.2109 m
+Epoch 51/200 - Loss 0.009162 (sup 0.007837, kd 0.013248) - ValidErr 3.7096 m - Smooth 4.0606 m
+Epoch 52/200 - Loss 0.009418 (sup 0.008175, kd 0.012432) - ValidErr 4.6204 m - Smooth 4.2285 m
+Epoch 53/200 - Loss 0.008714 (sup 0.007524, kd 0.011897) - ValidErr 4.3877 m - Smooth 4.2763 m
+Epoch 54/200 - Loss 0.009666 (sup 0.008136, kd 0.015299) - ValidErr 3.7192 m - Smooth 4.1092 m
+Epoch 55/200 - Loss 0.008930 (sup 0.007636, kd 0.012937) - ValidErr 4.7149 m - Smooth 4.2909 m
+Epoch 56/200 - Loss 0.008868 (sup 0.007641, kd 0.012272) - ValidErr 4.0316 m - Smooth 4.2131 m
+Epoch 57/200 - Loss 0.008869 (sup 0.007509, kd 0.013596) - ValidErr 3.3491 m - Smooth 3.9539 m
+Epoch 58/200 - Loss 0.008562 (sup 0.007385, kd 0.011772) - ValidErr 4.1004 m - Smooth 3.9979 m
+Epoch 59/200 - Loss 0.008993 (sup 0.007866, kd 0.011273) - ValidErr 3.8088 m - Smooth 3.9411 m
+Epoch 60/200 - Loss 0.009525 (sup 0.008233, kd 0.012923) - ValidErr 3.6634 m - Smooth 3.8578 m
+Epoch 61/200 - Loss 0.010357 (sup 0.009068, kd 0.012887) - ValidErr 4.5623 m - Smooth 4.0691 m
+Epoch 62/200 - Loss 0.008609 (sup 0.007531, kd 0.010779) - ValidErr 3.7101 m - Smooth 3.9614 m
+Epoch 63/200 - Loss 0.008786 (sup 0.007512, kd 0.012741) - ValidErr 3.8720 m - Smooth 3.9346 m
+Epoch 64/200 - Loss 0.010190 (sup 0.009090, kd 0.011005) - ValidErr 4.0173 m - Smooth 3.9594 m
+Epoch 65/200 - Loss 0.008913 (sup 0.007703, kd 0.012095) - ValidErr 3.9052 m - Smooth 3.9432 m
+Epoch 66/200 - Loss 0.008790 (sup 0.007653, kd 0.011370) - ValidErr 3.7533 m - Smooth 3.8862 m
+Epoch 67/200 - Loss 0.008667 (sup 0.007279, kd 0.013883) - ValidErr 3.7506 m - Smooth 3.8455 m
+Epoch 68/200 - Loss 0.008559 (sup 0.007471, kd 0.010883) - ValidErr 4.6139 m - Smooth 4.0760 m
+Epoch 69/200 - Loss 0.008193 (sup 0.007073, kd 0.011195) - ValidErr 3.6934 m - Smooth 3.9613 m
+Epoch 70/200 - Loss 0.009600 (sup 0.008180, kd 0.014195) - ValidErr 4.3501 m - Smooth 4.0779 m
+Epoch 71/200 - Loss 0.008424 (sup 0.007338, kd 0.010856) - ValidErr 3.7817 m - Smooth 3.9891 m
+Epoch 72/200 - Loss 0.008173 (sup 0.006816, kd 0.013571) - ValidErr 3.0845 m - Smooth 3.7177 m
+Epoch 73/200 - Loss 0.008700 (sup 0.007602, kd 0.010981) - ValidErr 4.0812 m - Smooth 3.8268 m
+Epoch 74/200 - Loss 0.007380 (sup 0.006285, kd 0.010954) - ValidErr 3.5345 m - Smooth 3.7391 m
+Epoch 75/200 - Loss 0.008546 (sup 0.007385, kd 0.011612) - ValidErr 4.6011 m - Smooth 3.9977 m
+Epoch 76/200 - Loss 0.008493 (sup 0.007348, kd 0.011447) - ValidErr 4.7988 m - Smooth 4.2380 m
+Epoch 77/200 - Loss 0.007756 (sup 0.006521, kd 0.012348) - ValidErr 3.7856 m - Smooth 4.1023 m
+Epoch 78/200 - Loss 0.008261 (sup 0.006915, kd 0.013461) - ValidErr 4.2831 m - Smooth 4.1565 m
+Epoch 79/200 - Loss 0.007236 (sup 0.006030, kd 0.012059) - ValidErr 4.0057 m - Smooth 4.1113 m
+Epoch 80/200 - Loss 0.007634 (sup 0.006491, kd 0.011428) - ValidErr 3.5127 m - Smooth 3.9317 m
+Epoch 81/200 - Loss 0.007977 (sup 0.006646, kd 0.013307) - ValidErr 4.0565 m - Smooth 3.9691 m
+Epoch 82/200 - Loss 0.008536 (sup 0.007482, kd 0.010537) - ValidErr 3.7935 m - Smooth 3.9164 m
+Epoch 83/200 - Loss 0.008255 (sup 0.007100, kd 0.011548) - ValidErr 3.3818 m - Smooth 3.7560 m
+Epoch 84/200 - Loss 0.007613 (sup 0.006615, kd 0.009983) - ValidErr 3.7832 m - Smooth 3.7642 m
+Epoch 85/200 - Loss 0.008008 (sup 0.006793, kd 0.012146) - ValidErr 3.6163 m - Smooth 3.7198 m
+Epoch 86/200 - Loss 0.007987 (sup 0.006733, kd 0.012537) - ValidErr 3.6805 m - Smooth 3.7080 m
+Epoch 87/200 - Loss 0.008193 (sup 0.006734, kd 0.014588) - ValidErr 4.3443 m - Smooth 3.8989 m
+Epoch 88/200 - Loss 0.008498 (sup 0.007347, kd 0.011516) - ValidErr 3.9900 m - Smooth 3.9262 m
+Epoch 89/200 - Loss 0.007042 (sup 0.005860, kd 0.011814) - ValidErr 3.8166 m - Smooth 3.8933 m
+Epoch 90/200 - Loss 0.006935 (sup 0.005786, kd 0.011489) - ValidErr 4.4988 m - Smooth 4.0750 m
+Epoch 91/200 - Loss 0.006147 (sup 0.005112, kd 0.010342) - ValidErr 4.0525 m - Smooth 4.0682 m
+Epoch 92/200 - Loss 0.006367 (sup 0.005253, kd 0.011143) - ValidErr 3.7245 m - Smooth 3.9651 m
+Epoch 93/200 - Loss 0.007612 (sup 0.006367, kd 0.012449) - ValidErr 4.2582 m - Smooth 4.0530 m
+Epoch 94/200 - Loss 0.006450 (sup 0.005307, kd 0.011425) - ValidErr 3.8549 m - Smooth 3.9936 m
+Epoch 95/200 - Loss 0.005947 (sup 0.004790, kd 0.011578) - ValidErr 3.7268 m - Smooth 3.9136 m
+Epoch 96/200 - Loss 0.006370 (sup 0.005291, kd 0.010783) - ValidErr 3.7397 m - Smooth 3.8614 m
+Epoch 97/200 - Loss 0.006145 (sup 0.005072, kd 0.010733) - ValidErr 3.6870 m - Smooth 3.8091 m
+Epoch 98/200 - Loss 0.006024 (sup 0.004862, kd 0.011619) - ValidErr 3.7243 m - Smooth 3.7837 m
+Epoch 99/200 - Loss 0.005856 (sup 0.004757, kd 0.010988) - ValidErr 3.8847 m - Smooth 3.8140 m
+Epoch 100/200 - Loss 0.006844 (sup 0.005741, kd 0.011035) - ValidErr 3.9576 m - Smooth 3.8571 m
+Epoch 101/200 - Loss 0.006701 (sup 0.005456, kd 0.012448) - ValidErr 4.0887 m - Smooth 3.9266 m
+Epoch 102/200 - Loss 0.006643 (sup 0.005471, kd 0.011726) - ValidErr 4.2077 m - Smooth 4.0109 m
+Epoch 103/200 - Loss 0.005744 (sup 0.004567, kd 0.011771) - ValidErr 3.8979 m - Smooth 3.9770 m
+Epoch 104/200 - Loss 0.006261 (sup 0.004956, kd 0.013045) - ValidErr 4.3725 m - Smooth 4.0957 m
+Epoch 105/200 - Loss 0.005226 (sup 0.004201, kd 0.010249) - ValidErr 4.1933 m - Smooth 4.1250 m
+Epoch 106/200 - Loss 0.006506 (sup 0.005512, kd 0.009945) - ValidErr 3.6878 m - Smooth 3.9938 m
+Early stopping triggered at epoch 106
+Epoch that the student was saved 86 - best smoothed error 3.7080 m
+  [meeting_room] query 340 frames | student 3.7423 m | teacher 3.8235 m | const 2.5379 m
+  [Lounge] query 711 frames | student 2.9043 m | teacher 2.6494 m | const 2.9372 m
+  [Office] query 441 frames | student 3.2929 m | teacher 2.6020 m | const 3.3429 m
+  [empty_room] query 564 frames | student 3.3460 m | teacher 3.8807 m | const 2.4612 m
+wandb: - 0.000 MB of 0.000 MB uploadedwandb:                                                                                
+wandb: 
+wandb: Run history:
+wandb:         query/Lounge/const_mean_error_m ▁
+wandb:       query/Lounge/student_mean_error_m ▁
+wandb:       query/Lounge/teacher_mean_error_m ▁
+wandb:         query/Office/const_mean_error_m ▁
+wandb:       query/Office/student_mean_error_m ▁
+wandb:       query/Office/teacher_mean_error_m ▁
+wandb:     query/empty_room/const_mean_error_m ▁
+wandb:   query/empty_room/student_mean_error_m ▁
+wandb:   query/empty_room/teacher_mean_error_m ▁
+wandb:   query/meeting_room/const_mean_error_m ▁
+wandb: query/meeting_room/student_mean_error_m ▁
+wandb: query/meeting_room/teacher_mean_error_m ▁
+wandb: 
+wandb: Run summary:
+wandb:         query/Lounge/const_mean_error_m 2.93722
+wandb:       query/Lounge/student_mean_error_m 2.90432
+wandb:       query/Lounge/teacher_mean_error_m 2.64942
+wandb:         query/Office/const_mean_error_m 3.34287
+wandb:       query/Office/student_mean_error_m 3.29287
+wandb:       query/Office/teacher_mean_error_m 2.60201
+wandb:     query/empty_room/const_mean_error_m 2.4612
+wandb:   query/empty_room/student_mean_error_m 3.346
+wandb:   query/empty_room/teacher_mean_error_m 3.88069
+wandb:   query/meeting_room/const_mean_error_m 2.53787
+wandb: query/meeting_room/student_mean_error_m 3.74233
+wandb: query/meeting_room/teacher_mean_error_m 3.82346
+wandb: 
+wandb: You can sync this run to the cloud by running:
+wandb: wandb sync /cluster/raid/home/jajo/AMAR/wandb/offline-run-20261022_180045-k1nyhdfn
+wandb: Find logs at: ./wandb/offline-run-20261022_180045-k1nyhdfn/logs
+
+--- student repeat 1 ---
+wandb: Tracking run with wandb version 0.18.3
+wandb: W&B syncing is set to `offline` in this directory.  
+wandb: Run `wandb online` or set WANDB_MODE=online to enable cloud syncing.
+Epoch 0/200 - Loss 0.273253 (sup 0.249397, kd 0.238556) - ValidErr 10.4986 m - Smooth 10.4986 m
+Epoch 1/200 - Loss 0.146865 (sup 0.132286, kd 0.145791) - ValidErr 10.2362 m - Smooth 10.4199 m
+Epoch 2/200 - Loss 0.093537 (sup 0.085595, kd 0.079427) - ValidErr 5.6648 m - Smooth 8.9933 m
+Epoch 3/200 - Loss 0.069150 (sup 0.062271, kd 0.068783) - ValidErr 4.6648 m - Smooth 7.6948 m
+Epoch 4/200 - Loss 0.045689 (sup 0.041633, kd 0.040557) - ValidErr 7.4547 m - Smooth 7.6228 m
+Epoch 5/200 - Loss 0.047017 (sup 0.042889, kd 0.041282) - ValidErr 4.4734 m - Smooth 6.6779 m
+Epoch 6/200 - Loss 0.038030 (sup 0.033980, kd 0.040506) - ValidErr 4.9374 m - Smooth 6.1558 m
+Epoch 7/200 - Loss 0.032281 (sup 0.029487, kd 0.027945) - ValidErr 6.1565 m - Smooth 6.1560 m
+Epoch 8/200 - Loss 0.029775 (sup 0.027230, kd 0.025452) - ValidErr 5.6037 m - Smooth 5.9903 m
+Epoch 9/200 - Loss 0.026375 (sup 0.023342, kd 0.030335) - ValidErr 5.0151 m - Smooth 5.6977 m
+Epoch 10/200 - Loss 0.024011 (sup 0.021610, kd 0.024014) - ValidErr 6.4431 m - Smooth 5.9213 m
+Epoch 11/200 - Loss 0.026447 (sup 0.024413, kd 0.020338) - ValidErr 4.6960 m - Smooth 5.5537 m
+Epoch 12/200 - Loss 0.025816 (sup 0.023149, kd 0.026673) - ValidErr 4.3548 m - Smooth 5.1941 m
+Epoch 13/200 - Loss 0.025577 (sup 0.022714, kd 0.028638) - ValidErr 4.8169 m - Smooth 5.0809 m
+Epoch 14/200 - Loss 0.022478 (sup 0.020363, kd 0.021156) - ValidErr 5.4950 m - Smooth 5.2051 m
+Epoch 15/200 - Loss 0.021140 (sup 0.019064, kd 0.020763) - ValidErr 4.2308 m - Smooth 4.9128 m
+Epoch 16/200 - Loss 0.018084 (sup 0.016234, kd 0.018502) - ValidErr 4.3788 m - Smooth 4.7526 m
+Epoch 17/200 - Loss 0.019995 (sup 0.018033, kd 0.019625) - ValidErr 4.5011 m - Smooth 4.6772 m
+Epoch 18/200 - Loss 0.019828 (sup 0.017893, kd 0.019354) - ValidErr 4.8199 m - Smooth 4.7200 m
+Epoch 19/200 - Loss 0.018144 (sup 0.016185, kd 0.019596) - ValidErr 4.2867 m - Smooth 4.5900 m
+Epoch 20/200 - Loss 0.020029 (sup 0.017566, kd 0.024629) - ValidErr 4.1369 m - Smooth 4.4541 m
+Epoch 21/200 - Loss 0.017312 (sup 0.015479, kd 0.018334) - ValidErr 4.5286 m - Smooth 4.4764 m
+Epoch 22/200 - Loss 0.019659 (sup 0.017920, kd 0.017389) - ValidErr 4.2355 m - Smooth 4.4042 m
+Epoch 23/200 - Loss 0.016423 (sup 0.014330, kd 0.020929) - ValidErr 4.5828 m - Smooth 4.4578 m
+Epoch 24/200 - Loss 0.018121 (sup 0.016417, kd 0.017041) - ValidErr 5.2889 m - Smooth 4.7071 m
+Epoch 25/200 - Loss 0.013875 (sup 0.012348, kd 0.015271) - ValidErr 4.5274 m - Smooth 4.6532 m
+Epoch 26/200 - Loss 0.015356 (sup 0.013628, kd 0.017281) - ValidErr 4.7092 m - Smooth 4.6700 m
+Epoch 27/200 - Loss 0.013369 (sup 0.011828, kd 0.015411) - ValidErr 5.7176 m - Smooth 4.9843 m
+Epoch 28/200 - Loss 0.015074 (sup 0.013432, kd 0.016413) - ValidErr 5.1855 m - Smooth 5.0446 m
+Epoch 29/200 - Loss 0.014170 (sup 0.012398, kd 0.017721) - ValidErr 4.3815 m - Smooth 4.8457 m
+Epoch 30/200 - Loss 0.014115 (sup 0.012688, kd 0.014264) - ValidErr 4.9649 m - Smooth 4.8814 m
+Epoch 31/200 - Loss 0.014226 (sup 0.012776, kd 0.014502) - ValidErr 5.0916 m - Smooth 4.9445 m
+Epoch 32/200 - Loss 0.014312 (sup 0.012808, kd 0.015046) - ValidErr 5.4266 m - Smooth 5.0891 m
+Epoch 33/200 - Loss 0.014895 (sup 0.013430, kd 0.014649) - ValidErr 5.2670 m - Smooth 5.1425 m
+Epoch 34/200 - Loss 0.012068 (sup 0.010590, kd 0.014783) - ValidErr 4.9138 m - Smooth 5.0739 m
+Epoch 35/200 - Loss 0.012550 (sup 0.011039, kd 0.015107) - ValidErr 5.3266 m - Smooth 5.1497 m
+Epoch 36/200 - Loss 0.013134 (sup 0.011838, kd 0.012966) - ValidErr 4.2372 m - Smooth 4.8760 m
+Epoch 37/200 - Loss 0.013616 (sup 0.012086, kd 0.015302) - ValidErr 4.3576 m - Smooth 4.7205 m
+Epoch 38/200 - Loss 0.011225 (sup 0.009731, kd 0.014937) - ValidErr 5.3925 m - Smooth 4.9221 m
+Epoch 39/200 - Loss 0.012964 (sup 0.011630, kd 0.013342) - ValidErr 4.1483 m - Smooth 4.6900 m
+Epoch 40/200 - Loss 0.013215 (sup 0.011542, kd 0.016727) - ValidErr 5.3492 m - Smooth 4.8877 m
+Epoch 41/200 - Loss 0.013320 (sup 0.011855, kd 0.014655) - ValidErr 5.0797 m - Smooth 4.9453 m
+Epoch 42/200 - Loss 0.013005 (sup 0.011770, kd 0.012350) - ValidErr 3.4306 m - Smooth 4.4909 m
+Early stopping triggered at epoch 42
+Epoch that the student was saved 22 - best smoothed error 4.4042 m
+  [meeting_room] query 340 frames | student 4.5047 m | teacher 3.8235 m | const 2.5379 m
+  [Lounge] query 711 frames | student 2.8881 m | teacher 2.6494 m | const 2.9372 m
+  [Office] query 441 frames | student 3.3699 m | teacher 2.6020 m | const 3.3429 m
+  [empty_room] query 564 frames | student 4.6191 m | teacher 3.8807 m | const 2.4612 m
+wandb: - 0.000 MB of 0.000 MB uploadedwandb:                                                                                
+wandb: 
+wandb: Run history:
+wandb:         query/Lounge/const_mean_error_m ▁
+wandb:       query/Lounge/student_mean_error_m ▁
+wandb:       query/Lounge/teacher_mean_error_m ▁
+wandb:         query/Office/const_mean_error_m ▁
+wandb:       query/Office/student_mean_error_m ▁
+wandb:       query/Office/teacher_mean_error_m ▁
+wandb:     query/empty_room/const_mean_error_m ▁
+wandb:   query/empty_room/student_mean_error_m ▁
+wandb:   query/empty_room/teacher_mean_error_m ▁
+wandb:   query/meeting_room/const_mean_error_m ▁
+wandb: query/meeting_room/student_mean_error_m ▁
+wandb: query/meeting_room/teacher_mean_error_m ▁
+wandb: 
+wandb: Run summary:
+wandb:         query/Lounge/const_mean_error_m 2.93722
+wandb:       query/Lounge/student_mean_error_m 2.8881
+wandb:       query/Lounge/teacher_mean_error_m 2.64942
+wandb:         query/Office/const_mean_error_m 3.34287
+wandb:       query/Office/student_mean_error_m 3.36988
+wandb:       query/Office/teacher_mean_error_m 2.60201
+wandb:     query/empty_room/const_mean_error_m 2.4612
+wandb:   query/empty_room/student_mean_error_m 4.61907
+wandb:   query/empty_room/teacher_mean_error_m 3.88069
+wandb:   query/meeting_room/const_mean_error_m 2.53787
+wandb: query/meeting_room/student_mean_error_m 4.50467
+wandb: query/meeting_room/teacher_mean_error_m 3.82346
+wandb: 
+wandb: You can sync this run to the cloud by running:
+wandb: wandb sync /cluster/raid/home/jajo/AMAR/wandb/offline-run-20261022_180121-40hib3u5
+wandb: Find logs at: ./wandb/offline-run-20261022_180121-40hib3u5/logs
+
+--- student repeat 2 ---
+wandb: Tracking run with wandb version 0.18.3
+wandb: W&B syncing is set to `offline` in this directory.  
+wandb: Run `wandb online` or set WANDB_MODE=online to enable cloud syncing.
+Epoch 0/200 - Loss 0.469077 (sup 0.428301, kd 0.407759) - ValidErr 11.8364 m - Smooth 11.8364 m
+Epoch 1/200 - Loss 0.248006 (sup 0.223790, kd 0.242168) - ValidErr 9.4803 m - Smooth 11.1296 m
+Epoch 2/200 - Loss 0.109045 (sup 0.100047, kd 0.089979) - ValidErr 5.5216 m - Smooth 9.4472 m
+Epoch 3/200 - Loss 0.084468 (sup 0.076046, kd 0.084222) - ValidErr 5.8529 m - Smooth 8.3689 m
+Epoch 4/200 - Loss 0.051505 (sup 0.047128, kd 0.043766) - ValidErr 5.1546 m - Smooth 7.4046 m
+Epoch 5/200 - Loss 0.037481 (sup 0.033787, kd 0.036938) - ValidErr 4.9400 m - Smooth 6.6652 m
+Epoch 6/200 - Loss 0.035720 (sup 0.032190, kd 0.035291) - ValidErr 5.8765 m - Smooth 6.4286 m
+Epoch 7/200 - Loss 0.034314 (sup 0.030852, kd 0.034618) - ValidErr 6.3827 m - Smooth 6.4148 m
+Epoch 8/200 - Loss 0.036573 (sup 0.033354, kd 0.032186) - ValidErr 4.7247 m - Smooth 5.9078 m
+Epoch 9/200 - Loss 0.024161 (sup 0.021499, kd 0.026621) - ValidErr 5.4468 m - Smooth 5.7695 m
+Epoch 10/200 - Loss 0.023647 (sup 0.021445, kd 0.022023) - ValidErr 6.4859 m - Smooth 5.9844 m
+Epoch 11/200 - Loss 0.024708 (sup 0.022282, kd 0.024251) - ValidErr 5.2025 m - Smooth 5.7498 m
+Epoch 12/200 - Loss 0.023022 (sup 0.020875, kd 0.021474) - ValidErr 4.0531 m - Smooth 5.2408 m
+Epoch 13/200 - Loss 0.022305 (sup 0.020145, kd 0.021598) - ValidErr 5.0434 m - Smooth 5.1816 m
+Epoch 14/200 - Loss 0.022670 (sup 0.020334, kd 0.023354) - ValidErr 5.8747 m - Smooth 5.3895 m
+Epoch 15/200 - Loss 0.024829 (sup 0.022159, kd 0.026705) - ValidErr 5.4168 m - Smooth 5.3977 m
+Epoch 16/200 - Loss 0.021671 (sup 0.019598, kd 0.020725) - ValidErr 5.3534 m - Smooth 5.3844 m
+Epoch 17/200 - Loss 0.018241 (sup 0.016450, kd 0.017915) - ValidErr 5.7400 m - Smooth 5.4911 m
+Epoch 18/200 - Loss 0.018013 (sup 0.016106, kd 0.019072) - ValidErr 5.9616 m - Smooth 5.6322 m
+Epoch 19/200 - Loss 0.016581 (sup 0.014736, kd 0.018458) - ValidErr 4.9304 m - Smooth 5.4217 m
+Epoch 20/200 - Loss 0.017737 (sup 0.015754, kd 0.019828) - ValidErr 5.3122 m - Smooth 5.3888 m
+Epoch 21/200 - Loss 0.016824 (sup 0.015215, kd 0.016097) - ValidErr 5.8982 m - Smooth 5.5417 m
+Epoch 22/200 - Loss 0.016338 (sup 0.014730, kd 0.016079) - ValidErr 4.8793 m - Smooth 5.3429 m
+Epoch 23/200 - Loss 0.014904 (sup 0.012781, kd 0.021227) - ValidErr 4.3662 m - Smooth 5.0499 m
+Epoch 24/200 - Loss 0.014346 (sup 0.012626, kd 0.017201) - ValidErr 4.7274 m - Smooth 4.9531 m
+Epoch 25/200 - Loss 0.017287 (sup 0.015636, kd 0.016512) - ValidErr 5.1126 m - Smooth 5.0010 m
+Epoch 26/200 - Loss 0.016077 (sup 0.014272, kd 0.018054) - ValidErr 4.0416 m - Smooth 4.7132 m
+Epoch 27/200 - Loss 0.017280 (sup 0.015142, kd 0.021380) - ValidErr 4.3402 m - Smooth 4.6013 m
+Epoch 28/200 - Loss 0.016532 (sup 0.014752, kd 0.017791) - ValidErr 4.9415 m - Smooth 4.7033 m
+Epoch 29/200 - Loss 0.014704 (sup 0.012925, kd 0.017789) - ValidErr 4.6837 m - Smooth 4.6975 m
+Epoch 30/200 - Loss 0.015550 (sup 0.013861, kd 0.016888) - ValidErr 4.2683 m - Smooth 4.5687 m
+Epoch 31/200 - Loss 0.016506 (sup 0.014544, kd 0.019615) - ValidErr 5.6765 m - Smooth 4.9010 m
+Epoch 32/200 - Loss 0.016314 (sup 0.014810, kd 0.015044) - ValidErr 5.5853 m - Smooth 5.1063 m
+Epoch 33/200 - Loss 0.014802 (sup 0.013043, kd 0.017596) - ValidErr 4.6531 m - Smooth 4.9703 m
+Epoch 34/200 - Loss 0.014332 (sup 0.012763, kd 0.015696) - ValidErr 5.2111 m - Smooth 5.0426 m
+Epoch 35/200 - Loss 0.014667 (sup 0.013162, kd 0.015054) - ValidErr 4.6058 m - Smooth 4.9116 m
+Epoch 36/200 - Loss 0.012730 (sup 0.011111, kd 0.016192) - ValidErr 5.0538 m - Smooth 4.9542 m
+Epoch 37/200 - Loss 0.011688 (sup 0.010248, kd 0.014400) - ValidErr 5.3025 m - Smooth 5.0587 m
+Epoch 38/200 - Loss 0.013707 (sup 0.012190, kd 0.015164) - ValidErr 4.7347 m - Smooth 4.9615 m
+Epoch 39/200 - Loss 0.011055 (sup 0.009776, kd 0.012784) - ValidErr 4.7178 m - Smooth 4.8884 m
+Epoch 40/200 - Loss 0.015215 (sup 0.013596, kd 0.016186) - ValidErr 5.0445 m - Smooth 4.9352 m
+Epoch 41/200 - Loss 0.012640 (sup 0.011047, kd 0.015928) - ValidErr 4.4403 m - Smooth 4.7867 m
+Epoch 42/200 - Loss 0.012142 (sup 0.010565, kd 0.015777) - ValidErr 4.8268 m - Smooth 4.7988 m
+Epoch 43/200 - Loss 0.012139 (sup 0.010746, kd 0.013921) - ValidErr 5.3601 m - Smooth 4.9671 m
+Epoch 44/200 - Loss 0.011894 (sup 0.010338, kd 0.015559) - ValidErr 4.4414 m - Smooth 4.8094 m
+Epoch 45/200 - Loss 0.012074 (sup 0.010580, kd 0.014944) - ValidErr 4.9376 m - Smooth 4.8479 m
+Epoch 46/200 - Loss 0.010609 (sup 0.009379, kd 0.012305) - ValidErr 5.3669 m - Smooth 5.0036 m
+Epoch 47/200 - Loss 0.011556 (sup 0.010374, kd 0.011819) - ValidErr 4.6570 m - Smooth 4.8996 m
+Epoch 48/200 - Loss 0.011410 (sup 0.009929, kd 0.014809) - ValidErr 3.9051 m - Smooth 4.6013 m
+Epoch 49/200 - Loss 0.010974 (sup 0.009552, kd 0.014220) - ValidErr 4.9663 m - Smooth 4.7108 m
+Epoch 50/200 - Loss 0.011543 (sup 0.010275, kd 0.012674) - ValidErr 4.6082 m - Smooth 4.6800 m
+Early stopping triggered at epoch 50
+Epoch that the student was saved 30 - best smoothed error 4.5687 m
+  [meeting_room] query 340 frames | student 3.3773 m | teacher 3.8235 m | const 2.5379 m
+  [Lounge] query 711 frames | student 2.8127 m | teacher 2.6494 m | const 2.9372 m
+  [Office] query 441 frames | student 3.2988 m | teacher 2.6020 m | const 3.3429 m
+  [empty_room] query 564 frames | student 3.8236 m | teacher 3.8807 m | const 2.4612 m
+wandb: - 0.000 MB of 0.000 MB uploadedwandb:                                                                                
+wandb: 
+wandb: Run history:
+wandb:         query/Lounge/const_mean_error_m ▁
+wandb:       query/Lounge/student_mean_error_m ▁
+wandb:       query/Lounge/teacher_mean_error_m ▁
+wandb:         query/Office/const_mean_error_m ▁
+wandb:       query/Office/student_mean_error_m ▁
+wandb:       query/Office/teacher_mean_error_m ▁
+wandb:     query/empty_room/const_mean_error_m ▁
+wandb:   query/empty_room/student_mean_error_m ▁
+wandb:   query/empty_room/teacher_mean_error_m ▁
+wandb:   query/meeting_room/const_mean_error_m ▁
+wandb: query/meeting_room/student_mean_error_m ▁
+wandb: query/meeting_room/teacher_mean_error_m ▁
+wandb: 
+wandb: Run summary:
+wandb:         query/Lounge/const_mean_error_m 2.93722
+wandb:       query/Lounge/student_mean_error_m 2.8127
+wandb:       query/Lounge/teacher_mean_error_m 2.64942
+wandb:         query/Office/const_mean_error_m 3.34287
+wandb:       query/Office/student_mean_error_m 3.29883
+wandb:       query/Office/teacher_mean_error_m 2.60201
+wandb:     query/empty_room/const_mean_error_m 2.4612
+wandb:   query/empty_room/student_mean_error_m 3.82356
+wandb:   query/empty_room/teacher_mean_error_m 3.88069
+wandb:   query/meeting_room/const_mean_error_m 2.53787
+wandb: query/meeting_room/student_mean_error_m 3.37728
+wandb: query/meeting_room/teacher_mean_error_m 3.82346
+wandb: 
+wandb: You can sync this run to the cloud by running:
+wandb: wandb sync /cluster/raid/home/jajo/AMAR/wandb/offline-run-20261022_180136-3v9mu2to
+wandb: Find logs at: ./wandb/offline-run-20261022_180136-3v9mu2to/logs
+
+Visualizations saved at visualizations/few_shot_hwild_to_wimans/Conference_Laboratory_classroom/6/meeting_room
+
+Detailed Performance Analysis:
+Mean Error: 0.0694 ± 0.0271
+
+Class-wise Mean Absolute Error:
+Class c00: 0.0000
+Class c01: 0.0000
+Class c02: 0.0000
+Class c03: 0.0000
+Class c04: 0.0000
+Class c10: 0.0000
+Class c11: 0.0059
+Class c12: 0.0676
+Class c13: 0.0000
+Class c14: 0.0000
+Class c20: 0.0000
+Class c21: 0.0000
+Class c22: 0.5118
+Class c23: 0.2882
+Class c24: 0.2118
+Class c30: 0.0000
+Class c31: 0.0000
+Class c32: 0.2176
+Class c33: 0.2206
+Class c34: 0.2118
+Class c40: 0.0000
+Class c41: 0.0000
+Class c42: 0.0000
+Class c43: 0.0000
+Class c44: 0.0000
+
+Perfect Predictions: 13.24%
+
+[meeting_room] student 3.8748 ± 0.3321 m | teacher 3.8235 m | constant baseline 2.5379 m
+
+Visualizations saved at visualizations/few_shot_hwild_to_wimans/Conference_Laboratory_classroom/6/Lounge
+
+Detailed Performance Analysis:
+Mean Error: 0.0632 ± 0.0326
+
+Class-wise Mean Absolute Error:
+Class c00: 0.0000
+Class c01: 0.0000
+Class c02: 0.0000
+Class c03: 0.0000
+Class c04: 0.0000
+Class c10: 0.0028
+Class c11: 0.0113
+Class c12: 0.0028
+Class c13: 0.0000
+Class c14: 0.0000
+Class c20: 0.0098
+Class c21: 0.4191
+Class c22: 0.4641
+Class c23: 0.0745
+Class c24: 0.0239
+Class c30: 0.0338
+Class c31: 0.1617
+Class c32: 0.2518
+Class c33: 0.0731
+Class c34: 0.0042
+Class c40: 0.0000
+Class c41: 0.0113
+Class c42: 0.0281
+Class c43: 0.0084
+Class c44: 0.0000
+
+Perfect Predictions: 20.96%
+
+[Lounge] student 2.8684 ± 0.0282 m | teacher 2.6494 m | constant baseline 2.9372 m
+
+Visualizations saved at visualizations/few_shot_hwild_to_wimans/Conference_Laboratory_classroom/6/Office
+
+Detailed Performance Analysis:
+Mean Error: 0.0673 ± 0.0292
+
+Class-wise Mean Absolute Error:
+Class c00: 0.0023
+Class c01: 0.0181
+Class c02: 0.0295
+Class c03: 0.0204
+Class c04: 0.0000
+Class c10: 0.0091
+Class c11: 0.2018
+Class c12: 0.1655
+Class c13: 0.0227
+Class c14: 0.0000
+Class c20: 0.0000
+Class c21: 0.3787
+Class c22: 0.2721
+Class c23: 0.0635
+Class c24: 0.0068
+Class c30: 0.0000
+Class c31: 0.1270
+Class c32: 0.2336
+Class c33: 0.1156
+Class c34: 0.0000
+Class c40: 0.0000
+Class c41: 0.0000
+Class c42: 0.0159
+Class c43: 0.0000
+Class c44: 0.0000
+
+Perfect Predictions: 15.87%
+
+[Office] student 3.3205 ± 0.0247 m | teacher 2.6020 m | constant baseline 3.3429 m
+
+Visualizations saved at visualizations/few_shot_hwild_to_wimans/Conference_Laboratory_classroom/6/empty_room
+
+Detailed Performance Analysis:
+Mean Error: 0.0770 ± 0.0151
+
+Class-wise Mean Absolute Error:
+Class c00: 0.0000
+Class c01: 0.0000
+Class c02: 0.0000
+Class c03: 0.0000
+Class c04: 0.0000
+Class c10: 0.0000
+Class c11: 0.0000
+Class c12: 0.0674
+Class c13: 0.0035
+Class c14: 0.0000
+Class c20: 0.0000
+Class c21: 0.0000
+Class c22: 0.7216
+Class c23: 0.3209
+Class c24: 0.1986
+Class c30: 0.0000
+Class c31: 0.0000
+Class c32: 0.0124
+Class c33: 0.3954
+Class c34: 0.2057
+Class c40: 0.0000
+Class c41: 0.0000
+Class c42: 0.0000
+Class c43: 0.0000
+Class c44: 0.0000
+
+Perfect Predictions: 3.72%
+
+[empty_room] student 3.9295 ± 0.3713 m | teacher 3.8807 m | constant baseline 2.4612 m
+================================================================================
+H-WILD -> WiMANS FEW-SHOT LOCALIZATION (support 5.00%, kd_weight 0.1)
+================================================================================
+
+meeting_room:
+  Student   MDE 3.8748 ± 0.3321 m (SE) | RMSE 4.2257 ± 0.3249 m (SE) | Median 3.8753 ± 0.3955 m (SE)
+  Teacher   MDE 3.8235 ± 0.0000 m (SE) | RMSE 4.6145 ± 0.0000 m (SE) | Median 2.9511 ± 0.0000 m (SE)  (H-WILD teacher, no WiMANS fine-tuning)
+  Constant  MDE 2.5379 m | RMSE 2.8453 m | Median 1.6870 m  (mean support position; beat this to show the few-shot step learned anything)
+
+Lounge:
+  Student   MDE 2.8684 ± 0.0282 m (SE) | RMSE 3.2291 ± 0.0207 m (SE) | Median 2.6685 ± 0.0320 m (SE)
+  Teacher   MDE 2.6494 ± 0.0000 m (SE) | RMSE 3.2128 ± 0.0000 m (SE) | Median 2.2614 ± 0.0000 m (SE)  (H-WILD teacher, no WiMANS fine-tuning)
+  Constant  MDE 2.9372 m | RMSE 3.2928 m | Median 2.7843 m  (mean support position; beat this to show the few-shot step learned anything)
+
+Office:
+  Student   MDE 3.3205 ± 0.0247 m (SE) | RMSE 3.5694 ± 0.0324 m (SE) | Median 3.3416 ± 0.0622 m (SE)
+  Teacher   MDE 2.6020 ± 0.0000 m (SE) | RMSE 3.3052 ± 0.0000 m (SE) | Median 1.9523 ± 0.0000 m (SE)  (H-WILD teacher, no WiMANS fine-tuning)
+  Constant  MDE 3.3429 m | RMSE 4.0430 m | Median 2.7840 m  (mean support position; beat this to show the few-shot step learned anything)
+
+empty_room:
+  Student   MDE 3.9295 ± 0.3713 m (SE) | RMSE 4.2186 ± 0.3485 m (SE) | Median 3.9286 ± 0.3784 m (SE)
+  Teacher   MDE 3.8807 ± 0.0000 m (SE) | RMSE 4.9334 ± 0.0000 m (SE) | Median 2.6424 ± 0.0000 m (SE)  (H-WILD teacher, no WiMANS fine-tuning)
+  Constant  MDE 2.4612 m | RMSE 2.6039 m | Median 2.4295 m  (mean support position; beat this to show the few-shot step learned anything)
+
+Results saved to: output/few_shot_hwild_to_wimans/few_shot_hwild_to_wimans_localization_train-Conference+Laboratory+classroom_test-meeting_room+Lounge+Office+empty_room_fs0.05_kd0.1_r3_window_20261022_180323.json
+Report saved to:  output/few_shot_hwild_to_wimans/few_shot_hwild_to_wimans_localization_train-Conference+Laboratory+classroom_test-meeting_room+Lounge+Office+empty_room_fs0.05_kd0.1_r3_window_20261022_180323.txt
+Total time: 455.2210853099823 seconds
