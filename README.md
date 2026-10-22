@@ -308,7 +308,9 @@ weights and compare the student column; if `kd_weight 1.0` does not beat `0`, th
 weight and the few-shot gain is coming from the WiMANS support set alone.
 
 Reports go to `output/few_shot_hwild_to_wimans/*.json|txt`; curves to
-`visualizations/few_shot_hwild_to_wimans/<train_rooms>/`.
+`visualizations/few_shot_hwild_to_wimans/<train_rooms>/`. Each room's report lists MDE (mean distance
+error), RMSE and median error in meters — with the standard error over repeats for the student and the
+teacher, and as single values for the constant baseline.
 
 ## Available Models
 

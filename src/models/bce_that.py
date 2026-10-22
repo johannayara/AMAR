@@ -124,6 +124,18 @@ class SamePadConv1d(torch.nn.Module):
 ## ------------------------------------------------------------------------------------------ ##
 #
 ##
+def resolve_encoder_norm():
+    """
+    [description]
+    : the effective encoder channel-norm kind: the AMAR_ENCODER_NORM env override if set, else
+      preset["nn"]["encoder_norm"], else "batch". Single source of truth so make_channel_norm builds
+      the norm and save_density_checkpoint records the same value it actually used.
+    : return: str, one of "batch", "group", "layer"
+    """
+    #
+    return os.environ.get("AMAR_ENCODER_NORM", preset["nn"].get("encoder_norm", "batch"))
+
+
 def make_channel_norm(var_num_channels):
     """
     [description]
@@ -136,7 +148,7 @@ def make_channel_norm(var_num_channels):
     : return: torch.nn.Module
     """
     #
-    var_kind = os.environ.get("AMAR_ENCODER_NORM", preset["nn"].get("encoder_norm", "batch"))
+    var_kind = resolve_encoder_norm()
     if var_kind == "layer":
         return torch.nn.GroupNorm(1, var_num_channels)
     if var_kind == "group":

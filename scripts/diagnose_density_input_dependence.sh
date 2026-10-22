@@ -41,10 +41,17 @@
 ##     MAX_SAMPLES  frames scored per room, evenly spaced; "all" or empty scores the whole room
 ##                  (default 600)
 ##     BATCH_SIZE   forward batch size (default 32)
+##     BACKBONE     force nn.backbone (default: read from the checkpoint, else inferred from its
+##                  state-dict keys)
+##     ENCODER_NORM force nn.encoder_norm (default: read from the checkpoint, else inferred)
 #
 set -euo pipefail
 
-source /software/anaconda3/etc/profile.d/conda.sh
+if [[ -f /software/anaconda3/etc/profile.d/conda.sh ]]; then
+    source /software/anaconda3/etc/profile.d/conda.sh
+elif command -v conda >/dev/null 2>&1; then
+    source "$(conda info --base)/etc/profile.d/conda.sh"
+fi
 conda activate AMAR
 
 cd "${SLURM_SUBMIT_DIR:-$(pwd)}"
@@ -69,6 +76,8 @@ PREPROCESS="${PREPROCESS:-none}"
 USERS="${USERS:-0,1,2,3,4,5}"
 MAX_SAMPLES="${MAX_SAMPLES:-600}"
 BATCH_SIZE="${BATCH_SIZE:-32}"
+BACKBONE="${BACKBONE:-}"
+ENCODER_NORM="${ENCODER_NORM:-}"
 
 ## Resolve the newest checkpoint under the training-room directory. run_cross_domain names the run
 ## directory after the training rooms joined by "_" and claims an increasing numeric leaf, so the
@@ -94,6 +103,17 @@ if [[ -n "${MAX_SAMPLES}" && "${MAX_SAMPLES}" != "all" ]]; then
     max_args=(--max-samples "${MAX_SAMPLES}")
 fi
 
+## The backbone and encoder norm are recovered from the checkpoint automatically (or from its
+## state-dict keys for checkpoints written before they were recorded); set these only to force a
+## specific architecture.
+model_args=()
+if [[ -n "${BACKBONE}" ]]; then
+    model_args+=(--backbone "${BACKBONE}")
+fi
+if [[ -n "${ENCODER_NORM}" ]]; then
+    model_args+=(--encoder-norm "${ENCODER_NORM}")
+fi
+
 out_dir="output/diagnose/${TEST_ENV}"
 fig_dir="visualizations/diagnose/${TEST_ENV}"
 mkdir -p "${out_dir}" "${fig_dir}"
@@ -115,6 +135,7 @@ python scripts/diagnose_density_input_dependence.py \
     --users "${USERS}" \
     --batch-size "${BATCH_SIZE}" \
     "${max_args[@]}" \
+    "${model_args[@]}" \
     --out "${fig_dir}/diagnose_${TEST_ENV}_${var_run}_${stamp}.png" \
     2>&1 | tee "${log}"
 end=$(date +%s)

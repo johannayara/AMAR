@@ -31,7 +31,7 @@ import torch
 
 from configs.preset import preset
 from src.data.load_data import load_data_x, load_data_y, encode_occupancy_y
-from src.models.density_map import (DensityMapNet, density_map_maxima, calibrate_empty_threshold)
+from src.models.density_map import (load_density_checkpoint, density_map_maxima, calibrate_empty_threshold)
 from src.utils import select_device
 
 
@@ -46,7 +46,13 @@ def parse_args():
                           help="path to a density_map model.pth saved by save_density_checkpoint")
     var_args.add_argument("--env", required=True, type=str,
                           help="test room whose frames are scored, e.g. empty_room")
-    var_args.add_argument("--users", default="0, 1,2,3,4,5", type=str,
+    var_args.add_argument("--backbone", default=None, type=str,
+                          help="override nn.backbone (e.g. thatv-nostats). Default: the value stored "
+                               "in the checkpoint, else inferred from its state-dict keys")
+    var_args.add_argument("--encoder-norm", default=None, type=str,
+                          help="override nn.encoder_norm (batch|group|layer). Default: the value stored "
+                               "in the checkpoint, else inferred from its state-dict keys")
+    var_args.add_argument("--users", default="0,1,2,3,4,5", type=str,
                           help="Comma-separated list of user IDs")
     var_args.add_argument("--batch-size", default=32, type=int)
     var_args.add_argument("--max-samples", default=None, type=int,
@@ -57,25 +63,17 @@ def parse_args():
     return var_args.parse_args()
 
 
-def load_model(var_checkpoint_path, var_device):
+def load_model(var_checkpoint_path, var_device, var_backbone=None, var_encoder_norm=None):
     """
     [description]
-    : rebuild the DensityMapNet described by the checkpoint and load its weights.
+    : rebuild the DensityMapNet described by the checkpoint and load its weights. The backbone and
+      encoder norm are read from the checkpoint, else inferred from the state-dict keys, so a
+      checkpoint trained with nn.backbone=thatv* or a non-batch nn.encoder_norm loads correctly.
     : return: (model, checkpoint dict)
     """
     #
-    var_checkpoint = torch.load(var_checkpoint_path, map_location=var_device)
-    var_model = DensityMapNet(tuple(var_checkpoint["x_shape"]),
-                              preset["layouts"][var_checkpoint["layout_name"]],
-                              embedding_dim=100,
-                              grid_size=var_checkpoint["grid_size"],
-                              hidden_dim=var_checkpoint["decoder_hidden"],
-                              sigma=var_checkpoint["sigma"],
-                              dropout=var_checkpoint["decoder_dropout"],
-                              var_output_mode="probability").to(var_device)
-    var_model.load_state_dict(var_checkpoint["model_state_dict"])
-    var_model.eval()
-    return var_model, var_checkpoint
+    return load_density_checkpoint(var_checkpoint_path, var_device,
+                                   var_backbone=var_backbone, var_encoder_norm=var_encoder_norm)
 
 
 def predict_maps(var_model, var_x, var_device, var_batch_size):
@@ -108,7 +106,10 @@ def _relative_change(var_maps, var_reference):
 def run():
     var_args = parse_args()
     var_device = select_device()
-    var_model, _ = load_model(var_args.checkpoint, var_device)
+    var_model, _ = load_model(var_args.checkpoint, var_device,
+                              var_backbone=var_args.backbone,
+                              var_encoder_norm=var_args.encoder_norm)
+    print(f"Model: nn.backbone={preset['nn']['backbone']} nn.encoder_norm={preset['nn']['encoder_norm']}")
     #
     ## --------------------------------------------- data ------------------------------------------- ##
     #
@@ -148,7 +149,7 @@ def run():
     print("\nINPUT DEPENDENCE (mean |map(condition) - map(real)|, and /|map(real)|):")
     for var_name, var_maps, var_counts in (("shuffled", var_maps_shuffled, var_counts_shuffled),
                                            ("zeroed", var_maps_zeroed, var_counts_zeroed),
-                                           ("room-marginal (dataset mean map)", var_maps_mean, None)):
+                                           ("mean predicted map (room marginal)", var_maps_mean, None)):
         var_abs, var_rel = _relative_change(var_maps, var_maps_real)
         var_r = (float(np.corrcoef(var_counts_real, var_counts)[0, 1])
                  if var_counts is not None and np.std(var_counts) > 0 and np.std(var_counts_real) > 0
@@ -167,7 +168,7 @@ def run():
     print(f"  map max occupied {var_map_max[~var_empty].mean():.4f} +- {var_map_max[~var_empty].std():.4f}"
           if (~var_empty).any() else "  map max occupied (none)")
     print(f"  best gate threshold={var_threshold:.4f}  balanced empty/occupied acc={var_score:.3f}"
-          " (0.5 is chance; 1.0 is cleanly separable)")
+          " (fitted on these frames, so an upper bound; 0.5 is chance, 1.0 is cleanly separable)")
     #
     ## --------------------------------------- figure ----------------------------------------------- ##
     #
@@ -176,9 +177,14 @@ def run():
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
         var_fig, var_axes = plt.subplots(1, 3, figsize=(16, 4.5))
-        var_axes[0].hist(var_map_max[var_empty], bins=40, alpha=0.6, label="empty", density=True)
-        var_axes[0].hist(var_map_max[~var_empty], bins=40, alpha=0.6, label="occupied", density=True)
-        var_axes[0].axvline(var_threshold, color="k", ls="--", label=f"gate {var_threshold:.2f}")
+        ## a room with no empty (or no occupied) frame leaves a class empty; an empty hist() with
+        ## density=True warns, and axvline(+-inf) from the degenerate gate draws nothing meaningful
+        if var_empty.any():
+            var_axes[0].hist(var_map_max[var_empty], bins=40, alpha=0.6, label="empty", density=True)
+        if (~var_empty).any():
+            var_axes[0].hist(var_map_max[~var_empty], bins=40, alpha=0.6, label="occupied", density=True)
+        if np.isfinite(var_threshold):
+            var_axes[0].axvline(var_threshold, color="k", ls="--", label=f"gate {var_threshold:.2f}")
         var_axes[0].set_title("map max: empty vs occupied"); var_axes[0].legend()
         var_axes[1].scatter(var_counts_real, var_counts_shuffled, s=6, alpha=0.4)
         var_axes[1].set_xlabel("count real"); var_axes[1].set_ylabel("count shuffled")

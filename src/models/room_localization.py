@@ -266,8 +266,8 @@ def visualize_localization_predictions(var_true_xy, var_pred_xy, var_room, save_
                            var_y0 + var_pred_xy[:, 1] * (var_y1 - var_y0)], axis=1)
     #
     var_fig, var_ax = plt.subplots(figsize=(6, 6))
-    var_ax.scatter(var_true_m[:, 0], var_true_m[:, 1], s=10, c="tab:green", alpha=0.5, label="true")
-    var_ax.scatter(var_pred_m[:, 0], var_pred_m[:, 1], s=10, c="tab:red", alpha=0.5, label="pred")
+    var_ax.scatter(var_true_m[:, 0], var_true_m[:, 1], s=10, c="tab:pink", alpha=0.5, label="true")
+    var_ax.scatter(var_pred_m[:, 0], var_pred_m[:, 1], s=10, c="tab:blue", alpha=0.5, label="pred")
     var_ax.set_xlim(var_x0, var_x1); var_ax.set_ylim(var_y0, var_y1)
     var_ax.set_aspect("equal"); var_ax.set_xlabel("x (m)"); var_ax.set_ylabel("y (m)")
     var_ax.set_title(f"{var_room} - true vs predicted positions")

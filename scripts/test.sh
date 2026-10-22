@@ -10,6 +10,7 @@ set -euo pipefail
 
 source /software/anaconda3/etc/profile.d/conda.sh
 conda activate AMAR
+
 # parameters
 model=density_map
 env=classroom

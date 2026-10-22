@@ -31,6 +31,7 @@ import os
 import random
 import sys
 import time
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -100,6 +101,29 @@ def standardize_windows(var_x):
     var_mu = var_x.mean(axis=(1, 2), keepdims=True)
     var_sd = var_x.std(axis=(1, 2), keepdims=True) + 1e-6
     return ((var_x - var_mu) / var_sd).astype(np.float32)
+
+
+def reserve_viz_dir(var_train_rooms):
+    """
+    [description]
+    : claim a fresh figure directory for one run and return it as a str.
+    : The numeric leaf is claimed with mkdir() rather than an is_dir() check followed by a create: the
+      check-then-create races between concurrent runs (e.g. scripts/sweep_few_shot_hwild.sh launches
+      several combos at once), which would otherwise both pick the same leaf and write their figures
+      over each other. mkdir() is atomic at the OS level, so exactly one run wins a leaf. Same pattern
+      as run_main.reserve_viz_dir and run_cross_domain.py.
+    : return: str path of the created directory
+    """
+    var_root = Path(f"./visualizations/few_shot_hwild_to_wimans/{'_'.join(var_train_rooms)}")
+    var_root.mkdir(parents=True, exist_ok=True)
+    var_index = 1
+    while True:
+        var_path = var_root / str(var_index)
+        try:
+            var_path.mkdir()
+            return str(var_path)
+        except FileExistsError:
+            var_index += 1
 
 
 def run():
@@ -192,8 +216,7 @@ def run():
             var_sets[var_room] = (var_x, normalize_xy_meters(var_y, var_rect))
     #
     ## --------------------------------------- run the model ----------------------------------------
-    var_save_path = f"./visualizations/few_shot_hwild_to_wimans/{'_'.join(var_train_rooms)}"
-    os.makedirs(var_save_path, exist_ok=True)
+    var_save_path = reserve_viz_dir(var_train_rooms)
     var_results = run_few_shot_localization(
         train_sets_by_room, test_sets_by_room,
         var_few_shot_ratio=var_args.few_shot_ratio, var_kd_weight=var_args.kd_weight,

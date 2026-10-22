@@ -33,7 +33,7 @@ import torch
 from configs.preset import preset
 from src.data.load_data import load_data_x, load_data_y, encode_occupancy_y
 from src.models.density_map import (
-    DensityMapNet, build_kernels, peak_normalized_kernels, render_density_targets,
+    load_density_checkpoint, build_kernels, peak_normalized_kernels, render_density_targets,
     sample_location_occupancy, density_map_maxima, resolve_count_decision, visualize_density_map,
 )
 from src.utils import select_device
@@ -52,22 +52,18 @@ def parse_args():
     var_args.add_argument("--out", default=None, type=str, help="output directory (default: <checkpoint dir>/peakviz_<env>)")
     var_args.add_argument("--num_samples", default=6, type=int)
     var_args.add_argument("--users", default="0, 1,2,3,4,5", type=str)
+    var_args.add_argument("--backbone", default=None, type=str,
+                          help="override nn.backbone. Default: the value stored in the checkpoint, "
+                               "else inferred from its state-dict keys")
+    var_args.add_argument("--encoder-norm", default=None, type=str,
+                          help="override nn.encoder_norm (batch|group|layer). Default: the value stored "
+                               "in the checkpoint, else inferred from its state-dict keys")
     return var_args.parse_args()
 
 
-def load_model(var_checkpoint_path, var_device):
-    var_checkpoint = torch.load(var_checkpoint_path, map_location=var_device)
-    var_layout_name = var_checkpoint["layout_name"]
-    var_layout = preset["layouts"].get(var_layout_name) or preset["layouts"][preset["data"]["environment"][0]]
-    var_model = DensityMapNet(tuple(var_checkpoint["x_shape"]), var_layout,
-                              grid_size=var_checkpoint["grid_size"],
-                              sigma=var_checkpoint["sigma"],
-                              hidden_dim=var_checkpoint.get("decoder_hidden"),
-                              dropout=var_checkpoint.get("decoder_dropout"),
-                              var_output_mode=var_checkpoint.get("output_mode", "probability")).to(var_device)
-    var_model.load_state_dict(var_checkpoint["model_state_dict"])
-    var_model.eval()
-    return var_model, var_checkpoint
+def load_model(var_checkpoint_path, var_device, var_backbone=None, var_encoder_norm=None):
+    return load_density_checkpoint(var_checkpoint_path, var_device,
+                                   var_backbone=var_backbone, var_encoder_norm=var_encoder_norm)
 
 
 def load_room(var_env, var_users):
@@ -116,7 +112,9 @@ def run():
     var_device = select_device()
     print(f"Using device: {var_device}")
 
-    var_model, var_checkpoint = load_model(var_args.checkpoint, var_device)
+    var_model, var_checkpoint = load_model(var_args.checkpoint, var_device,
+                                           var_backbone=var_args.backbone,
+                                           var_encoder_norm=var_args.encoder_norm)
     var_grid_size = var_checkpoint["grid_size"]
     var_sigma = var_checkpoint["sigma"]
     print(f"Checkpoint: layout '{var_checkpoint['layout_name']}', grid {var_grid_size}, "

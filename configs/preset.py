@@ -43,6 +43,11 @@ preset = {
     ## hyperparameters of models
     "nn": {
         "lr": 0.0012,                                     # learning rate
+        ## Optimizer for the density-map model (src/models/density_map.build_optimizer). "adam" keeps
+        ## the original behaviour; "sgd" uses the same lr/weight_decay plus nn.momentum (default 0,
+        ## i.e. plain SGD). Override per run without editing this file, e.g. --hp nn.optimizer=sgd.
+        "optimizer": "adam",                             # "adam" or "sgd"
+        "momentum": 0.0,                                 # SGD momentum (ignored by adam)
         "epoch": 100,                                 # number of epochs 
         "batch_size":32,                              # batch size
         "threshold": 0.5,                               # threshold to binarize sigmoid outputs

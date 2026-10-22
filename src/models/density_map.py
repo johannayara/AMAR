@@ -40,7 +40,7 @@ from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import TensorDataset
 from ptflops import get_model_complexity_info
 
-from src.models.bce_that import THAT
+from src.models.bce_that import THAT, resolve_encoder_norm
 from src.models.modules.molecules import Backbone
 from src.models.that_variance import build_thatv, parse_backbone
 from src.models.losses.supervised_loss import OccupancyDistillationLoss
@@ -1017,9 +1017,88 @@ def save_density_checkpoint(model, var_x_shape, var_env, save_path, var_tag="mod
         "decoder_dropout": model.dropout,
         "output_mode": model.output_mode,
         "location_names": list(model.location_names),
+        ## The backbone and the encoder CNN norm are read from the preset by DensityMapNet (and
+        ## make_channel_norm), so they are not recoverable from the weights alone. Record them or a
+        ## reload cannot rebuild the module a checkpoint trained with nn.backbone=thatv* or a
+        ## non-batch nn.encoder_norm describes (load_density_checkpoint still infers them for
+        ## checkpoints written before this key existed).
+        "backbone": preset["nn"].get("backbone", "default"),
+        "encoder_norm": resolve_encoder_norm(),
+        "embedding_dim": model.decoder_fc[0].in_features,
     }, var_out_path)
     print(f"  Checkpoint saved to {var_out_path}")
     return var_out_path
+
+
+def infer_backbone_from_state_dict(var_state_dict):
+    """
+    [description]
+    : recover the nn.backbone string a checkpoint was trained with from its parameter names. The
+      THATV features leave unambiguous names, so the ablation string is exact; a state dict with THAT
+      encoders but none of them is "default", and one with no THAT encoders is the AMAR CNN ("cnn").
+      Needed for checkpoints written before save_density_checkpoint recorded "backbone".
+    : return: str, a value DensityMapNet accepts as nn.backbone
+    """
+    var_keys = set(var_state_dict)
+    var_use_stats = "backbone.layer_stats.0.weight" in var_keys
+    var_use_tokens = "backbone.layer_left_cnn_0.layer_conv.weight" in var_keys
+    var_use_pool = "backbone.layer_pool_proj.weight" in var_keys
+    if not (var_use_stats or var_use_tokens or var_use_pool):
+        return ("default" if "backbone.layer_left_encoder.0.layer_norm_0.weight" in var_keys
+                else "cnn")
+    var_disabled = [var_name for var_name, var_on in
+                    (("stats", var_use_stats), ("tokens", var_use_tokens), ("pool", var_use_pool))
+                    if not var_on]
+    return "thatv" if not var_disabled else "thatv-" + ",".join("no" + var_name for var_name in var_disabled)
+
+
+def infer_encoder_norm_from_state_dict(var_state_dict):
+    """
+    [description]
+    : "batch" when the encoder CNN branches carry BatchNorm running statistics, else a sample-wise
+      norm. GroupNorm and LayerNorm share parameter names and shapes, so either rebuilds the weights
+      identically; "group" is returned as the representative. Needed for checkpoints written before
+      save_density_checkpoint recorded "encoder_norm".
+    : return: str
+    """
+    return ("batch"
+            if "backbone.layer_left_encoder.0.layer_cnn.0.1.running_mean" in set(var_state_dict)
+            else "group")
+
+
+def load_density_checkpoint(var_checkpoint_path, var_device, var_backbone=None, var_encoder_norm=None):
+    """
+    [description]
+    : rebuild the DensityMapNet a checkpoint describes and load its weights. backbone and encoder norm
+      come from the checkpoint when present, else from the state-dict keys (see the infer_* helpers),
+      else the current preset; an explicit var_backbone / var_encoder_norm wins over all three.
+    : return: (model in eval mode, checkpoint dict)
+    """
+    var_checkpoint = torch.load(var_checkpoint_path, map_location=var_device)
+    var_state_dict = var_checkpoint["model_state_dict"]
+    var_backbone = (var_backbone or var_checkpoint.get("backbone")
+                    or infer_backbone_from_state_dict(var_state_dict))
+    var_encoder_norm = (var_encoder_norm or var_checkpoint.get("encoder_norm")
+                        or infer_encoder_norm_from_state_dict(var_state_dict))
+    ## DensityMapNet reads the backbone from the preset and make_channel_norm reads the encoder norm
+    ## from the preset or the AMAR_ENCODER_NORM env, so set both before constructing; the env var is
+    ## set too so a stale export cannot rebuild a different norm than the checkpoint was trained with.
+    preset["nn"]["backbone"] = var_backbone
+    preset["nn"]["encoder_norm"] = var_encoder_norm
+    os.environ["AMAR_ENCODER_NORM"] = var_encoder_norm
+    var_layout_name = var_checkpoint["layout_name"]
+    var_layout = (preset["layouts"].get(var_layout_name)
+                  or preset["layouts"][preset["data"]["environment"][0]])
+    var_model = DensityMapNet(tuple(var_checkpoint["x_shape"]), var_layout,
+                              embedding_dim=var_checkpoint.get("embedding_dim", 100),
+                              grid_size=var_checkpoint["grid_size"],
+                              hidden_dim=var_checkpoint.get("decoder_hidden"),
+                              sigma=var_checkpoint["sigma"],
+                              dropout=var_checkpoint.get("decoder_dropout"),
+                              var_output_mode=var_checkpoint.get("output_mode", "probability")).to(var_device)
+    var_model.load_state_dict(var_state_dict)
+    var_model.eval()
+    return var_model, var_checkpoint
 
 
 def plot_training_curves(var_history, var_save_path, var_tag="training"):
@@ -1421,6 +1500,31 @@ def train_density(model,
 ## ---------------------------------------- main runner ----------------------------------------- ##
 #
 ##
+def build_optimizer(var_parameters, var_preset):
+    """
+    [description]
+    : build the training optimizer for the density-map model from preset["nn"]["optimizer"], so Adam
+      and SGD can be compared from the config alone (e.g. --hp nn.optimizer=sgd). Both share the
+      preset learning rate and weight decay; SGD additionally honours preset["nn"]["momentum"]
+      (default 0.0, i.e. plain SGD).
+    : var_parameters: iterable of parameters handed to the optimizer
+    : var_preset: the preset dict
+    : return: torch.optim.Optimizer
+    """
+    var_nn = var_preset["nn"]
+    var_name = str(var_nn.get("optimizer", "adam")).lower()
+    if var_name == "adam":
+        return torch.optim.Adam(var_parameters,
+                                lr=var_nn["lr"],
+                                weight_decay=var_nn["weight_decay"])
+    if var_name == "sgd":
+        return torch.optim.SGD(var_parameters,
+                               lr=var_nn["lr"],
+                               weight_decay=var_nn["weight_decay"],
+                               momentum=var_nn.get("momentum", 0.0))
+    raise ValueError(f"unknown nn.optimizer {var_name!r}; expected 'adam' or 'sgd'")
+
+
 def run_density_map(data_train_x,
                     data_train_y,
                     data_test_x,
@@ -1513,9 +1617,7 @@ def run_density_map(data_train_x,
         model_density = DensityMapNet(var_x_shape, var_layout,
                                       embedding_dim=100, grid_size=var_grid_size,
                                       var_output_mode=var_output_mode).to(device)
-        optimizer = torch.optim.Adam(model_density.parameters(),
-                                     lr=preset["nn"]["lr"],
-                                     weight_decay=preset["nn"]["weight_decay"])
+        optimizer = build_optimizer(model_density.parameters(), preset)
         #
         var_time_0 = time.time()
         var_best_weight = train_density(model=model_density,
@@ -1808,9 +1910,7 @@ def run_density_map_cross_domain(train_sets_by_env,
         model_density = DensityMapNet(var_x_shape, var_layout,
                                       embedding_dim=100, grid_size=var_grid_size,
                                       var_output_mode=var_output_mode).to(device)
-        optimizer = torch.optim.Adam(model_density.parameters(),
-                                     lr=preset["nn"]["lr"],
-                                     weight_decay=preset["nn"]["weight_decay"])
+        optimizer = build_optimizer(model_density.parameters(), preset)
         #
         var_best_weight = train_density(model=model_density,
                                         optimizer=optimizer,
@@ -2108,9 +2208,7 @@ def run_density_map_few_shot(data_train_x,
                                 var_output_mode=var_output_mode).to(device)
         if var_compile:
             teacher.backbone = torch.compile(teacher.backbone)
-        teacher_optimizer = torch.optim.Adam(teacher.parameters(),
-                                             lr=preset["nn"]["lr"],
-                                             weight_decay=preset["nn"]["weight_decay"])
+        teacher_optimizer = build_optimizer(teacher.parameters(), preset)
         teacher_time_0 = time.time()
         teacher_best_weight = train_density(model=teacher,
                                             optimizer=teacher_optimizer,
@@ -2135,9 +2233,7 @@ def run_density_map_few_shot(data_train_x,
                                 var_output_mode=var_output_mode).to(device)
         if var_compile:
             student.backbone = torch.compile(student.backbone)
-        student_optimizer = torch.optim.Adam(student.parameters(),
-                                             lr=preset["nn"]["lr"],
-                                             weight_decay=preset["nn"]["weight_decay"])
+        student_optimizer = build_optimizer(student.parameters(), preset)
         kd_loss = OccupancyDistillationLoss(temperature=var_kd_temperature)
         student_time_0 = time.time()
         student_best_weight = train_density(model=student,
