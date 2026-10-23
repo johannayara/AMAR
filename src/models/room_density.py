@@ -94,7 +94,10 @@ def extract_peak_sets(var_density, var_threshold_frac, var_abs_floor=0.0, var_ma
         var_values = nd_maximum(var_map, var_labels, range(1, var_num + 1))
         var_order = np.argsort(var_values)[::-1][:var_max_peaks]
         var_h, var_w = var_map.shape
-        var_sets.append(np.array([[var_coms[j][1] / var_w, var_coms[j][0] / var_h] for j in var_order],
+        ## same cell-centre convention as _peaks_with_values (render_multi_targets places cell i at
+        ## (i+0.5)/N), so a continuous index c decodes to (c + 0.5) / N.
+        var_sets.append(np.array([[(var_coms[j][1] + 0.5) / var_w, (var_coms[j][0] + 0.5) / var_h]
+                                  for j in var_order],
                                  dtype=np.float32))
     return var_sets
 

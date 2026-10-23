@@ -281,7 +281,10 @@ def _peaks_with_values(var_map, var_threshold_frac, var_abs_floor=0.0):
     var_height, var_width = var_map.shape
     var_centroids = center_of_mass(var_map, var_labels, range(1, var_num + 1))
     var_values = maximum(var_map, var_labels, range(1, var_num + 1))
-    var_positions = np.array([[var_c[1] / var_width, var_c[0] / var_height] for var_c in var_centroids],
+    ## cell i spans [i/N, (i+1)/N) and its centre is (i+0.5)/N (build_kernels / splat_positions), so a
+    ## continuous index c decodes to (c + 0.5) / N; c / N would bias every position by half a cell.
+    var_positions = np.array([[(var_c[1] + 0.5) / var_width, (var_c[0] + 0.5) / var_height]
+                              for var_c in var_centroids],
                              dtype=np.float32)
     #
     return var_positions, np.asarray(var_values, dtype=np.float32)
