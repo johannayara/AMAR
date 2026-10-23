@@ -277,6 +277,78 @@ def visualize_localization_predictions(var_true_xy, var_pred_xy, var_room, save_
     return var_path
 
 
+def visualize_sample_predictions(var_room_data, save_dir, var_bounds, var_num_samples=5):
+    """
+    [description]
+    : per-sample ground-truth-vs-prediction panels for every query room in one figure: one row per
+      query sample, two columns per room (ground truth | predicted), both in raw meters on the shared
+      frame. The aggregate scatter (visualize_localization_predictions) shows the error distribution;
+      this shows what one prediction actually looks like, which is what separates "close but the wrong
+      side of the room" from "lands on the neighbouring location". Saves
+      <save_dir>/samples_all_rooms.png.
+    : var_room_data: list of (room_name, true_xy (N, 2) normalized, pred_xy (N, 2) normalized), one
+      entry per room, in the order the column groups should appear
+    : var_bounds: (x_min, x_max, y_min, y_max) in meters of the shared frame
+    : var_num_samples: rows to show, spread evenly across each room's query set
+    """
+    #
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    #
+    var_room_data = [(var_room, np.asarray(var_true), np.asarray(var_pred))
+                     for var_room, var_true, var_pred in var_room_data]
+    if not var_room_data:
+        return None
+    os.makedirs(save_dir, exist_ok=True)
+    var_x0, var_x1, var_y0, var_y1 = var_bounds
+    ## a small margin outside the walls, so a position on the boundary is not clipped by the axes
+    var_pad_x, var_pad_y = 0.08 * (var_x1 - var_x0), 0.08 * (var_y1 - var_y0)
+    var_num_rooms = len(var_room_data)
+    ## one row per sampled query frame; a room with fewer frames than requested caps the row count
+    var_num = min([var_num_samples] + [len(var_true) for _, var_true, _ in var_room_data])
+    var_fig, var_axes = plt.subplots(var_num, 2 * var_num_rooms,
+                                     figsize=(1.9 * 2 * var_num_rooms, 3.1 * var_num), squeeze=False)
+    for var_room_idx, (var_room, var_true_xy, var_pred_xy) in enumerate(var_room_data):
+        ## an even spread over the room's query set, so the panels sample the run, not its first frames
+        var_pick = np.linspace(0, len(var_true_xy) - 1, var_num).astype(int)
+        ## normalized -> meters, the same mapping the scatter figure uses
+        var_true_m = np.stack([var_x0 + var_true_xy[:, 0] * (var_x1 - var_x0),
+                               var_y0 + var_true_xy[:, 1] * (var_y1 - var_y0)], axis=1)
+        var_pred_m = np.stack([var_x0 + var_pred_xy[:, 0] * (var_x1 - var_x0),
+                               var_y0 + var_pred_xy[:, 1] * (var_y1 - var_y0)], axis=1)
+        var_err = np.linalg.norm(var_true_m - var_pred_m, axis=1)
+        for var_row, var_idx in enumerate(var_pick):
+            for var_sub, var_is_pred in enumerate((False, True)):
+                var_ax = var_axes[var_row][2 * var_room_idx + var_sub]
+                ## the room frame as a box, so a position reads against the walls
+                var_ax.plot([var_x0, var_x1, var_x1, var_x0, var_x0],
+                            [var_y0, var_y0, var_y1, var_y1, var_y0], color="0.7", lw=1)
+                if var_is_pred:
+                    ## the true position, faint, so the miss direction is visible inside one panel
+                    var_ax.scatter([var_true_m[var_idx, 0]], [var_true_m[var_idx, 1]],
+                                   s=40, facecolors="none", edgecolors="0.55", lw=1.2)
+                    ## below the axes, so it cannot overlap the marker
+                    var_ax.set_xlabel(f"#{var_idx}  {var_err[var_idx]:.2f} m", fontsize=8)
+                    var_ax.scatter([var_pred_m[var_idx, 0]], [var_pred_m[var_idx, 1]],
+                                   s=110, marker="x", c="tab:blue", lw=2.5)
+                else:
+                    var_ax.scatter([var_true_m[var_idx, 0]], [var_true_m[var_idx, 1]],
+                                   s=110, marker="x", c="tab:pink", lw=2.5)
+                var_ax.set_xlim(var_x0 - var_pad_x, var_x1 + var_pad_x)
+                var_ax.set_ylim(var_y0 - var_pad_y, var_y1 + var_pad_y)
+                var_ax.set_aspect("equal")
+                var_ax.set_xticks([]); var_ax.set_yticks([])
+                if var_row == 0:
+                    ## the room name heads its two-column group, over the ground-truth column
+                    var_ax.set_title(f"{var_room}\nground truth" if not var_is_pred else "predicted",
+                                     fontsize=9)
+    var_fig.suptitle("per-sample ground truth vs prediction")
+    var_path = os.path.join(save_dir, "samples_all_rooms.png")
+    var_fig.tight_layout(rect=(0, 0, 1, 0.97)); var_fig.savefig(var_path, dpi=120); plt.close(var_fig)
+    return var_path
+
+
 def run_localization_cross_domain(train_sets_by_room, test_sets_by_room, var_repeat=3,
                                   save_path="./visualizations/room_localization",
                                   var_spans=None, var_bounds=None):
@@ -692,6 +764,7 @@ def run_few_shot_localization(hwild_sets_by_room, wimans_sets_by_room, var_few_s
     #
     ## ----------------------------------------- aggregate -------------------------------------------
     results = {}
+    var_sample_panels = []
     for var_room in var_student_query_metrics:
         var_student_list = var_student_query_metrics[var_room]
         var_teacher_list = var_teacher_query_metrics[var_room]
@@ -714,6 +787,8 @@ def run_few_shot_localization(hwild_sets_by_room, wimans_sets_by_room, var_few_s
         var_true_xy, var_pred_xy = var_env_last_xy[var_room]
         visualize_localization_predictions(var_true_xy, var_pred_xy, var_room,
                                            os.path.join(save_path, var_room), var_bounds)
+        ## collected for the single all-rooms per-sample figure drawn after the loop
+        var_sample_panels.append((var_room, var_true_xy, var_pred_xy))
         ## the standard per-location figures, with the room's grid cells as locations
         visualize_room_grid_performance([[var_t] for var_t in var_true_xy],
                                         [[var_p] for var_p in var_pred_xy],
@@ -723,6 +798,9 @@ def run_few_shot_localization(hwild_sets_by_room, wimans_sets_by_room, var_few_s
               f"{var_env_result['se_student_mean_error_m']:.4f} m | teacher "
               f"{var_env_result['avg_teacher_mean_error_m']:.4f} m | constant baseline "
               f"{var_env_result['avg_const_mean_error_m']:.4f} m")
+    #
+    ## one figure with every query room: rows are sampled query frames, columns are (room, gt|pred)
+    visualize_sample_predictions(var_sample_panels, save_path, var_bounds)
     #
     return results
 
