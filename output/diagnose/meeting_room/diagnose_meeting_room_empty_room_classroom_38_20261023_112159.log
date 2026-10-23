@@ -1,0 +1,23 @@
+Model: nn.backbone=default nn.encoder_norm=batch
+Room meeting_room: 600 frames, feature shape (3000, 270), preprocessing {'static_removal': False, 'temporal_zscore': False, 'per_room_zscore': False} (env AMAR_CSI_PREPROCESS=none)
+
+INPUT DEPENDENCE (mean |map(condition) - map(real)|, and /|map(real)|):
+  shuffled                             abs=0.00045  rel=0.283  count_corr=0.000
+  zeroed                               abs=0.00062  rel=0.388  count_corr=nan
+  mean predicted map (room marginal)   abs=0.00045  rel=0.284  count_corr=nan
+  rel near 0 => the map barely depends on the input (the marginal-map shortcut).
+
+EMPTY GATE: 32 empty / 568 occupied frames
+  statistic              empty         occupied  Otsu thr  Otsu bal   sup thr  sup bal
+  map max       1.0000+-0.0000   1.0000+-0.0000    1.0000       nan    1.0000    0.500
+  map mean      0.0010+-0.0000   0.0016+-0.0005    0.0010     0.835    0.0015    0.835
+  max/mean   1023.9895+-0.0000680.5582+-240.6014  512.9974     0.165  511.9974    0.500
+  mass          1.0000+-0.0000   1.6708+-0.4699    1.0020     0.835    1.5000    0.835
+  gate fires when the statistic is BELOW the threshold. Otsu = label-free (self-calibrated per room); sup = fitted on these frames (upper bound). 0.5 = chance, 1.0 = clean.
+
+  SOURCE GATE (calibrated on the training rooms) = 0.0900
+    fires on 0/32 empty frames, 0/568 occupied frames
+    empty recall (= the count-0 accuracy it can reach) = 0.000
+    NEVER FIRES on this room: the source threshold sits below this room's whole map range, so every empty frame is counted as occupied.
+
+Figure: visualizations/diagnose/meeting_room/diagnose_meeting_room_38_20261023_112159.png

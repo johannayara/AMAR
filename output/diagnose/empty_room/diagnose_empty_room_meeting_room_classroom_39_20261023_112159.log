@@ -1,0 +1,23 @@
+Model: nn.backbone=thatv-nostats nn.encoder_norm=group
+Room empty_room: 600 frames, feature shape (3000, 270), preprocessing {'static_removal': False, 'temporal_zscore': False, 'per_room_zscore': False} (env AMAR_CSI_PREPROCESS=none)
+
+INPUT DEPENDENCE (mean |map(condition) - map(real)|, and /|map(real)|):
+  shuffled                             abs=0.06890  rel=0.731  count_corr=0.021
+  zeroed                               abs=0.06755  rel=0.717  count_corr=nan
+  mean predicted map (room marginal)   abs=0.05225  rel=0.554  count_corr=nan
+  rel near 0 => the map barely depends on the input (the marginal-map shortcut).
+
+EMPTY GATE: 32 empty / 568 occupied frames
+  statistic              empty         occupied  Otsu thr  Otsu bal   sup thr  sup bal
+  map max       0.7711+-0.0066   0.8640+-0.0932    0.8183     0.890    0.7825    0.923
+  map mean      0.1009+-0.0037   0.0939+-0.0321    0.1108     0.617    0.1078    0.628
+  max/mean      7.6491+-0.2372  10.0510+-2.8528   10.2617     0.722    8.1152    0.876
+  mass        103.3435+-3.8393 96.1595+-32.8583  113.4872     0.617  110.3397    0.628
+  gate fires when the statistic is BELOW the threshold. Otsu = label-free (self-calibrated per room); sup = fitted on these frames (upper bound). 0.5 = chance, 1.0 = clean.
+
+  SOURCE GATE (calibrated on the training rooms) = 0.0900
+    fires on 0/32 empty frames, 0/568 occupied frames
+    empty recall (= the count-0 accuracy it can reach) = 0.000
+    NEVER FIRES on this room: the source threshold sits below this room's whole map range, so every empty frame is counted as occupied.
+
+Figure: visualizations/diagnose/empty_room/diagnose_empty_room_39_20261023_112159.png

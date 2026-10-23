@@ -1,0 +1,244 @@
+wandb: Using wandb-core as the SDK backend. Please refer to https://wandb.me/wandb-core for more information.
+wandb: Tracking run with wandb version 0.18.3
+wandb: W&B syncing is set to `offline` in this directory.  
+wandb: Run `wandb online` or set WANDB_MODE=online to enable cloud syncing.
+wandb: - 0.000 MB of 0.000 MB uploadedwandb:                                                                                
+wandb: 
+wandb: Run history:
+wandb:                                                          epoch ▁▁▁▁▁▂▂▂▂▃▃▃▃▃▃▄▄▄▄▄▅▅▅▅▅▆▆▆▆▆▆▆▆▇▇▇▇███
+wandb:                                                  learning_rate ██████▇▇▇▇▇▇▇▆▆▆▆▆▅▅▄▄▄▄▃▃▃▂▂▂▂▁▁▁▁▁▁▁▁▁
+wandb:                     test_results_per_env/meeting_room/accuracy ▁
+wandb:            test_results_per_env/meeting_room/balanced_accuracy ▁
+wandb:              test_results_per_env/meeting_room/empty_threshold ▁
+wandb:                          test_results_per_env/meeting_room/mae ▁
+wandb:                test_results_per_env/meeting_room/mass_accuracy ▁
+wandb:       test_results_per_env/meeting_room/mass_balanced_accuracy ▁
+wandb:                     test_results_per_env/meeting_room/mass_mae ▁
+wandb:           test_results_per_env/meeting_room/occupancy_accuracy ▁
+wandb:                 test_results_per_env/meeting_room/occupancy_f1 ▁
+wandb:             test_results_per_env/meeting_room/position_error_m ▁
+wandb: test_results_per_env/meeting_room/position_false_positive_rate ▁
+wandb:           test_results_per_env/meeting_room/position_miss_rate ▁
+wandb:                                                       train_kd ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:                                                     train_loss █▇▆▅▅▅▅▅▅▅▅▄▄▄▄▄▄▄▄▃▃▃▃▃▃▃▂▂▂▂▂▂▂▂▁▁▁▁▁▁
+wandb:                                                 valid_accuracy ▁▁▂▂▂▄▃▃▃▃▃▄▃▅▄▅▆▅▅▆▅▆▆▅▆▅▅▇▇▆▇▇▇█▇██▇██
+wandb:                                        valid_accuracy_smoothed ▂▁▁▂▂▃▃▃▃▃▃▃▄▄▅▄▅▄▅▅▅▅▅▅▆▆▆▆▆▆▆▇▇▇▇▇████
+wandb:                                        valid_balanced_accuracy ▁▃▃▄▅▄▄▅▆▅▅▅▅▅▅▆▆▆▆▆▆▇▆▆▇▇▇▇▇▇█▇████████
+wandb:                               valid_balanced_accuracy_smoothed ▂▁▂▃▃▃▃▃▃▃▃▄▄▄▄▄▄▄▅▅▅▆▆▆▆▆▆▆▆▆▆▆▆▇▇█████
+wandb:                                          valid_empty_threshold █▅▃▅▆▂▃▂▃▂▃▁▃▂▂▃▂▃▃▃▂▂▁▂▃▃▃▂▂▂▂▂▃▂▄▃▄▅▃▄
+wandb:                                 valid_empty_threshold_smoothed ██▇▄▃▃▃▂▂▂▂▁▁▂▁▁▁▂▂▂▂▂▂▁▁▁▁▁▂▂▁▁▁▁▁▁▁▁▂▃
+wandb:                                                       valid_kd ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:                                                     valid_loss ██▇▇▇▆▆▆▆▆▆▆▆▆▅▅▅▅▅▄▄▄▄▄▃▂▂▂▂▂▂▂▂▂▂▁▁▁▁▁
+wandb:                                                      valid_mae ▇█▆▅▆▆▅▆▅▅▅▄▅▅▅▄▃▄▄▄▄▃▄▂▃▃▂▂▃▃▂▁▂▂▁▂▁▁▁▁
+wandb:                                             valid_mae_smoothed ▅██▆▆▅▅▅▄▄▄▄▄▄▄▃▃▃▃▃▃▃▃▃▃▂▂▂▂▂▂▂▁▁▁▁▁▁▁▁
+wandb:                                       valid_occupancy_accuracy ▂▁▁▂▂▃▂▃▃▃▃▄▄▄▄▄▄▄▄▅▅▅▅▅▅▅▆▆▇▇▇▇▇▇▇█████
+wandb:                              valid_occupancy_accuracy_smoothed ▁▃▃▃▃▄▄▄▄▄▅▅▅▅▅▅▆▆▆▆▆▆▆▆▆▇▇▇▇▇██████████
+wandb:                                             valid_occupancy_f1 ▁▃▃▄▄▄▃▄▄▄▅▄▅▅▅▄▄▄▅▅▅▆▅▆▅▆▆▇▆▇▇▇▇███████
+wandb:                                    valid_occupancy_f1_smoothed ▂▁▁▂▃▃▃▄▄▄▄▄▄▄▄▅▅▅▅▅▅▅▅▅▅▆▆▇▇▇▇▇▇▇██████
+wandb:                                      valid_occupancy_threshold ▃▄▆▁▆▁▂▃▅▃▅▃▅▅▅▃▄▄▅▄▄▇▅▆▆▇▇▅█▇▅▆▅▆▆▅▃▃▃▅
+wandb:                             valid_occupancy_threshold_smoothed ▁▂▄▂▄▄▁▃▃▄▄▄▅▄▅▅▅▅▅▅█▇█▇█▆▇▇███▇▅▅▆▅▆▇▆▅
+wandb:                                           valid_peak_threshold ▅▆▄▃▃▄▆▃▂▂▆▁▄▁▂▁▁▁█▁▁▁▇▁▁▂▂▇█▂▂▂▃▃▃█▆▅▄▅
+wandb:                                  valid_peak_threshold_smoothed ▆▆▄▄▄▄▅▄▄▄▄▄▂▄▃▂▁▁▄▄▃▃▂▃▂▃▄▅▆▆▄▆▆█▄▅▅▅▅▇
+wandb: 
+wandb: Run summary:
+wandb:                                                          epoch 149
+wandb:                                                  learning_rate 0.00012
+wandb:                     test_results_per_env/meeting_room/accuracy 0.22222
+wandb:            test_results_per_env/meeting_room/balanced_accuracy 0.18462
+wandb:              test_results_per_env/meeting_room/empty_threshold 0.13092
+wandb:                          test_results_per_env/meeting_room/mae 1.38118
+wandb:                test_results_per_env/meeting_room/mass_accuracy 0.25146
+wandb:       test_results_per_env/meeting_room/mass_balanced_accuracy 0.19304
+wandb:                     test_results_per_env/meeting_room/mass_mae 1.33068
+wandb:           test_results_per_env/meeting_room/occupancy_accuracy 0.51334
+wandb:                 test_results_per_env/meeting_room/occupancy_f1 0.24832
+wandb:             test_results_per_env/meeting_room/position_error_m 4.52812
+wandb: test_results_per_env/meeting_room/position_false_positive_rate 0.32618
+wandb:           test_results_per_env/meeting_room/position_miss_rate 0.24579
+wandb:                                                       train_kd 0
+wandb:                                                     train_loss 0.13216
+wandb:                                                 valid_accuracy 0.77926
+wandb:                                        valid_accuracy_smoothed 0.75978
+wandb:                                        valid_balanced_accuracy 0.81459
+wandb:                               valid_balanced_accuracy_smoothed 0.80576
+wandb:                                          valid_empty_threshold 0.13092
+wandb:                                 valid_empty_threshold_smoothed 0.1366
+wandb:                                                       valid_kd 0
+wandb:                                                     valid_loss 0.14431
+wandb:                                                      valid_mae 0.2234
+wandb:                                             valid_mae_smoothed 0.24317
+wandb:                                       valid_occupancy_accuracy 0.91223
+wandb:                              valid_occupancy_accuracy_smoothed 0.91142
+wandb:                                             valid_occupancy_f1 0.91688
+wandb:                                    valid_occupancy_f1_smoothed 0.91567
+wandb:                                      valid_occupancy_threshold 0.57
+wandb:                             valid_occupancy_threshold_smoothed 0.57959
+wandb:                                           valid_peak_threshold 0.50524
+wandb:                                  valid_peak_threshold_smoothed 0.5495
+wandb: 
+wandb: You can sync this run to the cloud by running:
+wandb: wandb sync /cluster/raid/home/jajo/AMAR/wandb/offline-run-20261023_113746-u0px63ox
+wandb: Find logs at: ./wandb/offline-run-20261023_113746-u0px63ox/logs
+wandb: Tracking run with wandb version 0.18.3
+wandb: W&B syncing is set to `offline` in this directory.  
+wandb: Run `wandb online` or set WANDB_MODE=online to enable cloud syncing.
+wandb: - 0.000 MB of 0.000 MB uploadedwandb:                                                                                
+wandb: 
+wandb: Run history:
+wandb:                                                          epoch ▁▁▂▂▂▂▂▂▂▃▃▄▄▄▄▄▄▄▅▅▅▅▅▅▅▆▆▆▆▆▇▇▇▇▇▇▇███
+wandb:                                                  learning_rate ███████▇▇▇▆▆▆▅▅▄▄▄▃▃▃▃▂▂▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:                     test_results_per_env/meeting_room/accuracy ▁
+wandb:            test_results_per_env/meeting_room/balanced_accuracy ▁
+wandb:              test_results_per_env/meeting_room/empty_threshold ▁
+wandb:                          test_results_per_env/meeting_room/mae ▁
+wandb:                test_results_per_env/meeting_room/mass_accuracy ▁
+wandb:       test_results_per_env/meeting_room/mass_balanced_accuracy ▁
+wandb:                     test_results_per_env/meeting_room/mass_mae ▁
+wandb:           test_results_per_env/meeting_room/occupancy_accuracy ▁
+wandb:                 test_results_per_env/meeting_room/occupancy_f1 ▁
+wandb:             test_results_per_env/meeting_room/position_error_m ▁
+wandb: test_results_per_env/meeting_room/position_false_positive_rate ▁
+wandb:           test_results_per_env/meeting_room/position_miss_rate ▁
+wandb:                                                       train_kd ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:                                                     train_loss █▃▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:                                                 valid_accuracy ▁▃▁▁▃▃▃▃▃▄▄▃▃▄▃▃▄▄▃▄▅▅▄▅▆▆▆▆▆▇▇▇▇▇▇█████
+wandb:                                        valid_accuracy_smoothed ▂▁▂▁▁▂▂▂▂▃▃▄▄▃▄▃▄▅▄▅▄▅▅▅▆▆▆▆▇▇▇▇▇▇██████
+wandb:                                        valid_balanced_accuracy ▂▂▁▂▂▃▂▂▃▂▃▄▄▄▅▅▅▅▄▆▅▆▆▆▆▆▆▆▆▇▇▇▇▇▇█████
+wandb:                               valid_balanced_accuracy_smoothed ▁▁▁▂▂▃▃▃▃▃▃▄▄▄▄▄▄▅▅▅▅▅▅▅▅▅▆▆▆▆▇▇▇▇▇▇▇███
+wandb:                                          valid_empty_threshold █▇█▆█▅▆▅▁▅▆▄▄▅▆▄▄▆▄▅▅▄▄▆▄▄▄▄▇▄▆▆▅▄▄▄▄▄▅▅
+wandb:                                 valid_empty_threshold_smoothed █▇▇▆▄▄▃▁▁▂▂▃▃▃▂▂▂▂▂▁▂▃▂▂▃▃▃▃▃▃▂▂▂▂▂▂▂▁▂▂
+wandb:                                                       valid_kd ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:                                                     valid_loss ▇██▇▇▆▆▆▆▆▅▅▅▅▅▅▅▅▄▅▄▄▄▄▃▄▃▃▃▃▃▂▂▂▂▂▁▁▁▁
+wandb:                                                      valid_mae ▃█▄▃▃▃▃▃▃▃▂▃▃▂▂▂▂▂▂▂▂▂▂▂▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:                                             valid_mae_smoothed ▅█▆▆▅▅▅▄▄▄▃▄▃▃▃▃▃▃▃▃▂▂▂▂▂▂▂▂▂▂▁▁▁▁▁▁▁▁▁▁
+wandb:                                       valid_occupancy_accuracy ▁▂▃▂▂▂▃▂▃▃▃▃▃▄▄▄▄▄▅▄▅▅▅▆▆▆▇▆▇▇▇▇▇▇▇█▇███
+wandb:                              valid_occupancy_accuracy_smoothed ▁▁▂▂▂▃▃▃▃▂▂▄▃▃▄▄▄▄▄▄▅▅▅▅▆▆▆▆▇▇▇▇▇▇▇█████
+wandb:                                             valid_occupancy_f1 ▂▁▃▃▃▄▄▄▄▄▄▄▅▄▅▄▅▅▅▅▅▆▆▇▇▇▇▇▇▇▇▇█▇▇█████
+wandb:                                    valid_occupancy_f1_smoothed ▁▂▂▂▂▂▃▃▃▃▃▄▄▄▄▄▄▄▄▄▄▄▅▆▆▇▇▇▇▇▇▇▇▇▇█████
+wandb:                                      valid_occupancy_threshold ▄▄▄▃▄▄▄▅▂▄▃▅▁▆▆▆▅▆▅▅▇▆▆▆█▇█▇██▅▆▇▅▄▆▅▅█▆
+wandb:                             valid_occupancy_threshold_smoothed ▄▃▃▄▃▃▃▂▂▂▂▁▃▄▄▄▄▅▆▅▆▇█▇█▇▆▆▆▆▆▇▆▅▅▆▇▆▅▆
+wandb:                                           valid_peak_threshold ▄▄▅▄▃▂▃▁▄▂▁▆▇▁▆▂▁▁▇▁▇▂█▂▂▄▃▅██▄▅█▆▇▆▇▅▅█
+wandb:                                  valid_peak_threshold_smoothed ▆▅▂▂▂▂▁▂▁▄▅▃▃▄▄▂▄▃▂▂▅▇█▄▂▅▅▇▅▅▆██▇▆▇▆▆▆█
+wandb: 
+wandb: Run summary:
+wandb:                                                          epoch 149
+wandb:                                                  learning_rate 0.00012
+wandb:                     test_results_per_env/meeting_room/accuracy 0.2387
+wandb:            test_results_per_env/meeting_room/balanced_accuracy 0.17957
+wandb:              test_results_per_env/meeting_room/empty_threshold 0.10565
+wandb:                          test_results_per_env/meeting_room/mae 1.30197
+wandb:                test_results_per_env/meeting_room/mass_accuracy 0.27485
+wandb:       test_results_per_env/meeting_room/mass_balanced_accuracy 0.20847
+wandb:                     test_results_per_env/meeting_room/mass_mae 1.16055
+wandb:           test_results_per_env/meeting_room/occupancy_accuracy 0.51515
+wandb:                 test_results_per_env/meeting_room/occupancy_f1 0.25246
+wandb:             test_results_per_env/meeting_room/position_error_m 4.13119
+wandb: test_results_per_env/meeting_room/position_false_positive_rate 0.28598
+wandb:           test_results_per_env/meeting_room/position_miss_rate 0.21486
+wandb:                                                       train_kd 0
+wandb:                                                     train_loss 0.1279
+wandb:                                                 valid_accuracy 0.77394
+wandb:                                        valid_accuracy_smoothed 0.76692
+wandb:                                        valid_balanced_accuracy 0.83018
+wandb:                               valid_balanced_accuracy_smoothed 0.81648
+wandb:                                          valid_empty_threshold 0.10565
+wandb:                                 valid_empty_threshold_smoothed 0.10436
+wandb:                                                       valid_kd 0
+wandb:                                                     valid_loss 0.14426
+wandb:                                                      valid_mae 0.23138
+wandb:                                             valid_mae_smoothed 0.23996
+wandb:                                       valid_occupancy_accuracy 0.91064
+wandb:                              valid_occupancy_accuracy_smoothed 0.91089
+wandb:                                             valid_occupancy_f1 0.91549
+wandb:                                    valid_occupancy_f1_smoothed 0.91571
+wandb:                                      valid_occupancy_threshold 0.58
+wandb:                             valid_occupancy_threshold_smoothed 0.54671
+wandb:                                           valid_peak_threshold 0.65362
+wandb:                                  valid_peak_threshold_smoothed 0.58139
+wandb: 
+wandb: You can sync this run to the cloud by running:
+wandb: wandb sync /cluster/raid/home/jajo/AMAR/wandb/offline-run-20261023_121536-wmxd1qtu
+wandb: Find logs at: ./wandb/offline-run-20261023_121536-wmxd1qtu/logs
+wandb: Tracking run with wandb version 0.18.3
+wandb: W&B syncing is set to `offline` in this directory.  
+wandb: Run `wandb online` or set WANDB_MODE=online to enable cloud syncing.
+wandb: - 0.000 MB of 0.000 MB uploadedwandb:                                                                                
+wandb: 
+wandb: Run history:
+wandb:                                                          epoch ▁▁▁▁▁▂▂▂▂▂▂▃▃▃▃▃▃▃▃▄▄▄▄▅▅▆▆▆▆▆▆▆▆▆▇▇▇▇██
+wandb:                                                  learning_rate █████████▇▇▇▇▆▆▆▅▅▅▅▄▄▄▄▃▃▂▂▂▂▁▁▁▁▁▁▁▁▁▁
+wandb:                     test_results_per_env/meeting_room/accuracy ▁
+wandb:            test_results_per_env/meeting_room/balanced_accuracy ▁
+wandb:              test_results_per_env/meeting_room/empty_threshold ▁
+wandb:                          test_results_per_env/meeting_room/mae ▁
+wandb:                test_results_per_env/meeting_room/mass_accuracy ▁
+wandb:       test_results_per_env/meeting_room/mass_balanced_accuracy ▁
+wandb:                     test_results_per_env/meeting_room/mass_mae ▁
+wandb:           test_results_per_env/meeting_room/occupancy_accuracy ▁
+wandb:                 test_results_per_env/meeting_room/occupancy_f1 ▁
+wandb:             test_results_per_env/meeting_room/position_error_m ▁
+wandb: test_results_per_env/meeting_room/position_false_positive_rate ▁
+wandb:           test_results_per_env/meeting_room/position_miss_rate ▁
+wandb:                                                       train_kd ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:                                                     train_loss █▃▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▁▁▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:                                                 valid_accuracy ▂▂▁▃▄▃▃▄▄▃▃▄▆▅▄▅▅▅▅▅▆▅▆▆▆▆▆▇▇█▇▇▇███████
+wandb:                                        valid_accuracy_smoothed ▁▁▁▁▂▂▃▃▃▃▃▂▃▃▃▃▃▃▄▄▄▄▅▄▅▅▅▆▅▅▆▆▇▇▇▇████
+wandb:                                        valid_balanced_accuracy ▂▁▁▂▂▂▂▃▁▂▃▂▁▄▄▃▅▄▅▄▅▅▅▅▆▆▅▆▆▇▇▇▇▇▇▇▇███
+wandb:                               valid_balanced_accuracy_smoothed ▁▂▃▃▃▃▃▄▄▄▄▄▅▅▅▅▅▆▆▆▆▆▆▆▆▇▇▇▇▇▇▇▇▇▇█████
+wandb:                                          valid_empty_threshold █▆▄▅▃▂▃▂▂▂▂▂▁▂▁▁▁▁▂▁▁▁▁▁▂▁▂▂▂▁▁▂▁▂▂▂▁▄▂▂
+wandb:                                 valid_empty_threshold_smoothed █▅▄▃▃▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▂▁▂▁▂▁▁▂▂▂
+wandb:                                                       valid_kd ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:                                                     valid_loss █▇▇▆▇▆▆▆▆▆▆▅▅▅▅▅▅▄▄▄▄▄▄▃▄▃▃▂▂▂▂▂▂▁▁▁▁▁▁▁
+wandb:                                                      valid_mae █▄▄▄▄▄▄▅▃▃▃▄▃▄▃▃▃▃▃▃▃▃▃▃▃▂▂▂▂▂▂▁▂▁▂▁▁▁▁▁
+wandb:                                             valid_mae_smoothed ▆█▅▅▅▅▄▄▄▄▄▄▄▄▃▃▃▃▃▃▃▃▃▂▂▂▂▂▂▂▁▁▁▁▁▁▁▁▁▁
+wandb:                                       valid_occupancy_accuracy ▁▃▄▄▄▄▃▄▅▄▅▄▅▅▅▅▆▆▆▆▆▆▇▇▇▇▇▇▇▇██████████
+wandb:                              valid_occupancy_accuracy_smoothed ▁▃▃▄▄▄▄▄▄▄▅▅▅▅▅▅▆▆▆▆▆▆▆▇▇▇▇▇▇▇██████████
+wandb:                                             valid_occupancy_f1 ▃▁▄▄▄▄▃▄▄▄▄▄▅▅▅▅▅▄▅▅▅▅▅▅▅▆▆▅▆▆▇▇▇▇▇█████
+wandb:                                    valid_occupancy_f1_smoothed ▁▁▁▁▂▃▃▃▄▄▄▄▄▄▄▅▆▆▆▆▆▆▇▇▇▇▇█████████████
+wandb:                                      valid_occupancy_threshold ▄▅▃▂▃▁▄▄▅▅▇▆▆▆▅▆▆▆▇▆▆▇▇█▅▆▆▆▇█▇▅▇█▇▆▄▆▅█
+wandb:                             valid_occupancy_threshold_smoothed ▃▂▁▁▁▃▃▂▁▂▄▅▆▅▇▅▅▆▆▆▇▆▇▆▆▇█▇▆▇▇██▇█▅▅▅▅▇
+wandb:                                           valid_peak_threshold ▇▄▃▃▃▃▂▃▁▄▅▁▆▁▁▆▁▇▇▇▆▆▂▁▆▂█▆▇█▃▄▃█▇▃▄▇▅▄
+wandb:                                  valid_peak_threshold_smoothed ▆▅▅▄▄▃▃▂▃▂▃▃▄▅▃▄▅▆▃▁▅▇▆▆▇▆▇▅▅▆▇█▆▅█▆▇▆▅▇
+wandb: 
+wandb: Run summary:
+wandb:                                                          epoch 149
+wandb:                                                  learning_rate 0.00012
+wandb:                     test_results_per_env/meeting_room/accuracy 0.20893
+wandb:            test_results_per_env/meeting_room/balanced_accuracy 0.17116
+wandb:              test_results_per_env/meeting_room/empty_threshold 0.11203
+wandb:                          test_results_per_env/meeting_room/mae 1.35991
+wandb:                test_results_per_env/meeting_room/mass_accuracy 0.25837
+wandb:       test_results_per_env/meeting_room/mass_balanced_accuracy 0.18911
+wandb:                     test_results_per_env/meeting_room/mass_mae 1.26847
+wandb:           test_results_per_env/meeting_room/occupancy_accuracy 0.50633
+wandb:                 test_results_per_env/meeting_room/occupancy_f1 0.29832
+wandb:             test_results_per_env/meeting_room/position_error_m 4.65209
+wandb: test_results_per_env/meeting_room/position_false_positive_rate 0.28072
+wandb:           test_results_per_env/meeting_room/position_miss_rate 0.25715
+wandb:                                                       train_kd 0
+wandb:                                                     train_loss 0.13003
+wandb:                                                 valid_accuracy 0.74202
+wandb:                                        valid_accuracy_smoothed 0.7459
+wandb:                                        valid_balanced_accuracy 0.82416
+wandb:                               valid_balanced_accuracy_smoothed 0.81289
+wandb:                                          valid_empty_threshold 0.1119
+wandb:                                 valid_empty_threshold_smoothed 0.11795
+wandb:                                                       valid_kd 0
+wandb:                                                     valid_loss 0.14476
+wandb:                                                      valid_mae 0.26064
+wandb:                                             valid_mae_smoothed 0.26143
+wandb:                                       valid_occupancy_accuracy 0.90479
+wandb:                              valid_occupancy_accuracy_smoothed 0.90441
+wandb:                                             valid_occupancy_f1 0.90662
+wandb:                                    valid_occupancy_f1_smoothed 0.90731
+wandb:                                      valid_occupancy_threshold 0.68
+wandb:                             valid_occupancy_threshold_smoothed 0.62475
+wandb:                                           valid_peak_threshold 0.68725
+wandb:                                  valid_peak_threshold_smoothed 0.60638
+wandb: 
+wandb: You can sync this run to the cloud by running:
+wandb: wandb sync /cluster/raid/home/jajo/AMAR/wandb/offline-run-20261023_125412-yqc2k01j
+wandb: Find logs at: ./wandb/offline-run-20261023_125412-yqc2k01j/logs
+wandb: Tracking run with wandb version 0.18.3
+wandb: W&B syncing is set to `offline` in this directory.  
+wandb: Run `wandb online` or set WANDB_MODE=online to enable cloud syncing.
