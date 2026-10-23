@@ -44,6 +44,8 @@
 ##     BACKBONE     force nn.backbone (default: read from the checkpoint, else inferred from its
 ##                  state-dict keys)
 ##     ENCODER_NORM force nn.encoder_norm (default: read from the checkpoint, else inferred)
+##     SOURCE_EMPTY_THRESHOLD  the EmptyThr the training run used (from its log); reports whether that
+##                  gate fires on this room at all
 #
 set -euo pipefail
 
@@ -78,6 +80,7 @@ MAX_SAMPLES="${MAX_SAMPLES:-600}"
 BATCH_SIZE="${BATCH_SIZE:-32}"
 BACKBONE="${BACKBONE:-}"
 ENCODER_NORM="${ENCODER_NORM:-}"
+SOURCE_EMPTY_THRESHOLD="${SOURCE_EMPTY_THRESHOLD:-}"
 
 ## Resolve the newest checkpoint under the training-room directory. run_cross_domain names the run
 ## directory after the training rooms joined by "_" and claims an increasing numeric leaf, so the
@@ -114,6 +117,13 @@ if [[ -n "${ENCODER_NORM}" ]]; then
     model_args+=(--encoder-norm "${ENCODER_NORM}")
 fi
 
+## The empty-gate threshold the training run actually used (its log prints it as EmptyThr). When set,
+## the diagnostic reports how often it fires on this room, i.e. whether the gate transfers.
+gate_args=()
+if [[ -n "${SOURCE_EMPTY_THRESHOLD}" ]]; then
+    gate_args=(--source-empty-threshold "${SOURCE_EMPTY_THRESHOLD}")
+fi
+
 out_dir="output/diagnose/${TEST_ENV}"
 fig_dir="visualizations/diagnose/${TEST_ENV}"
 mkdir -p "${out_dir}" "${fig_dir}"
@@ -136,6 +146,7 @@ python scripts/diagnose_density_input_dependence.py \
     --batch-size "${BATCH_SIZE}" \
     "${max_args[@]}" \
     "${model_args[@]}" \
+    "${gate_args[@]}" \
     --out "${fig_dir}/diagnose_${TEST_ENV}_${var_run}_${stamp}.png" \
     2>&1 | tee "${log}"
 end=$(date +%s)
