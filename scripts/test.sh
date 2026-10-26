@@ -28,7 +28,7 @@ export WANDB_MODE=offline
 ## nn.backbone only reaches DensityMapNet; the "coords" head (SetLocalizer) hardcodes THAT and
 ## ignores it, so force the density-grid head here or every array task is the same run.
 python scripts/run_main.py --model "${model}" --task location --repeat 3 \
-    --env "${env}" --hp nn.backbone="${backbone}" --hp density.head=density --epochs 50 \
+    --env "${env}" --hp nn.backbone="${backbone}" --hp density.head=density --epochs 70 \
   > "${log_dir}/run_$(date +%Y%m%d_%H%M%S).log" 2>&1
 end=$(date +%s)
 echo "Total runtime: $((end - start)) seconds"

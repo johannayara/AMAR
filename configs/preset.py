@@ -213,8 +213,8 @@ preset = {
         ## raised map floor under domain shift from turning every empty frame into a count >= 1.
         ## "empty_threshold" None => calibrate the gate on the validation split; set False to disable
         ## the gate entirely (single-threshold behaviour, calibrated on every frame).
-        "staged_count": True,
-        "empty_threshold": None,#TODO: figure out what this does 
+        "staged_count": None,
+        "empty_threshold": None,# threshold for the stages scenario where we classify some values as empty
     },
 
     ## H-WILD human-held-device localization (src/data/hwild.py). "path" is the dataset root holding
