@@ -36,7 +36,7 @@ from src.data.hwild import (HWILD_ROOMS, room_names as hwild_room_names, load_hw
 #
 ##
 WIMANS_ROOMS = ["empty_room", "meeting_room", "classroom"]
-## WiMANS rooms are 510 x 1030 cm (preset["layouts"] comment); layout coordinates are in units of
+## WiMANS rooms are 510 x 1030 cm layout coordinates are in units of
 ## 1000 cm, i.e. 1 unit = 10 m, with the origin at the transmitter.
 WIMANS_EXTENT_M = (5.10, 10.30)
 WIMANS_BOUNDS = (0.0, WIMANS_EXTENT_M[0], 0.0, WIMANS_EXTENT_M[1])

@@ -32,7 +32,7 @@
 set -euo pipefail
 
 REPEAT="${REPEAT:-3}"
-EPOCHS="${EPOCHS:-50}"
+EPOCHS="${EPOCHS:-70}"
 USERS="${USERS:-0,1,2,3,4,5}"
 MAX_JOBS="${MAX_JOBS:-4}"
 
