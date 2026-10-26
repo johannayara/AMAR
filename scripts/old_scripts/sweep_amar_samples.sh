@@ -14,10 +14,6 @@
 ## samples the model trains on. Set ROOM/REPEAT/TASK/MODEL to override the defaults, e.g.
 ##     ROOM=meeting_room REPEAT=5 sbatch scripts/sweep_amar_samples.sh
 ##     MODEL=AMAR TASK=activity sbatch scripts/sweep_amar_samples.sh
-##
-## (ROOM, not ENV: ENV is a standard shell variable that Slurm forwards into the job and would
-## silently override the room name.)
-##
 ## Defaults target AMAR_WO_RVQ on the location task. NOTE: run_AMAR (the RVQ model) is activity-only
 ## today, so keep TASK=activity when MODEL=AMAR. EPOCHS defaults to 300: your existing 300-epoch
 ## runs select their best checkpoint at epochs 209-299, so 20 would be badly undertrained.

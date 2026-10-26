@@ -6,11 +6,7 @@
 #SBATCH --gres gpu:a100:1
 #SBATCH --array=0-2
 
-#
-## Cross-domain density-map group counting: train on one room and test on the other two.
-## One array task per training room. The occupancy threshold is calibrated on the training room's
-## validation split only, and each test room's map is rendered with that room's own layout kernels.
-#
+
 set -euo pipefail
 
 source /software/anaconda3/etc/profile.d/conda.sh

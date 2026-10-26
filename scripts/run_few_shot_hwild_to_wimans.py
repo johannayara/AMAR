@@ -1,12 +1,12 @@
 """
 [file]          run_few_shot_hwild_to_wimans.py
-[description]   Few-shot knowledge distillation for H-WILD -> WiMANS localization.
+[description]   Few-shot knowledge distillation for train -> test localization.
 
-                Teacher : RoomLocalizer trained on every H-WILD room, then frozen.
+                Teacher : RoomLocalizer trained on every train rooms, then frozen.
                 Student : RoomLocalizer warm-started from the teacher and fine-tuned on a small
-                          fraction of the WiMANS frames (--few_shot_ratio) with the supervised Huber
+                          fraction of the test frames (--few_shot_ratio) with the supervised Huber
                           position loss plus --kd_weight * a smooth-L1 match to the frozen teacher.
-                Test    : the WiMANS frames held out of both the support set and the student's
+                Test    : the test frames held out of both the support set and the student's
                           validation slice, so the reported error is on frames neither model was
                           tuned on. Teacher and constant-position baseline are reported alongside.
 
@@ -14,10 +14,6 @@
                 src/data/hwild.tx_frame_xy and src/data/unified_rooms.load_wimans_room_targets), so
                 the positions are directly comparable in meters.
 
-                Caveat, stated up front: the H-WILD teacher's own WiMANS error is worse than the
-                constant baseline (its device-link channel does not transfer to WiMANS passive
-                scattering), so the distillation term pulls the student toward weak targets.
-                --kd_weight 0 is the honest few-shot reference; run both and compare.
 
                 Example:
                     python scripts/run_few_shot_hwild_to_wimans.py --few_shot_ratio 0.05 --kd_weight 1.0

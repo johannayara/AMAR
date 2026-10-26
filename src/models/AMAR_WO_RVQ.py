@@ -1170,3 +1170,226 @@ def run_AMAR_WO_RVQ_few_shot(data_train_x,
 
     wandb.finish()
     return all_envs_results
+
+## ====================================================================================================================
+# FEW-SHOT KNOWLEDGE DISTILLATION ACROSS DATASETS
+
+def run_few_shot_cross_domain(train_sets_by_env, test_sets_by_env, var_support_idx, var_valid_idx,
+                              var_query_idx, var_few_shot_ratio=0.05, var_kd_weight=1.0,
+                              var_kd_temperature=1.0, var_teacher_epochs=None, var_student_epochs=None,
+                              var_init_from_teacher=True, var_compile=True, var_repeat=3,
+                              var_task="activity", var_env="ntu_har",
+                              save_path="./visualizations/temp"):
+    """
+    [description]
+    : Cross-dataset few-shot activity distillation for AMAR_WO_RVQ (NTU-Fi HAR -> WiMANS).
+        teacher -- AMAR_WO_RVQ trained on every source environment, then frozen.
+        student -- AMAR_WO_RVQ warm-started from the teacher and fine-tuned on the support frames of
+                   the target pool with HungarianMatchingLoss + var_kd_weight *
+                   SetDistillationLoss against the frozen teacher.
+        test    -- the target pool's query frames, held out of both the support set and the student's
+                   validation slice, so the reported metrics are on frames neither model was tuned on.
+                   The teacher -- i.e. the source-only model, which is what the pure-split runner
+                   reports -- is scored on the same frames.
+    : train_sets_by_env: dict, source environment -> (X, y); the teacher's data
+    : test_sets_by_env: dict, target environment -> (X, y); the support/valid/query pool, concatenated
+      in dict order
+    : var_support_idx / var_valid_idx / var_query_idx: global index arrays into that concatenation, as
+      built by src.data.activity_transfer.split_target_pool
+    : var_kd_weight: weight of the distillation term (0 = supervised few-shot only)
+    : var_init_from_teacher: warm-start the student from the teacher's weights
+    : return: dict {target environment: {'avg_student_<metric>', 'avg_teacher_<metric>', ...}}
+    """
+    #
+    ##
+    device = select_device()
+    print(f"Using device: {device}")
+    if var_teacher_epochs is None:
+        var_teacher_epochs = preset["nn"]["epoch"]
+    if var_student_epochs is None:
+        var_student_epochs = preset["nn"]["epoch"]
+    var_mode = "multi_head"
+    var_target_names = list(test_sets_by_env)
+    #
+    ## ------------------------- source data: one 90/10 split, as run_cross_domain ------------------
+    var_teacher_x = np.concatenate([np.asarray(train_sets_by_env[var_name][0], dtype=np.float32)
+                                    for var_name in train_sets_by_env])
+    var_teacher_y = np.concatenate([np.asarray(train_sets_by_env[var_name][1], dtype=np.float32)
+                                    for var_name in train_sets_by_env])
+    var_teacher_x = var_teacher_x.reshape(len(var_teacher_x), var_teacher_x.shape[1], -1)
+    var_x_shape = tuple(var_teacher_x.shape[1:])
+    var_perm = np.random.RandomState(39).permutation(len(var_teacher_x))
+    var_num_valid = max(1, int(round(0.1 * len(var_teacher_x))))
+    var_t_valid = np.sort(var_perm[:var_num_valid])
+    var_t_train = np.sort(var_perm[var_num_valid:])
+    teacher_train_set = TensorDataset(torch.from_numpy(var_teacher_x[var_t_train]),
+                                      torch.from_numpy(var_teacher_y[var_t_train]))
+    teacher_valid_set = TensorDataset(torch.from_numpy(var_teacher_x[var_t_valid]),
+                                      torch.from_numpy(var_teacher_y[var_t_valid]))
+    #
+    ## --------------------- target pool: support / student validation / query ----------------------
+    var_pool_x = np.concatenate([np.asarray(test_sets_by_env[var_name][0], dtype=np.float32)
+                                 for var_name in var_target_names])
+    var_pool_y = np.concatenate([np.asarray(test_sets_by_env[var_name][1], dtype=np.float32)
+                                 for var_name in var_target_names])
+    var_pool_x = var_pool_x.reshape(len(var_pool_x), var_pool_x.shape[1], -1)
+    student_train_set = TensorDataset(torch.from_numpy(var_pool_x[var_support_idx]),
+                                      torch.from_numpy(var_pool_y[var_support_idx]))
+    student_valid_set = TensorDataset(torch.from_numpy(var_pool_x[var_valid_idx]),
+                                      torch.from_numpy(var_pool_y[var_valid_idx]))
+    print(f"Source {var_teacher_x.shape[0]} frames ({len(var_t_train)} train / {len(var_t_valid)} valid)")
+    print(f"Target pool {len(var_pool_x)} frames -> support {len(var_support_idx)} "
+          f"({var_few_shot_ratio:.2%}) | student validation {len(var_valid_idx)} | "
+          f"query {len(var_query_idx)}")
+    print(f"kd_weight {var_kd_weight} | kd_temperature {var_kd_temperature} | "
+          f"init_from_teacher {var_init_from_teacher}")
+    #
+    ## ---------------------------------------- complexity -----------------------------------------
+    #
+    var_macs, var_params = get_model_complexity_info(
+        _build_amar_wo_rvq(var_x_shape, torch.device("cpu")), var_x_shape, as_strings=False)
+    print("Parameters:", var_params, "- FLOPs:", var_macs * 2)
+    #
+    ## ========================================= Train & Evaluate ====================================
+    #
+    var_metric_names = ("accuracy", "precision", "recall", "f1_score",
+                        "perfect_prediction_percentage", "total_error")
+    var_student_metrics = {var_name: {var_m: [] for var_m in var_metric_names}
+                           for var_name in var_target_names}
+    var_teacher_metrics = {var_name: {var_m: [] for var_m in var_metric_names}
+                           for var_name in var_target_names}
+    var_time_teacher, var_time_student = [], []
+    var_predict_y_last = {}
+    #
+    for var_r in range(var_repeat):
+        wandb.init(project="FINAL_AMAR",
+                   name=f"AMAR_fewshot_{var_env}_k{var_few_shot_ratio}_r{var_r}",
+                   config=preset, reinit=True)
+        torch.random.manual_seed(var_r + 39)
+        #
+        ## ------------------------------------------- teacher -------------------------------------
+        teacher = _build_amar_wo_rvq(var_x_shape, device)
+        if var_compile:
+            teacher.feature_extractor = torch.compile(teacher.feature_extractor)
+        teacher_optimizer = torch.optim.Adam(teacher.parameters(), lr=preset["nn"]["lr"],
+                                             weight_decay=preset["nn"]["weight_decay"])
+        teacher_loss = HungarianMatchingLoss(
+            cost_class_weight=preset["nn"]["loss"]["cost_class_weight"],
+            aux_loss_weight=preset["nn"]["loss"]["aux_loss_weight"],
+            label_smoothing=preset["nn"]["loss"]["label_smoothing"],
+            class_imbalance_weight=preset["nn"]["loss"]["class_imbalance_weight"],
+            num_classes=preset["nn"]["num_classes"])
+        var_time_0 = time.time()
+        teacher_best_weight = train(model=teacher, optimizer=teacher_optimizer, loss=teacher_loss,
+                                    data_train_set=teacher_train_set,
+                                    data_valid_set=teacher_valid_set,
+                                    var_threshold=preset["nn"]["threshold"],
+                                    var_batch_size=preset["nn"]["batch_size"],
+                                    var_epochs=var_teacher_epochs, device=device, var_mode=var_mode)
+        var_time_1 = time.time()
+        teacher.load_state_dict(teacher_best_weight)
+        teacher.eval()
+        for var_param in teacher.parameters():
+            var_param.requires_grad = False
+        #
+        ## ------------------------------------------- student -------------------------------------
+        student = _build_amar_wo_rvq(var_x_shape, device)
+        if var_init_from_teacher:
+            student.load_state_dict(teacher.state_dict())
+        if var_compile:
+            student.feature_extractor = torch.compile(student.feature_extractor)
+        student_optimizer = torch.optim.Adam(student.parameters(), lr=preset["nn"]["lr"],
+                                             weight_decay=preset["nn"]["weight_decay"])
+        student_loss = HungarianMatchingLoss(
+            cost_class_weight=preset["nn"]["loss"]["cost_class_weight"],
+            aux_loss_weight=preset["nn"]["loss"]["aux_loss_weight"],
+            label_smoothing=preset["nn"]["loss"]["label_smoothing"],
+            class_imbalance_weight=preset["nn"]["loss"]["class_imbalance_weight"],
+            num_classes=preset["nn"]["num_classes"])
+        kd_loss = SetDistillationLoss(temperature=var_kd_temperature,
+                                      aux_loss_weight=preset["nn"]["loss"]["aux_loss_weight"])
+        student_best_weight = train(model=student, optimizer=student_optimizer, loss=student_loss,
+                                    data_train_set=student_train_set,
+                                    data_valid_set=student_valid_set,
+                                    var_threshold=preset["nn"]["threshold"],
+                                    var_batch_size=preset["nn"]["batch_size"],
+                                    var_epochs=var_student_epochs, device=device, var_mode=var_mode,
+                                    teacher=teacher, kd_loss=kd_loss, kd_weight=var_kd_weight)
+        var_time_2 = time.time()
+        if preset.get("save_model"):
+            save_model_components(preset, student)
+        student.load_state_dict(student_best_weight)
+        student.eval()
+        var_time_teacher.append(var_time_1 - var_time_0)
+        var_time_student.append(var_time_2 - var_time_1)
+        #
+        ## -------------------------------- query frames per target env ----------------------------
+        var_offset = 0
+        for var_name in var_target_names:
+            var_size = len(test_sets_by_env[var_name][0])
+            var_mask = (var_query_idx >= var_offset) & (var_query_idx < var_offset + var_size)
+            var_sel = var_query_idx[var_mask] - var_offset
+            var_offset += var_size
+            if len(var_sel) == 0:
+                continue
+            var_student_preds, var_teacher_preds = [], []
+            with torch.no_grad():
+                for var_b in range(0, len(var_sel), preset["nn"]["batch_size"]):
+                    var_xb = torch.from_numpy(
+                        var_pool_x[var_sel[var_b:var_b + preset["nn"]["batch_size"]]]).to(device)
+                    var_student_preds.append(student(var_xb).cpu())
+                    var_teacher_preds.append(teacher(var_xb).cpu())
+            var_student_y = torch.cat(var_student_preds, dim=1).numpy()
+            var_teacher_y = torch.cat(var_teacher_preds, dim=1).numpy()
+            var_q_y = var_pool_y[var_sel]
+            var_predict_y_last[var_name] = (var_q_y, var_student_y)
+            var_s_metrics = performance_metrics(var_q_y, var_student_y, var_mode=var_mode)
+            var_t_metrics = performance_metrics(var_q_y, var_teacher_y, var_mode=var_mode)
+            for var_metric in var_metric_names:
+                var_student_metrics[var_name][var_metric].append(var_s_metrics[var_metric])
+                var_teacher_metrics[var_name][var_metric].append(var_t_metrics[var_metric])
+            wandb.log({
+                f"query/{var_name}/student_accuracy": var_s_metrics['accuracy'],
+                f"query/{var_name}/student_f1_score": var_s_metrics['f1_score'],
+                f"query/{var_name}/student_perfect_prediction_percentage":
+                    var_s_metrics['perfect_prediction_percentage'],
+                f"query/{var_name}/teacher_accuracy": var_t_metrics['accuracy'],
+                f"query/{var_name}/teacher_f1_score": var_t_metrics['f1_score'],
+            }, step=var_r + 100000)
+            print(f"  [{var_name}] query {len(var_sel)} frames | student F1 {var_s_metrics['f1_score']:.4f} "
+                  f"(acc {var_s_metrics['accuracy']:.4f}, PPP "
+                  f"{var_s_metrics['perfect_prediction_percentage']:.4f}) | teacher F1 "
+                  f"{var_t_metrics['f1_score']:.4f} (acc {var_t_metrics['accuracy']:.4f})")
+        wandb.finish()
+        del teacher_optimizer, teacher_loss, student_optimizer, student_loss, kd_loss
+        del teacher_best_weight, student_best_weight, var_student_preds, var_teacher_preds
+        torch.cuda.empty_cache()
+        gc.collect()
+        del student, teacher
+    #
+    ## ------------------------------------------ aggregate -----------------------------------------
+    all_envs_results = {}
+    for var_name in var_target_names:
+        var_env_result = {}
+        for var_metric in var_metric_names:
+            for var_who, var_store in (("student", var_student_metrics), ("teacher", var_teacher_metrics)):
+                var_mean, var_std, var_se = _mean_std_se(np.array(var_store[var_name][var_metric]))
+                var_env_result[f"avg_{var_who}_{var_metric}"] = var_mean
+                var_env_result[f"std_{var_who}_{var_metric}"] = var_std
+                var_env_result[f"se_{var_who}_{var_metric}"] = var_se
+        var_env_result["avg_teacher_train_time"] = float(np.mean(var_time_teacher))
+        var_env_result["avg_student_train_time"] = float(np.mean(var_time_student))
+        all_envs_results[var_name] = var_env_result
+    #
+    for var_name, (var_true_y, var_pred_y) in var_predict_y_last.items():
+        visualize_model_performance(y_pred=var_pred_y, y_true=var_true_y, var_mode=var_mode,
+                                    save_dir=os.path.join(save_path, var_name))
+        var_stats = all_envs_results[var_name]
+        print(f"\n[{var_name}] avg over {var_repeat} repeats: "
+              f"Student F1 {var_stats['avg_student_f1_score']:.4f} ± "
+              f"{var_stats['se_student_f1_score']:.4f} | Student accuracy "
+              f"{var_stats['avg_student_accuracy']:.4f} ± {var_stats['se_student_accuracy']:.4f} | "
+              f"Teacher F1 {var_stats['avg_teacher_f1_score']:.4f} ± "
+              f"{var_stats['se_teacher_f1_score']:.4f} | Teacher accuracy "
+              f"{var_stats['avg_teacher_accuracy']:.4f} ± {var_stats['se_teacher_accuracy']:.4f}")
+    return all_envs_results
