@@ -7,10 +7,13 @@
                     <root>/test_amp/<class>/<class><i>.mat      264 captures
 
                 <class> is one of box, circle, clean, fall, run, walk, and every .mat holds the CSI
-                amplitude under the key "CSIamp" as (3 antennas, 114 subcarriers, 2000 packets).
+                amplitude under the key "CSIamp". The release is distributed with the axes in
+                different orders -- (3 antennas, 114 subcarriers, 2000 packets), (3, 2000, 114) -- and
+                some copies flatten the antenna x subcarrier plane, so load_ntu_har_array() resolves
+                the axes from the array shape instead of assuming one layout.
 
                 The benchmark's preprocessing is reproduced exactly: standardise with the dataset's
-                global amplitude mean/std, then decimate the packet axis 2000 -> 500 with x[:, ::4].
+                global amplitude mean/std, then decimate the packet axis 2000 -> 500 with x[..., ::4].
 
                 The (antenna, subcarrier) plane is then flattened into the feature axis the
                 AMAR_WO_RVQ backbone consumes. NTU-Fi HAR has 114 subcarriers while WiMANS has 30, so
@@ -82,12 +85,17 @@ def ntu_har_class_names(var_root=None, var_splits=None):
     return sorted(var_names)
 
 
-def read_ntu_har_sample(var_path):
+def load_ntu_har_array(var_path):
     """
     [description]
-    : one capture, standardised and decimated exactly as the benchmark's CSI_Dataset does.
+    : the raw 'CSIamp' array of one capture, with its axes resolved to
+      (antennas, subcarriers, packets). The NTU-Fi HAR release is distributed with the axes in
+      different orders -- (3, 114, 2000), (3, 2000, 114) -- and some copies store the antenna x
+      subcarrier plane flattened, as (packets, 3 * 114) or (3 * 114, packets), so the axes are
+      identified by their lengths (3 antennas, 114 subcarriers, the remaining one is packets) rather
+      than assumed.
     : var_path: path of a .mat file
-    : return: (3, 114, 500) float32 amplitude
+    : return: (3, 114, packets) float32
     """
     #
     ##
@@ -106,8 +114,56 @@ def read_ntu_har_sample(var_path):
                            f"(keys: {sorted(k for k in var_mat if not k.startswith('__'))})")
         var_x = np.asarray(var_mat["CSIamp"])
     #
-    var_x = (var_x.astype(np.float32) - NTU_HAR_MEAN) / NTU_HAR_STD
-    return np.ascontiguousarray(var_x[:, :, ::NTU_HAR_DECIMATION])
+    var_x = np.asarray(var_x, dtype=np.float32)
+    var_shape = tuple(int(var_size) for var_size in var_x.shape)
+    var_flat = NTU_HAR_ANTENNAS * NTU_HAR_SUBCARRIERS
+    if var_x.ndim == 3:
+        ## the packet axis is whichever of the three is neither the antenna nor the subcarrier axis
+        if (var_shape.count(NTU_HAR_ANTENNAS) != 1
+                or var_shape.count(NTU_HAR_SUBCARRIERS) != 1):
+            raise ValueError(
+                f"{var_path}: expected one axis of {NTU_HAR_ANTENNAS} antennas and one of "
+                f"{NTU_HAR_SUBCARRIERS} subcarriers, got shape {var_shape}")
+        var_axis_a = var_shape.index(NTU_HAR_ANTENNAS)
+        var_axis_s = var_shape.index(NTU_HAR_SUBCARRIERS)
+        var_axis_t = ({0, 1, 2} - {var_axis_a, var_axis_s}).pop()
+        var_x = np.transpose(var_x, (var_axis_a, var_axis_s, var_axis_t))
+    elif var_x.ndim == 2 and var_flat in var_shape:
+        ## flattened antenna x subcarrier plane: unflatten it, packets on the other axis
+        if var_shape[0] == var_flat:
+            var_x = var_x.reshape(NTU_HAR_ANTENNAS, NTU_HAR_SUBCARRIERS, var_shape[1])
+        else:
+            var_x = np.transpose(var_x.reshape(var_shape[0], NTU_HAR_ANTENNAS, NTU_HAR_SUBCARRIERS),
+                                 (1, 2, 0))
+    else:
+        raise ValueError(
+            f"{var_path}: expected a CSIamp of shape (antennas, subcarriers, packets) in any axis "
+            f"order, or a flattened ({var_flat}, packets) / (packets, {var_flat}), with "
+            f"{NTU_HAR_ANTENNAS} antennas and {NTU_HAR_SUBCARRIERS} subcarriers; got shape {var_shape}")
+    return np.ascontiguousarray(var_x)
+
+
+def read_ntu_har_sample(var_path):
+    """
+    [description]
+    : one capture, standardised and decimated exactly as the benchmark's CSI_Dataset does.
+    : var_path: path of a .mat file
+    : return: (3, 114, 500) float32 amplitude
+    """
+    #
+    ##
+    var_x = load_ntu_har_array(var_path)
+    var_x = (var_x - NTU_HAR_MEAN) / NTU_HAR_STD
+    ## the raw release holds 2000 packets, decimated 2000 -> 500; a copy that is already decimated is
+    ## taken as it is, so it is not decimated twice
+    var_packets = var_x.shape[-1]
+    if var_packets == NTU_HAR_PACKETS:
+        var_x = var_x[:, :, ::NTU_HAR_DECIMATION]
+    elif var_packets != NTU_HAR_LENGTH:
+        raise ValueError(
+            f"{var_path} has {var_packets} packets; expected the raw {NTU_HAR_PACKETS} "
+            f"(decimated to {NTU_HAR_LENGTH}) or an already decimated {NTU_HAR_LENGTH}")
+    return np.ascontiguousarray(var_x)
 
 
 def harmonize_ntu_features(var_x, var_features):

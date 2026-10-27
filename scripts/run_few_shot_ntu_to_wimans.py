@@ -36,6 +36,10 @@
                     python scripts/run_few_shot_ntu_to_wimans.py --activities walk_nothing --kd_weight 1.0
                     python scripts/run_few_shot_ntu_to_wimans.py --activities union --few_shot_ratio 0.1
                     python scripts/run_few_shot_ntu_to_wimans.py --activities union --kd_weight 0
+
+                Dataset paths, features, band, window length and occupant filter come from the preset
+                (see configs/preset.py); --hp overrides any of them for one run, e.g.
+                --hp ntu_har.path=/data/ntu_har.
 """
 #
 ##
@@ -54,8 +58,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from configs.preset import preset
 from src.data.activity_transfer import (ACTIVITY_VOCABULARIES, majority_activity,
-                                        majority_query_metrics, parse_activity_map,
-                                        prepare_transfer_task)
+                                        majority_query_metrics, prepare_transfer_task)
 from src.models import run_few_shot_cross_domain
 from src.utils import save_run_outputs, build_run_stem, join_envs, run_timestamp, reserve_viz_dir
 
@@ -74,41 +77,16 @@ def parse_args():
     ##
     var_args = argparse.ArgumentParser()
 
-    var_args.add_argument("--ntu_root", default=None, type=str,
-                          help="NTU-Fi HAR root holding train_amp/ and test_amp/ "
-                               "(default preset['ntu_har']['path'])")
-    var_args.add_argument("--ntu_splits", default=None, type=str,
-                          help="comma-separated NTU-Fi HAR splits the teacher is trained on (default "
-                               "both, 'train_amp,test_amp': the target is WiMANS, so every NTU capture "
-                               "is source data)")
-    var_args.add_argument("--activity_map", default=None, type=str,
-                          help="comma-separated NTU=WiMANS activity pairs, e.g. 'walk=walk,fall=lie_down' "
-                               "(default: the --activities vocabulary)")
     var_args.add_argument("--activities", default="shared", choices=ACTIVITY_VOCABULARIES,
                           help="label space of the transfer, and therefore what the WiMANS test set "
                                "holds: 'shared' (default) only the activity names both datasets have "
                                "(on NTU-Fi HAR x WiMANS that is {walk} alone, a walk-vs-no-object task "
                                "with no negatives); 'walk_nothing' adds WiMANS's idle activity, so the "
                                "target test is walking against nothing; 'union' keeps every activity of "
-                               "both datasets (14 classes). Overridden by --activity_map.")
-    var_args.add_argument("--features", default=None, type=int,
-                          help="feature count both sides are aligned to (default "
-                               "preset['ntu_har']['features'], 270 = WiMANS native; 90 averages the "
-                               "WiMANS TX antennas)")
+                               "both datasets (14 classes).")
     var_args.add_argument("--wimans_rooms", default=None, type=str,
                           help="comma-separated WiMANS rooms forming the support/query pool "
                                "(default preset['data']['environment'])")
-    var_args.add_argument("--wimans_users", default=None, type=str,
-                          help="WiMANS occupant-count filter (default '1', matching NTU-Fi HAR's "
-                               "single-person captures; e.g. '1,2,3' to also test set-size "
-                               "generalisation)")
-    var_args.add_argument("--band", default=None, type=str, help="WiMANS WiFi band, e.g. '5'")
-    var_args.add_argument("--length", default=None, type=int,
-                          help="WiMANS window length in packets (default preset['data']['length'])")
-    var_args.add_argument("--max_ntu_files", default=None, type=int,
-                          help="cap the NTU-Fi HAR captures read per class (quick runs / smoke tests)")
-    var_args.add_argument("--max_wimans_samples", default=None, type=int,
-                          help="cap the WiMANS frames drawn per room")
     var_args.add_argument("--standardize", default="window", choices=("none", "window"),
                           help="'window' z-scores each CSI window, removing the per-device gain/AGC "
                                "scale that differs between NTU-Fi HAR and WiMANS; 'none' feeds raw "
@@ -235,21 +213,9 @@ def run():
     #
     ## ------------------------------- load the shared-activity task -------------------------------
     var_task = prepare_transfer_task(
-        var_activity_map=parse_activity_map(var_args.activity_map) if var_args.activity_map else None,
-        var_ntu_root=var_args.ntu_root,
-        var_ntu_splits=([var_split.strip() for var_split in var_args.ntu_splits.split(',')]
-                        if var_args.ntu_splits else None),
-        var_features=var_args.features,
         var_wimans_rooms=([var_room.strip() for var_room in var_args.wimans_rooms.split(',')]
                           if var_args.wimans_rooms else None),
-        var_wimans_users=([var_user.strip() for var_user in var_args.wimans_users.split(',')]
-                          if var_args.wimans_users else None),
-        var_band=([var_band.strip() for var_band in var_args.band.split(',')]
-                  if var_args.band else None),
-        var_length=var_args.length,
         var_standardize=var_args.standardize,
-        var_max_ntu_files=var_args.max_ntu_files,
-        var_max_wimans_samples=var_args.max_wimans_samples,
         var_few_shot_ratio=var_args.few_shot_ratio,
         var_vocabulary=var_args.activities)
     var_shared = var_task["var_shared"]
@@ -259,9 +225,8 @@ def run():
         print(f"\nNOTE: the shared vocabulary is the single activity {var_shared[0]!r}, so this is a "
               f"{var_shared[0]!r}-vs-no-object detection task and every query frame is positive: the "
               f"teacher is already perfect on it and the run only shows whether fine-tuning degrades "
-              f"it. Pass --activities walk_nothing to test it against WiMANS's idle frames, "
-              f"--activities union for every activity of both datasets, or --activity_map to widen it, "
-              f"e.g. --activity_map 'walk=walk,fall=lie_down'.")
+              f"it. Pass --activities walk_nothing to test it against WiMANS's idle frames, or "
+              f"--activities union for every activity of both datasets.")
     #
     ## --------------------------- the trivial always-majority baseline -----------------------------
     var_majority = majority_activity(var_task["ntu_class_indices"])
@@ -293,18 +258,17 @@ def run():
         "task": "activity",
         "shared_activities": var_shared,
         "vocabulary": var_task["var_vocabulary"],
-        "activity_map": var_task["var_map"],
         "ntu_classes": var_task["var_ntu_classes"],
         "majority_activity": var_majority_name,
         "num_classes": var_task["var_num_classes"],
         "num_obj_queries": preset["nn"]["num_obj_queries"],
-        "ntu_root": var_args.ntu_root or preset["ntu_har"]["path"],
-        "ntu_splits": var_args.ntu_splits or preset["ntu_har"]["splits"],
-        "features": var_args.features or preset["ntu_har"]["features"],
+        "ntu_root": preset["ntu_har"]["path"],
+        "ntu_splits": preset["ntu_har"]["splits"],
+        "features": preset["ntu_har"]["features"],
         "wimans_rooms": var_args.wimans_rooms or preset["data"]["environment"],
-        "wimans_users": var_args.wimans_users or "1",
-        "band": var_args.band or preset["data"]["wifi_band"],
-        "length": var_args.length or preset["data"]["length"],
+        "wimans_users": "1",
+        "band": preset["data"]["wifi_band"],
+        "length": preset["data"]["length"],
         "standardize": var_args.standardize,
         "few_shot_ratio": var_args.few_shot_ratio,
         "kd_weight": var_args.kd_weight,

@@ -238,16 +238,15 @@ preset = {
         "weight_decay": 2e-4,
     },
 
-    ## NTU-Fi HAR (src/data/ntu_har.py) cross-dataset activity transfer
-    ## WiMANS activity; None keeps the identity intersection of the two vocabularies, which is the
-    ## only label space a cross-dataset run is well defined on. "features" is the feature count both
-    ## sides are aligned to: 270 is WiMANS's native (time, 3 TX, 3 RX, 30 subcarrier) flattening, and
-    ## the NTU-Fi HAR subcarrier axis is resampled from 114 to match it.
+    ## NTU-Fi HAR (src/data/ntu_har.py) cross-dataset activity transfer. The label space is picked by
+    ## --activities of scripts/run_ntu_to_wimans.py / scripts/run_few_shot_ntu_to_wimans.py, see
+    ## src/data/activity_transfer.resolve_vocabulary. "features" is the feature count both sides are
+    ## aligned to: 270 is WiMANS's native (time, 3 TX, 3 RX, 30 subcarrier) flattening, and the
+    ## NTU-Fi HAR subcarrier axis is resampled from 114 to match it.
     "ntu_har": {
         "path": "dataset/ntu_har",
         "splits": ["train_amp", "test_amp"],
         "features": 270,
-        "activity_map": None,
     },
 
     ## Grid used by the LOR per-location visualizations (src/utils.visualize_room_grid_performance):

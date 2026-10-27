@@ -327,9 +327,13 @@ git clone --depth 1 https://github.com/xyanchen/WiFi-CSI-Sensing-Benchmark /tmp/
 python scripts/run_ntu_to_wimans.py --repeat 3 --epochs 60
 ```
 
-`src/data/ntu_har.py` reproduces the benchmark's own preprocessing exactly (`CSIamp` under the key
-`CSIamp`, standardised with the dataset's global mean/std, packets decimated `2000 → 500` with
-`x[:, ::4]`), so windows match what SenseFi's models see.
+`src/data/ntu_har.py` reproduces the benchmark's own preprocessing exactly (`CSIamp`, standardised with
+the dataset's global mean/std, packets decimated `2000 → 500` with `x[..., ::4]`), so windows match
+what SenseFi's models see. The release is distributed with the CSI axes in different orders —
+`(3, 114, 2000)`, `(3, 2000, 114)` — and some copies flatten the antenna × subcarrier plane, so
+`load_ntu_har_array()` identifies the axes by their lengths (3 antennas, 114 subcarriers, the
+remaining axis is packets) instead of assuming one layout; an unrecognised shape fails with the
+observed shape in the message.
 
 **The label space is the constraint.** NTU-Fi HAR labels six activities (`box`, `circle`, `clean`,
 `fall`, `run`, `walk`) and WiMANS labels nine (`nothing`, `walk`, `rotation`, `jump`, `wave`,
@@ -347,12 +351,11 @@ mismatch. `--activities` picks that ordering:
 ```bash
 python scripts/run_ntu_to_wimans.py --activities union --repeat 3 --epochs 60
 python scripts/run_few_shot_ntu_to_wimans.py --activities walk_nothing --few_shot_ratio 0.1 --kd_weight 0.1
-python scripts/run_ntu_to_wimans.py --activity_map 'walk=walk,fall=lie_down'   # explicit override
 ```
 
-The default is `shared`, the identity intersection of the two vocabularies; an explicit `--activity_map`
-overrides `--activities` (its targets must be WiMANS activities, so it cannot express the union
-vocabulary).
+The default is `shared`, the identity intersection of the two vocabularies. Activities are matched by
+name — a class keeps its own name on both sides — so the vocabulary is the only thing that decides the
+class ordering; there is no cross-vocabulary mapping table.
 
 Under `shared` the task degenerates to a single activity against no-object and every query frame is
 positive — the runner says so in its log. **Every report therefore carries the "always name the most
@@ -360,21 +363,30 @@ frequent NTU-Fi HAR activity" baseline.** On a single-activity vocabulary that b
 perfect, so a run that only matches it has learned nothing; the comparison to make is model vs
 baseline, not model alone.
 
-Two more alignment choices, both configurable:
+Beyond `--activities` and `--wimans_rooms`/`--standardize`, both runners read the data setup from the
+preset — dataset roots, features, band, window length and occupant filter have no dedicated flags.
+`--hp <dotted.path>=<value>` overrides any preset field for one run:
+
+```bash
+python scripts/run_ntu_to_wimans.py --activities union --hp ntu_har.path=/data/ntu_har
+```
+
+Two alignment choices, both preset fields:
 
 - **Features.** NTU-Fi HAR has 3 antennas × 114 subcarriers and WiMANS 3 TX × 3 RX × 30, so one model
-  cannot consume both as they are. `--features 270` (default) keeps WiMANS's native flattening, the
-  representation the repo's own WiMANS runs use, and resamples the NTU-Fi HAR subcarrier axis
-  `114 → 90` to match. `--features 90` instead averages the WiMANS TX antennas, the convention
+  cannot consume both as they are. `preset["ntu_har"]["features"] = 270` (default) keeps WiMANS's
+  native flattening, the representation the repo's own WiMANS runs use, and resamples the NTU-Fi HAR
+  subcarrier axis `114 → 90` to match; 90 instead averages the WiMANS TX antennas, the convention
   `src/data/unified_rooms.py` uses to match H-WILD.
 - **Gain.** `--standardize window` (default) z-scores every CSI window, removing the per-device
   gain/AGC scale that differs between the two datasets (same alignment as
   `run_hwild_to_wimans.py`); WiMANS statistics are taken over the real packets only, excluding the
   leading zero padding. `--standardize none` feeds raw amplitude.
 
-WiMANS frames are kept when *every* occupant performs a shared activity; `--wimans_users 1` (default)
-restricts them to single-occupant frames, matching NTU-Fi HAR's single-person captures, and
-`--wimans_users 1,2,3` also tests set-size generalisation through the same set-prediction head.
+WiMANS frames are kept when *every* occupant performs a shared activity; `preset["data"]["num_users"]`
+is not what filters them — `load_wimans_activity` defaults to single-occupant frames (`"1"`), matching
+NTU-Fi HAR's single-person captures, and a wider filter would also test set-size generalisation
+through the same set-prediction head.
 
 Reports go to `output/ntu_to_wimans/*.json|txt` and figures to `visualizations/ntu_to_wimans/`.
 
@@ -404,9 +416,10 @@ python scripts/run_few_shot_ntu_to_wimans.py --activities union --few_shot_ratio
 python scripts/run_few_shot_ntu_to_wimans.py --activities union --few_shot_ratio 0.1 --kd_weight 0    # ablation
 ```
 
-`scripts/ntu_wimans.sh` runs both of those on SLURM. The runner also takes the loader flags of
-`run_ntu_to_wimans.py` (`--ntu_root`, `--ntu_splits`, `--features`, `--wimans_rooms`, `--wimans_users`,
-`--band`, `--length`, `--standardize`, `--max_ntu_files`, `--max_wimans_samples`).
+`scripts/ntu_wimans.sh` runs both of those on SLURM. The runner takes `--activities`, the few-shot
+knobs above and the same `--wimans_rooms`/`--standardize` as the pure-split runner; everything else
+(dataset roots, features, band, window length, occupant filter) comes from the preset and is
+overridable per run with `--hp`.
 
 **The two protocols are scored on the same frames.** Both runners build the task through
 `src.data.activity_transfer.prepare_transfer_task`, which splits the WiMANS pool with one fixed seed
