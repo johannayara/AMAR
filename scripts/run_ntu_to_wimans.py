@@ -40,8 +40,9 @@ import torch
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from configs.preset import preset
-from src.data.activity_transfer import (majority_activity, majority_query_metrics,
-                                        parse_activity_map, prepare_transfer_task)
+from src.data.activity_transfer import (ACTIVITY_VOCABULARIES, majority_activity,
+                                        majority_query_metrics, parse_activity_map,
+                                        prepare_transfer_task)
 from src.models import run_cross_domain
 from src.utils import save_run_outputs, build_run_stem, join_envs, run_timestamp, reserve_viz_dir
 
@@ -69,6 +70,13 @@ def parse_args():
     var_args.add_argument("--activity_map", default=None, type=str,
                           help="comma-separated NTU=WiMANS activity pairs, e.g. 'walk=walk,fall=lie_down' "
                                "(default: the identity intersection of the two vocabularies)")
+    var_args.add_argument("--activities", default="shared", choices=ACTIVITY_VOCABULARIES,
+                          help="label space of the transfer: 'shared' (default) keeps only the activity "
+                               "names both datasets have (on NTU-Fi HAR x WiMANS that is {walk} alone, a "
+                               "walk-vs-no-object task with no negatives); 'walk_nothing' adds WiMANS's "
+                               "idle activity, so the target test is walking against nothing; 'union' "
+                               "keeps every activity of both datasets (14 classes). Overridden by "
+                               "--activity_map.")
     var_args.add_argument("--features", default=None, type=int,
                           help="feature count both sides are aligned to (default "
                                "preset['ntu_har']['features'], 270 = WiMANS native; 90 averages the "
@@ -172,7 +180,8 @@ def format_result(var_result, var_shared, var_majority_name):
     ##
     var_lines = ["=" * 80,
                  f"NTU-Fi HAR -> WiMANS ACTIVITY TRANSFER, PURE SPLIT (model {var_result['model']})",
-                 f"Shared activities: {var_shared} | query frames: {var_result['query_frames']}",
+                 f"Shared activities ({var_result['vocabulary']}): {var_shared} | query frames: "
+                 f"{var_result['query_frames']}",
                  "=" * 80]
     for var_room, var_env_result in var_result["per_env"].items():
         var_lines.append(f"\n{var_room}:")
@@ -227,14 +236,17 @@ def run():
         var_standardize=var_args.standardize,
         var_max_ntu_files=var_args.max_ntu_files,
         var_max_wimans_samples=var_args.max_wimans_samples,
-        var_few_shot_ratio=var_args.few_shot_ratio)
+        var_few_shot_ratio=var_args.few_shot_ratio,
+        var_vocabulary=var_args.activities)
     var_shared = var_task["var_shared"]
     preset["nn"]["num_classes"] = var_task["var_num_classes"]
     preset["task"] = "activity"
     if len(var_shared) == 1:
         print(f"\nNOTE: the shared vocabulary is the single activity {var_shared[0]!r}, so this is a "
               f"{var_shared[0]!r}-vs-no-object detection task and every query frame is positive. "
-              f"Pass --activity_map to widen it, e.g. --activity_map 'walk=walk,fall=lie_down'.")
+              f"Pass --activities walk_nothing to test it against WiMANS's idle frames, "
+              f"--activities union for every activity of both datasets, or --activity_map to widen it, "
+              f"e.g. --activity_map 'walk=walk,fall=lie_down'.")
     #
     ## --------------------------- the trivial always-majority baseline -----------------------------
     var_majority = majority_activity(var_task["ntu_class_indices"])
@@ -257,6 +269,7 @@ def run():
         "model": "AMAR_WO_RVQ",
         "task": "activity",
         "shared_activities": var_shared,
+        "vocabulary": var_task["var_vocabulary"],
         "activity_map": var_task["var_map"],
         "ntu_classes": var_task["var_ntu_classes"],
         "majority_activity": var_majority_name,
@@ -280,7 +293,7 @@ def run():
     }
     #
     var_formatted = format_result(var_result, var_shared, var_majority_name)
-    var_stem = build_run_stem("ntu_to_wimans", "activity", f"map-{'+'.join(var_shared)}",
+    var_stem = build_run_stem("ntu_to_wimans", "activity", f"vocab-{var_task['var_vocabulary']}",
                               f"test-{join_envs(list(var_task['query_by_env']))}",
                               f"r{var_args.repeat}", f"e{preset['nn']['epoch']}",
                               var_args.standardize, run_timestamp())

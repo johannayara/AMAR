@@ -14,14 +14,26 @@ mkdir -p "./output/few_shot_ntu_wimans/har"
 
 start=$(date +%s)
 echo "Start: $(date)"
-export WANDB_MODE=offline 
+export WANDB_MODE=offline
 export AMAR_ENCODER_NORM=group
-## python scripts/run_hwild_to_wimans.py --repeat 3 --epochs 200 --train_rooms "Conference, Laboratory, empty_room, classroom" --test_rooms "meeting_room, Lounge, Office" > "./output/hwild_wimans/run_$(date +%Y%m%d_%H%M).log" 2>&1
-python scripts/run_few_shot_ntu_to_wimans.py --few_shot_ratio 0.05 --kd_weight 1.0 --repeat 3 \
+var_stamp=$(date +%Y%m%d_%H%M)
+
+## Teacher on every NTU-Fi HAR capture, few-shot KD on a fraction of the WiMANS pool, tested on the
+## held-out WiMANS frames. --activities walk_nothing restricts the target test to walking vs WiMANS's
+## idle activity "nothing".
+python scripts/run_few_shot_ntu_to_wimans.py --activities walk_nothing \
+  --wimans_rooms "meeting_room, classroom, empty_room" \
+  --few_shot_ratio 0.1 --kd_weight 0.1 --repeat 3 \
   --teacher_epochs 200 --student_epochs 200 \
-  --train_rooms "Conference, Laboratory, Lounge, Office" \
-  --test_rooms "meeting_room, classroom, empty_room" \
-  --few_shot_ratio 0.1 --kd_weight 0.1 > "./output/few_shot_ntu_wimans/har/run_$(date +%Y%m%d_%H%M).log" 2>&1
+  > "./output/few_shot_ntu_wimans/har/run_walk_nothing_${var_stamp}.log" 2>&1
+
+## Same protocol on the union of both vocabularies: the teacher sees NTU-Fi HAR's 6 activities, the
+## target test spans all 9 WiMANS activities.
+python scripts/run_few_shot_ntu_to_wimans.py --activities union \
+  --wimans_rooms "meeting_room, classroom, empty_room" \
+  --few_shot_ratio 0.1 --kd_weight 0.1 --repeat 3 \
+  --teacher_epochs 200 --student_epochs 200 \
+  > "./output/few_shot_ntu_wimans/har/run_union_${var_stamp}.log" 2>&1
 
 end=$(date +%s)
 

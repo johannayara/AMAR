@@ -9,6 +9,7 @@ import os
 import re
 import time
 import warnings
+from pathlib import Path
 
 LOCATION_SIZE = 5
 ACTIVITY_SIZE = 9

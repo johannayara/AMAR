@@ -334,21 +334,31 @@ python scripts/run_ntu_to_wimans.py --repeat 3 --epochs 60
 **The label space is the constraint.** NTU-Fi HAR labels six activities (`box`, `circle`, `clean`,
 `fall`, `run`, `walk`) and WiMANS labels nine (`nothing`, `walk`, `rotation`, `jump`, `wave`,
 `lie_down`, `pick_up`, `sit_down`, `stand_up`), so "train on one, test on the other" is only defined on
-the activities both of them have. Both sides are restricted to that intersection and mapped onto one
-class ordering plus the AMAR_WO_RVQ no-object class, which is what makes this a real classification
-protocol rather than a label-space mismatch. `src/data/activity_transfer.py` prints the resolved
-intersection; the default is the identity intersection of the two vocabularies and it can be widened
-with an explicit mapping:
+the activities both of them have. Both sides are mapped onto one class ordering plus the AMAR_WO_RVQ
+no-object class, which is what makes this a real classification protocol rather than a label-space
+mismatch. `--activities` picks that ordering:
+
+| `--activities` | classes | WiMANS frames kept | what it measures |
+|---|---|---|---|
+| `shared` (default) | `walk` (1) | walk only | the strict intersection: walk against no-object, no negatives, every query frame positive — the teacher is already perfect, so the run only shows whether fine-tuning degrades it |
+| `walk_nothing` | `nothing`, `walk` (2) | walk + nothing | walking against WiMANS's idle frames. NTU-Fi HAR has no `nothing` capture, so the class is target-only and only the few-shot student can learn it |
+| `union` | all 14 | every activity | the 6 NTU-Fi HAR classes plus the 9 WiMANS activities (`walk` shared). The teacher is trained on 6 and tested on all 9, the 8 target-only activities included |
 
 ```bash
-python scripts/run_ntu_to_wimans.py --activity_map 'walk=walk,fall=lie_down'
+python scripts/run_ntu_to_wimans.py --activities union --repeat 3 --epochs 60
+python scripts/run_few_shot_ntu_to_wimans.py --activities walk_nothing --few_shot_ratio 0.1 --kd_weight 0.1
+python scripts/run_ntu_to_wimans.py --activity_map 'walk=walk,fall=lie_down'   # explicit override
 ```
 
-If the shared vocabulary holds a single activity, the task degenerates to that activity against
-no-object and every query frame is positive — the runner says so in its log. **Every report therefore
-carries the "always name the most frequent NTU-Fi HAR activity" baseline.** On a single-activity
-vocabulary that baseline is already perfect, so a run that only matches it has learned nothing; the
-comparison to make is model vs baseline, not model alone.
+The default is `shared`, the identity intersection of the two vocabularies; an explicit `--activity_map`
+overrides `--activities` (its targets must be WiMANS activities, so it cannot express the union
+vocabulary).
+
+Under `shared` the task degenerates to a single activity against no-object and every query frame is
+positive — the runner says so in its log. **Every report therefore carries the "always name the most
+frequent NTU-Fi HAR activity" baseline.** On a single-activity vocabulary that baseline is already
+perfect, so a run that only matches it has learned nothing; the comparison to make is model vs
+baseline, not model alone.
 
 Two more alignment choices, both configurable:
 
@@ -373,7 +383,7 @@ Reports go to `output/ntu_to_wimans/*.json|txt` and figures to `visualizations/n
 `scripts/run_few_shot_ntu_to_wimans.py` turns the run above into a few-shot distillation, mirroring
 the other few-shot harnesses (`run_few_shot.py`, `run_few_shot_hwild_to_wimans.py`):
 
-- **Teacher** — `AMAR_WO_RVQ` trained on every NTU-Fi HAR capture of the shared activities, then
+- **Teacher** — `AMAR_WO_RVQ` trained on every NTU-Fi HAR capture of the `--activities` vocabulary, then
   frozen. This is exactly the model `run_ntu_to_wimans.py` reports.
 - **Student** — `AMAR_WO_RVQ` warm-started from the teacher and fine-tuned on `--few_shot_ratio` of the
   WiMANS pool with `HungarianMatchingLoss + kd_weight * SetDistillationLoss` against the frozen
@@ -381,15 +391,28 @@ the other few-shot harnesses (`run_few_shot.py`, `run_few_shot_hwild_to_wimans.p
 - **Test** — the WiMANS query frames, held out of both the support set and the student's validation
   slice. Teacher and majority-activity baseline are reported next to the student.
 
+`--activities` (see section 7) decides what the WiMANS test set holds, so the same script covers both
+protocols: the walk-only transfer, and the full-vocabulary one where the NTU-Fi HAR teacher meets all
+nine WiMANS activities.
+
 ```bash
-python scripts/run_few_shot_ntu_to_wimans.py --few_shot_ratio 0.05 --kd_weight 1.0
-python scripts/run_few_shot_ntu_to_wimans.py --few_shot_ratio 0.05 --kd_weight 0    # ablation
+# teacher on NTU-Fi HAR -> few-shot KD on WiMANS, target test = walking vs nothing
+python scripts/run_few_shot_ntu_to_wimans.py --activities walk_nothing --few_shot_ratio 0.1 --kd_weight 0.1
+
+# same protocol over the union of both vocabularies (14 classes)
+python scripts/run_few_shot_ntu_to_wimans.py --activities union --few_shot_ratio 0.1 --kd_weight 0.1
+python scripts/run_few_shot_ntu_to_wimans.py --activities union --few_shot_ratio 0.1 --kd_weight 0    # ablation
 ```
+
+`scripts/ntu_wimans.sh` runs both of those on SLURM. The runner also takes the loader flags of
+`run_ntu_to_wimans.py` (`--ntu_root`, `--ntu_splits`, `--features`, `--wimans_rooms`, `--wimans_users`,
+`--band`, `--length`, `--standardize`, `--max_ntu_files`, `--max_wimans_samples`).
 
 **The two protocols are scored on the same frames.** Both runners build the task through
 `src.data.activity_transfer.prepare_transfer_task`, which splits the WiMANS pool with one fixed seed
 (39) and the same `--few_shot_ratio`; the pure-split runner is evaluated on the query split rather
-than the whole pool, so its numbers sit directly beside the few-shot student's. Reports go to
+than the whole pool, so its numbers sit directly beside the few-shot student's. Pass both runners the
+same `--activities`: the pool, and therefore the query frames, depend on the vocabulary. Reports go to
 `output/few_shot_ntu_to_wimans/*.json|txt` and figures to
 `visualizations/few_shot_ntu_to_wimans/`.
 
