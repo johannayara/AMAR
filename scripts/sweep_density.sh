@@ -98,6 +98,7 @@ run_cell() {
         --model density_map --task location --env "$env" \
         --repeat "$REPEAT" --epochs "$EPOCHS" \
         --hp density.count_rule="$rule" \
+        --hp density.staged_count=true \
         --hp density.empty_threshold="$empty_thr" \
         --hp density.eval_threshold="$eval_thr" \
         --hp path.save_dir="$out" \

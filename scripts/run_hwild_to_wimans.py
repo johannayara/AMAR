@@ -21,7 +21,7 @@ from configs.preset import preset
 from src.data.hwild import room_names as hwild_room_names, load_hwild_room, HWILD_ROOMS
 from src.data.unified_rooms import WIMANS_ROOMS, load_wimans_room_targets, normalize_xy_meters
 from src.models.room_localization import run_localization_cross_domain, format_localization_result
-from src.utils import save_run_outputs, build_run_stem, join_envs, run_timestamp
+from src.utils import save_run_outputs, build_run_stem, join_envs, run_timestamp, reserve_viz_dir
 
 #
 ##
@@ -174,7 +174,7 @@ def run():
     var_bounds = {var_room: var_rect for var_room in list(train_sets_by_room) + list(test_sets_by_room)}
     #
     ## --------------------------------------- run the model ----------------------------------------
-    var_save_path = f"./visualizations/hwild_to_wimans/{'_'.join(var_train_rooms)}"
+    var_save_path = reserve_viz_dir(path=f"./visualizations/hwild_to_wimans/{'_'.join(var_train_rooms)}")
     os.makedirs(var_save_path, exist_ok=True)
     var_results = run_localization_cross_domain(train_sets_by_room, test_sets_by_room,
                                                 var_repeat=var_args.repeat, save_path=var_save_path,

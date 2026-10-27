@@ -312,6 +312,87 @@ Reports go to `output/few_shot_hwild_to_wimans/*.json|txt`; curves to
 error), RMSE and median error in meters — with the standard error over repeats for the student and the
 teacher, and as single values for the constant baseline.
 
+### 7. NTU-Fi HAR → WiMANS activity transfer (pure split)
+
+`scripts/run_ntu_to_wimans.py` trains `AMAR_WO_RVQ` on NTU-Fi HAR and tests it on the WiMANS activity
+task with no WiMANS training at all. NTU-Fi HAR comes from the [SenseFi
+benchmark](https://github.com/xyanchen/WiFi-CSI-Sensing-Benchmark) and is expected under
+`dataset/ntu_har/` in that repo's layout:
+
+```bash
+git clone --depth 1 https://github.com/xyanchen/WiFi-CSI-Sensing-Benchmark /tmp/sensefi
+# place the processed NTU-Fi_HAR data as:
+#   dataset/ntu_har/train_amp/<class>/<class><i>.mat     936 captures
+#   dataset/ntu_har/test_amp/<class>/<class><i>.mat      264 captures
+python scripts/run_ntu_to_wimans.py --repeat 3 --epochs 60
+```
+
+`src/data/ntu_har.py` reproduces the benchmark's own preprocessing exactly (`CSIamp` under the key
+`CSIamp`, standardised with the dataset's global mean/std, packets decimated `2000 → 500` with
+`x[:, ::4]`), so windows match what SenseFi's models see.
+
+**The label space is the constraint.** NTU-Fi HAR labels six activities (`box`, `circle`, `clean`,
+`fall`, `run`, `walk`) and WiMANS labels nine (`nothing`, `walk`, `rotation`, `jump`, `wave`,
+`lie_down`, `pick_up`, `sit_down`, `stand_up`), so "train on one, test on the other" is only defined on
+the activities both of them have. Both sides are restricted to that intersection and mapped onto one
+class ordering plus the AMAR_WO_RVQ no-object class, which is what makes this a real classification
+protocol rather than a label-space mismatch. `src/data/activity_transfer.py` prints the resolved
+intersection; the default is the identity intersection of the two vocabularies and it can be widened
+with an explicit mapping:
+
+```bash
+python scripts/run_ntu_to_wimans.py --activity_map 'walk=walk,fall=lie_down'
+```
+
+If the shared vocabulary holds a single activity, the task degenerates to that activity against
+no-object and every query frame is positive — the runner says so in its log. **Every report therefore
+carries the "always name the most frequent NTU-Fi HAR activity" baseline.** On a single-activity
+vocabulary that baseline is already perfect, so a run that only matches it has learned nothing; the
+comparison to make is model vs baseline, not model alone.
+
+Two more alignment choices, both configurable:
+
+- **Features.** NTU-Fi HAR has 3 antennas × 114 subcarriers and WiMANS 3 TX × 3 RX × 30, so one model
+  cannot consume both as they are. `--features 270` (default) keeps WiMANS's native flattening, the
+  representation the repo's own WiMANS runs use, and resamples the NTU-Fi HAR subcarrier axis
+  `114 → 90` to match. `--features 90` instead averages the WiMANS TX antennas, the convention
+  `src/data/unified_rooms.py` uses to match H-WILD.
+- **Gain.** `--standardize window` (default) z-scores every CSI window, removing the per-device
+  gain/AGC scale that differs between the two datasets (same alignment as
+  `run_hwild_to_wimans.py`); WiMANS statistics are taken over the real packets only, excluding the
+  leading zero padding. `--standardize none` feeds raw amplitude.
+
+WiMANS frames are kept when *every* occupant performs a shared activity; `--wimans_users 1` (default)
+restricts them to single-occupant frames, matching NTU-Fi HAR's single-person captures, and
+`--wimans_users 1,2,3` also tests set-size generalisation through the same set-prediction head.
+
+Reports go to `output/ntu_to_wimans/*.json|txt` and figures to `visualizations/ntu_to_wimans/`.
+
+### 8. NTU-Fi HAR → WiMANS few-shot knowledge distillation
+
+`scripts/run_few_shot_ntu_to_wimans.py` turns the run above into a few-shot distillation, mirroring
+the other few-shot harnesses (`run_few_shot.py`, `run_few_shot_hwild_to_wimans.py`):
+
+- **Teacher** — `AMAR_WO_RVQ` trained on every NTU-Fi HAR capture of the shared activities, then
+  frozen. This is exactly the model `run_ntu_to_wimans.py` reports.
+- **Student** — `AMAR_WO_RVQ` warm-started from the teacher and fine-tuned on `--few_shot_ratio` of the
+  WiMANS pool with `HungarianMatchingLoss + kd_weight * SetDistillationLoss` against the frozen
+  teacher. `--kd_weight 0` is the supervised-only ablation.
+- **Test** — the WiMANS query frames, held out of both the support set and the student's validation
+  slice. Teacher and majority-activity baseline are reported next to the student.
+
+```bash
+python scripts/run_few_shot_ntu_to_wimans.py --few_shot_ratio 0.05 --kd_weight 1.0
+python scripts/run_few_shot_ntu_to_wimans.py --few_shot_ratio 0.05 --kd_weight 0    # ablation
+```
+
+**The two protocols are scored on the same frames.** Both runners build the task through
+`src.data.activity_transfer.prepare_transfer_task`, which splits the WiMANS pool with one fixed seed
+(39) and the same `--few_shot_ratio`; the pure-split runner is evaluated on the query split rather
+than the whole pool, so its numbers sit directly beside the few-shot student's. Reports go to
+`output/few_shot_ntu_to_wimans/*.json|txt` and figures to
+`visualizations/few_shot_ntu_to_wimans/`.
+
 ## Available Models
 
 | Model | Type | Description | Reference |

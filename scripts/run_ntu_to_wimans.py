@@ -43,7 +43,7 @@ from configs.preset import preset
 from src.data.activity_transfer import (majority_activity, majority_query_metrics,
                                         parse_activity_map, prepare_transfer_task)
 from src.models import run_cross_domain
-from src.utils import save_run_outputs, build_run_stem, join_envs, run_timestamp
+from src.utils import save_run_outputs, build_run_stem, join_envs, run_timestamp, reserve_viz_dir
 
 #
 ##
@@ -151,35 +151,16 @@ def apply_hp_overrides(var_overrides):
     return var_applied
 
 
-def reserve_viz_dir():
-    """
-    [description]
-    : claim a fresh figure directory for one run. The numeric leaf is claimed with mkdir() rather than
-      an is_dir() check followed by a create, because the check-then-create races between concurrent
-      runs; mkdir() is atomic at the OS level. Same pattern as run_cross_domain.reserve_viz_dir.
-    : return: str path of the created directory
-    """
-    #
-    ##
-    var_root = Path("./visualizations/ntu_to_wimans/ntu_har")
-    var_root.mkdir(parents=True, exist_ok=True)
-    var_index = 1
-    while True:
-        var_path = var_root / str(var_index)
-        try:
-            var_path.mkdir()
-            return str(var_path)
-        except FileExistsError:
-            var_index += 1
 
 
 def scalar_metrics(var_metrics):
     """
     [description]
     : the scalar entries of a calculate_scores() dict (it also carries per-person arrays, which do not
-      belong in a JSON report).
+      belong in a JSON report), namespaced "majority_" so they sit beside the model's own
+      "avg_<metric>" entries in the same result dict instead of overwriting them.
     """
-    return {f"avg_{var_name}": float(var_metrics[var_name]) for var_name in VAR_METRIC_NAMES}
+    return {f"majority_{var_name}": float(var_metrics[var_name]) for var_name in VAR_METRIC_NAMES}
 
 
 def format_result(var_result, var_shared, var_majority_name):
@@ -195,14 +176,15 @@ def format_result(var_result, var_shared, var_majority_name):
                  "=" * 80]
     for var_room, var_env_result in var_result["per_env"].items():
         var_lines.append(f"\n{var_room}:")
+        ## run_cross_domain aggregates the perfect-prediction rate under "PPP", while the baseline
+        ## goes through calculate_scores(), which names it "perfect_prediction_percentage"
         var_lines.append("  Model     " + " | ".join(
             f"{var_label} {var_env_result[f'avg_{var_name}']:.4f} ± "
             f"{var_env_result.get(f'se_{var_name}', 0.0):.4f} (SE)"
             for var_name, var_label in (("accuracy", "Accuracy"), ("f1_score", "F1"),
-                                        ("perfect_prediction_percentage", "PPP"),
-                                        ("total_error", "Total Error"))))
+                                        ("PPP", "PPP"), ("total_error", "Total Error"))))
         var_lines.append("  Majority  " + " | ".join(
-            f"{var_label} {var_env_result[f'avg_{var_name}']:.4f}"
+            f"{var_label} {var_env_result[f'majority_{var_name}']:.4f}"
             for var_name, var_label in (("accuracy", "Accuracy"), ("f1_score", "F1"),
                                         ("perfect_prediction_percentage", "PPP"),
                                         ("total_error", "Total Error"))))
@@ -262,7 +244,7 @@ def run():
         for var_room, var_query_classes in var_task["query_class_indices_by_env"].items()}
     #
     ## --------------------------------------- run the model ----------------------------------------
-    var_save_path = reserve_viz_dir()
+    var_save_path = reserve_viz_dir(path="ntu_to_wimans/ntu_har")
     var_per_env = run_cross_domain(var_task["train_sets_by_env"], var_task["query_by_env"],
                                    var_repeat=var_args.repeat, var_task="activity",
                                    var_env=["ntu_har"], save_path=var_save_path)

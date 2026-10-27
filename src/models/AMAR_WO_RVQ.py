@@ -1294,10 +1294,13 @@ def run_few_shot_cross_domain(train_sets_by_env, test_sets_by_env, var_support_i
         #
         ## ------------------------------------------- student -------------------------------------
         student = _build_amar_wo_rvq(var_x_shape, device)
-        if var_init_from_teacher:
-            student.load_state_dict(teacher.state_dict())
         if var_compile:
             student.feature_extractor = torch.compile(student.feature_extractor)
+        if var_init_from_teacher:
+            ## compile before the warm start: a compiled feature extractor names its weights
+            ## "feature_extractor._orig_mod.*", so the teacher's state dict only matches a student
+            ## that is compiled too.
+            student.load_state_dict(teacher.state_dict())
         student_optimizer = torch.optim.Adam(student.parameters(), lr=preset["nn"]["lr"],
                                              weight_decay=preset["nn"]["weight_decay"])
         student_loss = HungarianMatchingLoss(
@@ -1362,7 +1365,7 @@ def run_few_shot_cross_domain(train_sets_by_env, test_sets_by_env, var_support_i
                   f"{var_t_metrics['f1_score']:.4f} (acc {var_t_metrics['accuracy']:.4f})")
         wandb.finish()
         del teacher_optimizer, teacher_loss, student_optimizer, student_loss, kd_loss
-        del teacher_best_weight, student_best_weight, var_student_preds, var_teacher_preds
+        del teacher_best_weight, student_best_weight
         torch.cuda.empty_cache()
         gc.collect()
         del student, teacher

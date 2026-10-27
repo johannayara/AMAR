@@ -367,6 +367,31 @@ def join_envs(var_envs):
     return "+".join(str(var_env) for var_env in var_envs)
 
 
+def format_decision(var_metrics):
+    """
+    [description]
+    : one-line summary of the decision the reported count metrics were produced under: the occupancy
+      threshold, the empty gate, the layout-free peak threshold and the per-person mass. All four are
+      derived (calibrated on the run's validation split, or pinned by preset), so a count metric is not
+      reproducible without them -- and position_error_m in particular can be gamed by a peak set that
+      differs from the counted one, which position_false_positive_rate is the only sign of.
+    : var_metrics: a result dict, per-environment or single-model, with any of avg_threshold /
+      avg_empty_threshold / avg_peak_threshold / avg_per_person_mass
+    : return: str, "" when none of those keys are present
+    """
+    var_specs = (("avg_threshold", "Thr", "%.4f"),
+                 ("avg_empty_threshold", "EmptyThr", "%.4f"),
+                 ("avg_peak_threshold", "peakThr", "%.4f"),
+                 ("avg_per_person_mass", "mass/person", "%.3f"))
+    var_parts = []
+    for var_key, var_label, var_fmt in var_specs:
+        if var_key not in var_metrics:
+            continue
+        var_value = float(var_metrics[var_key])
+        var_parts.append(f"{var_label} " + (var_fmt % var_value if np.isfinite(var_value) else "nan"))
+    return " - ".join(var_parts)
+
+
 def calculate_scores(y_true, y_pred):
     """
     Calculate all performance metrics for the predictions
@@ -1042,3 +1067,30 @@ def select_device():
     if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
         return torch.device("mps")
     return torch.device("cpu")
+
+#
+##
+def reserve_viz_dir(path):
+    """
+    [description]
+    : claim a fresh figure/checkpoint directory for one run and return it as a Path.
+    : The backbone is part of the path, mirroring the per-backbone log dir scripts/test.sh writes to,
+    : so runs that differ only in nn.backbone land in separate trees and their artifacts are
+    : attributable at a glance.
+    : The numeric leaf is claimed with mkdir() rather than an is_dir() check followed by a create.
+    : The old check-then-create raced between concurrent runs (the two SLURM array tasks of
+    : scripts/test.sh start in the same second): both saw the same leaf free, both picked it, and both
+    : wrote their checkpoint and figures into visualizations/density_map/classroom/4. mkdir() is
+    : atomic at the OS level, so exactly one run can win a leaf and the loser moves to the next.
+    : return: Path of the created directory
+    """
+    var_root = Path(f'./visualizations/{path}')
+    var_root.mkdir(parents=True, exist_ok=True)
+    var_index = 1
+    while True:
+        var_path = var_root / str(var_index)
+        try:
+            var_path.mkdir()
+            return var_path
+        except FileExistsError:
+            var_index += 1

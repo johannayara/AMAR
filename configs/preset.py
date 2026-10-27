@@ -211,9 +211,12 @@ preset = {
         ## below "empty_threshold" is predicted empty regardless of its per-location readouts. This
         ## decouples "is the room empty" from "how many locations are occupied" and is what stops a
         ## raised map floor under domain shift from turning every empty frame into a count >= 1.
-        ## "empty_threshold" None => calibrate the gate on the validation split; set False to disable
-        ## the gate entirely (single-threshold behaviour, calibrated on every frame).
-        "staged_count": None,
+        ## "staged_count": True/None => keep the gate and calibrate it on the validation split; only an
+        ## explicit False disables it (single-threshold behaviour, calibrated on every frame).
+        ## Pinned to False because every result committed up to 2026-10-27 was produced with the gate
+        ## off; set it to None (or True) for a gate-on run. Before the fix in resolve_count_decision,
+        ## None was read as falsy and behaved exactly like False.
+        "staged_count": False,
         "empty_threshold": None,# threshold for the stages scenario where we classify some values as empty
     },
 

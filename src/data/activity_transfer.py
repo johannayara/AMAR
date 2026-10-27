@@ -152,8 +152,8 @@ def harmonize_wimans_features(var_amp, var_features, var_length):
     [description]
     : (time, 3 TX, 3 RX, 30 subcarriers) -> (var_length, var_features).
     : var_features: 270 keeps WiMANS's native flattening (3 x 3 x 30), the representation the repo's
-      WiMANS runs of AMAR_WO_RVQ use; 90 averages the 3 TX antennas (3 x 30), the convention
-      src/data/unified_rooms.py uses to match H-WILD.
+      WiMANS runs of AMAR_WO_RVQ use; 90 averages the 3 TX antennas (axis 2 of (time, 3, 3, 30) ->
+      (time, 3, 30)), the exact convention src/data/unified_rooms.py uses to match H-WILD.
     : The time axis keeps the repo's convention: shorter captures are zero-padded at the front, longer
       ones are an error (exactly as load_data_x does).
     : return: (var_length, var_features) float32, plus the number of real packets
@@ -163,7 +163,7 @@ def harmonize_wimans_features(var_amp, var_features, var_length):
     if var_features == 270:
         var_x = var_amp.reshape(var_amp.shape[0], -1)
     elif var_features == 90:
-        var_x = var_amp.mean(axis=1).reshape(var_amp.shape[0], -1)
+        var_x = var_amp.mean(axis=2).reshape(var_amp.shape[0], -1)
     else:
         raise ValueError(f"WiMANS supports var_features 270 (native) or 90 (TX-averaged), "
                          f"got {var_features}")
@@ -207,9 +207,12 @@ def load_wimans_activity(var_activities, var_rooms=None, var_num_users=None, var
         var_pd = load_data_y(preset["path"]["data_y"], [var_room], var_band, var_num_users)
         var_labels, var_class_indices = [], []
         for _, var_row in var_pd.iterrows():
-            ## nan cells (absent users) and non-shared activities are both excluded
-            var_acts = [var_row[var_col] for var_col in var_cols if var_row[var_col] in var_index]
-            if not var_acts:
+            ## every occupant's activity, ignoring the blank cells of absent users
+            var_acts = [var_row[var_col] for var_col in var_cols
+                        if isinstance(var_row[var_col], str) and var_row[var_col].strip()]
+            ## a frame is only usable when *all* of its occupants do a shared activity: keeping it
+            ## while dropping an out-of-vocabulary occupant would silently mislabel the frame
+            if not var_acts or any(var_act not in var_index for var_act in var_acts):
                 continue
             var_labels.append(var_row["label"])
             var_class_indices.append([var_index[var_act] for var_act in var_acts])
@@ -341,7 +344,9 @@ def prepare_transfer_task(var_activity_map=None, var_ntu_root=None, var_ntu_spli
     """
     #
     ##
-    var_map, var_shared = resolve_activity_map(var_activity_map)
+    var_map, var_shared = resolve_activity_map(
+        var_activity_map,
+        var_ntu_classes=ntu_har_class_names(var_ntu_root, var_ntu_splits))
     var_num_classes = len(var_shared) + 1
     var_num_queries = preset["nn"]["num_obj_queries"]
     var_features = var_features or preset.get("ntu_har", {}).get("features", NTU_HAR_FEATURES)

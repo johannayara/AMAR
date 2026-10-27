@@ -38,7 +38,7 @@ from configs.preset import preset
 from src.data.hwild import room_names as hwild_room_names, load_hwild_room, HWILD_ROOMS
 from src.data.unified_rooms import WIMANS_ROOMS, load_wimans_room_targets, normalize_xy_meters
 from src.models.room_localization import run_few_shot_localization, format_few_shot_result
-from src.utils import save_run_outputs, build_run_stem, join_envs, run_timestamp
+from src.utils import save_run_outputs, build_run_stem, join_envs, run_timestamp, reserve_viz_dir
 
 #
 ##
@@ -99,27 +99,7 @@ def standardize_windows(var_x):
     return ((var_x - var_mu) / var_sd).astype(np.float32)
 
 
-def reserve_viz_dir(var_train_rooms):
-    """
-    [description]
-    : claim a fresh figure directory for one run and return it as a str.
-    : The numeric leaf is claimed with mkdir() rather than an is_dir() check followed by a create: the
-      check-then-create races between concurrent runs (e.g. scripts/sweep_few_shot_hwild.sh launches
-      several combos at once), which would otherwise both pick the same leaf and write their figures
-      over each other. mkdir() is atomic at the OS level, so exactly one run wins a leaf. Same pattern
-      as run_main.reserve_viz_dir and run_cross_domain.py.
-    : return: str path of the created directory
-    """
-    var_root = Path(f"./visualizations/few_shot_hwild_to_wimans/{'_'.join(var_train_rooms)}")
-    var_root.mkdir(parents=True, exist_ok=True)
-    var_index = 1
-    while True:
-        var_path = var_root / str(var_index)
-        try:
-            var_path.mkdir()
-            return str(var_path)
-        except FileExistsError:
-            var_index += 1
+
 
 
 def run():
@@ -212,7 +192,7 @@ def run():
             var_sets[var_room] = (var_x, normalize_xy_meters(var_y, var_rect))
     #
     ## --------------------------------------- run the model ----------------------------------------
-    var_save_path = reserve_viz_dir(var_train_rooms)
+    var_save_path = reserve_viz_dir(path=f"few_shot_hwild_to_wimans/{'_'.join(var_train_rooms)}")
     var_results = run_few_shot_localization(
         train_sets_by_room, test_sets_by_room,
         var_few_shot_ratio=var_args.few_shot_ratio, var_kd_weight=var_args.kd_weight,

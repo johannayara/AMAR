@@ -63,6 +63,7 @@ DENSITY_LABELS = {
     "Layout-free Mass MAE": "mass_mae",
     "Position Error (m)": "position_error_m",
     "Position Miss Rate": "position_miss_rate",
+    "Position False Positive Rate": "position_false_positive_rate",
 }
 AVG_KEYS = {
     "accuracy": "exact_count", "count acc": "exact_count",

@@ -162,8 +162,9 @@ def load_ntu_har(var_root=None, var_splits=None, var_classes=None, var_features=
         if var_max_files is not None:
             var_files = var_files[:var_max_files]
         if not var_files:
+            var_split_list = ",".join(var_splits)
             raise FileNotFoundError(f"no .mat files for NTU-Fi HAR class {var_class!r} under "
-                                    f"{os.path.join(var_root, '{' + ','.join(var_splits) + '}', var_class)}")
+                                    f"{var_root} (splits: {var_split_list})")
         var_paths.extend(var_files)
         var_labels.extend([var_idx] * len(var_files))
     #

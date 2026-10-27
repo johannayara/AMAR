@@ -638,14 +638,18 @@ def resolve_count_decision(var_occupancy, var_true_count, var_map_max):
     : the two-stage count decision used for the reported metrics: (empty-gate threshold, occupancy
       threshold). preset["density"]["empty_threshold"] and preset["density"]["eval_threshold"] pin the
       two thresholds; otherwise they are calibrated on the given split with the balanced objective.
-      preset["density"]["staged_count"] disables the gate and falls back to the single occupancy
-      threshold calibrated on every frame. Pinning matters for hyperparameter search: calibrating on
-      the split that is then scored is optimistic and lets a config win by fitting the sweep rather
-      than the model.
+      preset["density"]["staged_count"] enables the gate: only an explicit False disables it (single
+      occupancy threshold, calibrated on every frame); True, None and an absent key all keep the gate
+      and calibrate it. None is the preset's documented "calibrate" value, so it must not be read as
+      falsy -- doing that silently disables the gate AND sets nonempty_only=False, which is the
+      single-threshold behaviour False is meant to select. Pinning matters for hyperparameter search:
+      calibrating on the split that is then scored is optimistic and lets a config win by fitting the
+      sweep rather than the model.
     : return: (empty_threshold or None, count_threshold)
     """
     var_true_count = np.asarray(var_true_count).astype(int)
-    var_staged = preset["density"].get("staged_count", True)
+    ## `is not False`, not truthiness: None means "calibrate the gate", False means "disable it"
+    var_staged = preset["density"].get("staged_count", True) is not False
     #
     var_fixed_count = preset["density"].get("eval_threshold")
     if var_fixed_count is not None:
@@ -737,6 +741,11 @@ def layout_free_counts(var_density, var_peak_threshold, var_mass, var_empty_thre
     : the two layout-free counts of a batch, plus the predicted peak positions.
       - peak count: number of map peaks whose value is strictly above var_peak_threshold.
       - mass count: round(map_sum / per_person_mass).
+      The positions are the SAME peaks the peak count counts (the ones above var_peak_threshold), so a
+      reported count and its reported positions describe one prediction. Scoring the positions on the
+      looser relative-cut peak set instead makes position_error_m non-increasing in the number of
+      peaks -- an extra peak only raises position_false_positive_rate, which the .txt report does not
+      print -- so a diffuse map buys a better position score for free.
       Both counts are forced to 0, and the predicted positions emptied, when the map maximum is below
       var_empty_threshold (the same map-max gate the template rule uses), so the reported count and the
       "where" stay consistent: a frame the gate declares empty has neither a count nor a position.
@@ -750,9 +759,11 @@ def layout_free_counts(var_density, var_peak_threshold, var_mass, var_empty_thre
     var_peak_counts, var_mass_counts, var_positions = [], [], []
     for var_map in np.asarray(var_density):
         var_peaks, var_values = _peaks_with_values(var_map, var_threshold_frac, 0.0)
-        var_peak_counts.append(int(np.sum(var_values > var_peak_threshold)))
+        ## one peak set for both: the peaks whose value clears the calibrated absolute threshold
+        var_keep = var_values > var_peak_threshold
+        var_peak_counts.append(int(var_keep.sum()))
         var_mass_counts.append(int(round(float(np.sum(var_map)) / var_mass)))
-        var_positions.append(normalized_to_meters(var_peaks))
+        var_positions.append(normalized_to_meters(var_peaks[var_keep]))
     var_peak_counts = np.asarray(var_peak_counts, dtype=int)
     var_mass_counts = np.asarray(var_mass_counts, dtype=int)
     if var_empty_threshold is not None:
@@ -1745,7 +1756,13 @@ def run_density_map(data_train_x,
             save_density_checkpoint(model_density, var_x_shape, var_env, save_path)
             print(f"  Figure saved to {var_fig_path}")
         #
-        var_rep_metrics.append(var_count_metrics)
+        ## carry the decision the metrics were produced under, so the report can print it: all four
+        ## values are derived (calibrated or pinned), so a metric is only reproducible with them
+        var_rep_metrics.append({**var_count_metrics,
+                                "threshold": float(var_threshold),
+                                "empty_threshold": var_empty_threshold_log,
+                                "peak_threshold": _finite_or_nan(var_peak_threshold),
+                                "per_person_mass": _finite_or_nan(var_mass)})
         var_valid_rep_metrics.append(var_valid_metrics)
         result_per_class.append(var_count_metrics["per_class_accuracy"])
         #
@@ -1780,6 +1797,11 @@ def run_density_map(data_train_x,
             var_mean, var_se = mean_se([var_rep[var_name] for var_rep in var_valid_rep_metrics])
             results[f"valid_avg_{var_name}"] = var_mean
             results[f"se_valid_{var_name}"] = var_se
+    ## the decision every metric above was produced under (mean over repeats)
+    for var_key in ("threshold", "empty_threshold", "peak_threshold", "per_person_mass"):
+        var_values = np.array([var_rep.get(var_key, np.nan) for var_rep in var_rep_metrics], dtype=float)
+        results[f"avg_{var_key}"] = (float(np.nanmean(var_values))
+                                     if np.isfinite(var_values).any() else float("nan"))
     results["per_class_accuracy"] = {
         var_class: float(np.mean([var_rep[var_class] for var_rep in result_per_class]))
         for var_class in range(var_num_classes)
@@ -1973,7 +1995,9 @@ def run_density_map_cross_domain(train_sets_by_env,
             var_occupancy = var_extra["occupancy"]
             #
             var_rep = {**var_count_metrics, "threshold": var_threshold,
-                       "empty_threshold": var_empty_threshold_log}
+                       "empty_threshold": var_empty_threshold_log,
+                       "peak_threshold": _finite_or_nan(var_peak_threshold),
+                       "per_person_mass": _finite_or_nan(var_mass)}
             env_rep_metrics.setdefault(var_env_name, []).append(var_rep)
             env_last_density[var_env_name] = (true_density, pred_density)
             env_last_occupancy[var_env_name] = (var_occupancy, var_threshold, var_y_env, var_extra)
@@ -2039,6 +2063,11 @@ def run_density_map_cross_domain(train_sets_by_env,
         var_empty_values = np.array([var_rep["empty_threshold"] for var_rep in var_rep_list])
         var_env_result["avg_empty_threshold"] = (float(np.nanmean(var_empty_values))
                                                  if np.isfinite(var_empty_values).any() else float("nan"))
+        ## the layout-free peak rule is derived too: record it next to the metrics it produced
+        for var_key in ("peak_threshold", "per_person_mass"):
+            var_values = np.array([var_rep[var_key] for var_rep in var_rep_list], dtype=float)
+            var_env_result[f"avg_{var_key}"] = (float(np.nanmean(var_values))
+                                                if np.isfinite(var_values).any() else float("nan"))
         var_env_result["per_class_accuracy"] = {
             var_class: float(np.mean([var_rep["per_class_accuracy"][var_class] for var_rep in var_rep_list]))
             for var_class in range(var_num_classes)
@@ -2306,7 +2335,9 @@ def run_density_map_few_shot(data_train_x,
             var_rep = {**var_count_metrics, "threshold": var_threshold,
                        "empty_threshold": var_empty_threshold_log,
                        "teacher_train_time": teacher_time_1 - teacher_time_0,
-                       "student_train_time": student_time_1 - student_time_0}
+                       "student_train_time": student_time_1 - student_time_0,
+                       "peak_threshold": _finite_or_nan(var_peak_threshold),
+                       "per_person_mass": _finite_or_nan(var_mass)}
             env_rep_metrics.setdefault(var_env_name, []).append(var_rep)
             env_last_density[var_env_name] = (true_density, pred_density)
             env_last_occupancy[var_env_name] = (var_occupancy, var_threshold, var_y_env, var_extra)
@@ -2376,6 +2407,11 @@ def run_density_map_few_shot(data_train_x,
         var_empty_values = np.array([var_rep["empty_threshold"] for var_rep in var_rep_list])
         var_env_result["avg_empty_threshold"] = (float(np.nanmean(var_empty_values))
                                                  if np.isfinite(var_empty_values).any() else float("nan"))
+        ## the layout-free peak rule is derived too: record it next to the metrics it produced
+        for var_key in ("peak_threshold", "per_person_mass"):
+            var_values = np.array([var_rep[var_key] for var_rep in var_rep_list], dtype=float)
+            var_env_result[f"avg_{var_key}"] = (float(np.nanmean(var_values))
+                                                if np.isfinite(var_values).any() else float("nan"))
         var_env_result["avg_teacher_train_time"] = float(
             np.mean([var_rep["teacher_train_time"] for var_rep in var_rep_list]))
         var_env_result["avg_student_train_time"] = float(
@@ -3002,6 +3038,11 @@ def run_density_map_coords(train_sets_by_env, test_sets_by_env, var_repeat=3,
         var_empty_values = np.array([var_rep["empty_threshold"] for var_rep in var_rep_list])
         var_env_result["avg_empty_threshold"] = (float(np.nanmean(var_empty_values))
                                                  if np.isfinite(var_empty_values).any() else float("nan"))
+        ## the layout-free peak rule is derived too: record it next to the metrics it produced
+        for var_key in ("peak_threshold", "per_person_mass"):
+            var_values = np.array([var_rep[var_key] for var_rep in var_rep_list], dtype=float)
+            var_env_result[f"avg_{var_key}"] = (float(np.nanmean(var_values))
+                                                if np.isfinite(var_values).any() else float("nan"))
         var_env_result["per_class_accuracy"] = {
             var_class: float(np.mean([var_rep["per_class_accuracy"][var_class] for var_rep in var_rep_list]))
             for var_class in range(var_num_classes)}

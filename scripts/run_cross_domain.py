@@ -185,10 +185,17 @@ def format_result(var_model, var_task, result):
                                  f"± {env_results['se_position_error_m']:.4f} (SE)")
                     lines.append(f"  Position Miss Rate: {env_results['avg_position_miss_rate']:.4f} "
                                  f"± {env_results['se_position_miss_rate']:.4f} (SE)")
+                    if 'avg_position_false_positive_rate' in env_results:
+                        lines.append(f"  Position False Positive Rate: "
+                                     f"{env_results['avg_position_false_positive_rate']:.4f} "
+                                     f"± {env_results['se_position_false_positive_rate']:.4f} (SE)")
                 per_class = env_results.get('per_class_accuracy', {})
                 if per_class:
                     lines.append("  Per-count Accuracy: "
                                  + ", ".join(f"{k}:{v:.3f}" for k, v in per_class.items()))
+                var_decision = format_decision(env_results)
+                if var_decision:
+                    lines.append(f"  Decision: {var_decision}")
             else:
                 for avg_key, se_key, label in metric_specs:
                     if avg_key in env_results:

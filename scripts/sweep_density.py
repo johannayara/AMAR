@@ -130,6 +130,9 @@ def run_trial(var_args, var_stage, var_trial_idx, var_config):
     os.makedirs(var_trial_dir, exist_ok=True)
     var_hp = dict(var_config)
     var_hp["path.save_dir"] = var_trial_dir
+    ## the gate is one of the things this sweep tunes, so pin it on: the preset ships
+    ## density.staged_count=False, which would silently skip the gate and the empty_threshold knob
+    var_hp["density.staged_count"] = True
     if not var_args.calibrated_threshold:
         var_hp["density.eval_threshold"] = 0.5
     #
