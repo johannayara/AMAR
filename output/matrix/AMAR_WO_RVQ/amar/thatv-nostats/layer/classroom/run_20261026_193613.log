@@ -1,0 +1,742 @@
+wandb: Using wandb-core as the SDK backend. Please refer to https://wandb.me/wandb-core for more information.
+wandb: Tracking run with wandb version 0.18.3
+wandb: W&B syncing is set to `offline` in this directory.  
+wandb: Run `wandb online` or set WANDB_MODE=online to enable cloud syncing.
+/cluster/raid/home/jajo/AMAR/src/utils.py:237: UserWarning: No samples with 2 people in this batch — error_per_person[1] = NaN
+  warnings.warn(f"No samples with {count_index} people in this batch — error_per_person[{count_index-1}] = NaN")
+wandb: - 0.000 MB of 0.000 MB uploadedwandb:                                                                                
+wandb: 
+wandb: Run history:
+wandb:                                           accuracy_train ▂▁▂▃▃▄▃▅▆▇▆▇▇▇▇▇▇▇▇█▇▇▇████▇█▇█████▇████
+wandb:                                           accuracy_valid ▃▁▁▃▄█▅▅▇▇▇▇▆▅▆▇▅▇▇█▆▆▇▇▇█▇▇▇▇██████████
+wandb:                                                    epoch ▁▁▁▁▂▂▂▂▃▃▃▃▃▃▃▄▄▄▄▄▅▅▅▅▅▅▆▆▆▆▆▆▆▇▇▇▇▇▇█
+wandb:                                                 f1_score ▁▂▁▂▅█▇███▇▇▇▇▇▇▇██▇█▇██▇▇▇█████████████
+wandb:                                            learning_rate ████████▇▇▇▇▆▆▆▅▅▅▅▅▄▄▃▃▃▃▂▂▂▁▁▁▁▁▁▁▁▁▁▁
+wandb:                      perfect_prediction_percentage_train ▂▁▁▂▃▃▃▄▅▅▅▅▅▆▄▆▆▆▆▆▇▇▆▆▆▇▇▇▆▇▇█▇▇▇▇█▆▇▇
+wandb:                      perfect_prediction_percentage_valid ▁▁▁▂▃▂▄▃▄▃▃▃▅▅▄▅▄▆▅▇▇▅▆█▅▇▇▆▆█▇▇▆▇█▅▇▅▆▆
+wandb:                                                precision ▁▁▂▃█▅▆▇▅▅▇▆▆▆▆▆▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇
+wandb:                                                   recall ▂▁▂▆▆███▇▇▇▇█▇▇▇▇▇▇▇▇█▇▇▇▇▇▇▇█▇█▇████▇▇▇
+wandb:                              test_results/TOTAL_ACCURACY ▁
+wandb:                         test_results/TOTAL_TESTSET_ERROR ▁
+wandb: test_results/TOTAL_TESTSET_perfect_prediction_percentage ▁
+wandb:                          test_results/error_per_person_1 ▁
+wandb:                          test_results/error_per_person_2 ▁
+wandb:                          test_results/error_per_person_3 ▁
+wandb:                          test_results/error_per_person_4 ▁
+wandb:                          test_results/error_per_person_5 ▁
+wandb:                                    test_results/f1_score ▁
+wandb:                            test_results/mean_count_error ▁
+wandb:                                   test_results/precision ▁
+wandb:                                      test_results/recall ▁
+wandb:                                      test_results/repeat ▁
+wandb:                                   test_results/test_time ▁
+wandb:                                  test_results/train_time ▁
+wandb:                                        total_error_train ▇█▆▇▆▄▆▅▄▃▃▂▃▂▃▂▂▂▃▂▂▂▂▂▂▂▁▁▂▁▂▁▁▁▁▂▁▁▁▁
+wandb:                                        total_error_valid ▄██▃▅▆▂▁▄▃▂▂▃▃▄▄▂▂▃▃▂▁▂▂▂▂▂▂▂▃▂▂▂▂▂▂▁▁▂▂
+wandb:                                               train_loss █▆▆▆▆▆▅▆▆▅▄▄▃▂▂▃▂▃▃▃▃▂▂▃▂▂▂▂▃▂▂▂▃▂▂▁▂▂▂▂
+wandb:                                               valid_loss ████▆▂▂▃▃▃▃▃▃▂▃▂▃▂▂▃▂▂▂▂▂▂▂▂▁▁▁▁▂▂▁▁▂▂▂▂
+wandb: 
+wandb: Run summary:
+wandb:                                           accuracy_train 0.96875
+wandb:                                           accuracy_valid 0.66318
+wandb:                                                    epoch 69
+wandb:                                                 f1_score 0.58693
+wandb:                                            learning_rate 0.00012
+wandb:                      perfect_prediction_percentage_train 87.5
+wandb:                      perfect_prediction_percentage_valid 19.68085
+wandb:                                                precision 0.68441
+wandb:                                                   recall 0.54007
+wandb:                              test_results/TOTAL_ACCURACY 0.68711
+wandb:                         test_results/TOTAL_TESTSET_ERROR 1.85185
+wandb: test_results/TOTAL_TESTSET_perfect_prediction_percentage 23.80952
+wandb:                          test_results/error_per_person_1 0.80769
+wandb:                          test_results/error_per_person_2 1.17241
+wandb:                          test_results/error_per_person_3 3.09677
+wandb:                          test_results/error_per_person_4 3.23333
+wandb:                          test_results/error_per_person_5 2.7931
+wandb:                                    test_results/f1_score 0.62433
+wandb:                            test_results/mean_count_error 0.92063
+wandb:                                   test_results/precision 0.694
+wandb:                                      test_results/recall 0.59329
+wandb:                                      test_results/repeat 0
+wandb:                                   test_results/test_time 0.40365
+wandb:                                  test_results/train_time 849.2163
+wandb:                                        total_error_train 0.15625
+wandb:                                        total_error_valid 1.92021
+wandb:                                               train_loss 1.66867
+wandb:                                               valid_loss 2.24043
+wandb: 
+wandb: You can sync this run to the cloud by running:
+wandb: wandb sync /cluster/raid/home/jajo/AMAR/wandb/offline-run-20261026_193625-086xrng6
+wandb: Find logs at: ./wandb/offline-run-20261026_193625-086xrng6/logs
+wandb: Tracking run with wandb version 0.18.3
+wandb: W&B syncing is set to `offline` in this directory.  
+wandb: Run `wandb online` or set WANDB_MODE=online to enable cloud syncing.
+/cluster/raid/home/jajo/AMAR/src/utils.py:237: UserWarning: No samples with 2 people in this batch — error_per_person[1] = NaN
+  warnings.warn(f"No samples with {count_index} people in this batch — error_per_person[{count_index-1}] = NaN")
+wandb: - 0.000 MB of 0.000 MB uploadedwandb:                                                                                
+wandb: 
+wandb: Run history:
+wandb:                                           accuracy_train ▁▅▄▅▄▅▅▅▅▅▆▄▆▆▇▅▆▆▆▇▇▇▇▇██▇▇▇▇██████████
+wandb:                                           accuracy_valid ▁▃▅▆▆▇▆▅▆▇▆▇▆▇▇▆▆▇▇█▇▇▇▇▇█▇██▇██████████
+wandb:                                                    epoch ▁▁▁▁▂▂▂▂▂▃▃▃▃▃▄▄▄▄▅▅▅▅▅▅▆▆▆▆▆▆▇▇▇▇▇▇████
+wandb:                                                 f1_score ▁▅▇▇▇▇▇██▇▇▇▇▇▇█▇▇▇▇▇█▇█████████████████
+wandb:                                            learning_rate ████████▇▇▇▇▆▆▆▅▅▅▅▄▄▃▃▃▃▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:                      perfect_prediction_percentage_train ▁▁▃▄▄▃▃▄▆▃▅▅▇▆▆▅▅▅▅▅▆▇▅▆▆▆▇▇▇▇▇▇▇█▇▇█▇▇▇
+wandb:                      perfect_prediction_percentage_valid ▁▃▄▅▄▄▅▅▆▆▆▆▆▅▆▇▅▆▆▆▇▇▇██▇██▇▇▇█▇███████
+wandb:                                                precision ▁▇▇▇▇▇▇▆▇█▇██▇█▇▇▇███▇██████████████████
+wandb:                                                   recall ▁▅▇█▇▇▇▇▆▇▆▆▆▇▆▆▆▆▆▇▇███▇█▇█▇▇█▇█▇▇█▇█▇█
+wandb:                              test_results/TOTAL_ACCURACY ▁
+wandb:                         test_results/TOTAL_TESTSET_ERROR ▁
+wandb: test_results/TOTAL_TESTSET_perfect_prediction_percentage ▁
+wandb:                          test_results/error_per_person_1 ▁
+wandb:                          test_results/error_per_person_2 ▁
+wandb:                          test_results/error_per_person_3 ▁
+wandb:                          test_results/error_per_person_4 ▁
+wandb:                          test_results/error_per_person_5 ▁
+wandb:                                    test_results/f1_score ▁
+wandb:                            test_results/mean_count_error ▁
+wandb:                                   test_results/precision ▁
+wandb:                                      test_results/recall ▁
+wandb:                                      test_results/repeat ▁
+wandb:                                   test_results/test_time ▁
+wandb:                                  test_results/train_time ▁
+wandb:                                        total_error_train █▆▃▄▃▃▃▂▂▃▂▂▂▂▂▂▂▂▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:                                        total_error_valid █▄▃▄▃▂▄█▄▃▅▅▂▂▅▄▆▅▃▃▂▁▂▂▂▃▂▂▁▃▂▂▂▂▂▁▁▂▂▁
+wandb:                                               train_loss █▃▃▃▄▄▃▂▃▂▂▂▂▂▂▂▄▂▃▃▂▂▃▂▂▂▂▂▃▁▃▁▂▂▂▁▂▁▂▁
+wandb:                                               valid_loss █▃▂▂▂▂▂▂▂▂▂▂▂▂▂▃▂▂▂▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb: 
+wandb: Run summary:
+wandb:                                           accuracy_train 0.98125
+wandb:                                           accuracy_valid 0.81892
+wandb:                                                    epoch 69
+wandb:                                                 f1_score 0.80656
+wandb:                                            learning_rate 0.00012
+wandb:                      perfect_prediction_percentage_train 90.625
+wandb:                      perfect_prediction_percentage_valid 54.25532
+wandb:                                                precision 0.8335
+wandb:                                                   recall 0.80634
+wandb:                              test_results/TOTAL_ACCURACY 0.79362
+wandb:                         test_results/TOTAL_TESTSET_ERROR 1.13228
+wandb: test_results/TOTAL_TESTSET_perfect_prediction_percentage 53.43915
+wandb:                          test_results/error_per_person_1 0.61538
+wandb:                          test_results/error_per_person_2 0.58621
+wandb:                          test_results/error_per_person_3 1.22581
+wandb:                          test_results/error_per_person_4 4.03333
+wandb:                          test_results/error_per_person_5 0.2069
+wandb:                                    test_results/f1_score 0.77997
+wandb:                            test_results/mean_count_error 0.5291
+wandb:                                   test_results/precision 0.79289
+wandb:                                      test_results/recall 0.78571
+wandb:                                      test_results/repeat 1
+wandb:                                   test_results/test_time 0.417
+wandb:                                  test_results/train_time 848.434
+wandb:                                        total_error_train 0.09375
+wandb:                                        total_error_valid 0.98404
+wandb:                                               train_loss 1.64768
+wandb:                                               valid_loss 1.94628
+wandb: 
+wandb: You can sync this run to the cloud by running:
+wandb: wandb sync /cluster/raid/home/jajo/AMAR/wandb/offline-run-20261026_195037-t9rbhox3
+wandb: Find logs at: ./wandb/offline-run-20261026_195037-t9rbhox3/logs
+wandb: Tracking run with wandb version 0.18.3
+wandb: W&B syncing is set to `offline` in this directory.  
+wandb: Run `wandb online` or set WANDB_MODE=online to enable cloud syncing.
+/cluster/raid/home/jajo/AMAR/src/utils.py:237: UserWarning: No samples with 2 people in this batch — error_per_person[1] = NaN
+  warnings.warn(f"No samples with {count_index} people in this batch — error_per_person[{count_index-1}] = NaN")
+wandb: - 0.000 MB of 0.000 MB uploadedwandb:                                                                                
+wandb: 
+wandb: Run history:
+wandb:                                           accuracy_train ▁▄▅▅▄▆▆▅▆▇▆▆▇▇▇▇▇▇▇▇▇▇▇▇████████████████
+wandb:                                           accuracy_valid ▁▅▅▃▅▃▃▄▇▇▅▅▅▇▆▆▆▆▆▆▅▇█▆▆▆▇▇▇▇▇▇▇▇██████
+wandb:                                                    epoch ▁▁▁▂▂▂▂▂▂▂▃▃▃▃▃▄▄▄▄▄▅▅▅▅▅▅▅▅▆▆▆▆▇▇▇▇▇███
+wandb:                                                 f1_score ▁▅▆▆▆▆▇▅▆▆▇▇▆▆▆▇▇▇▇█▇▇▇█████████████████
+wandb:                                            learning_rate ███████▇▇▇▇▇▇▆▆▆▅▅▅▅▄▄▄▃▃▃▃▂▂▂▂▂▁▁▁▁▁▁▁▁
+wandb:                      perfect_prediction_percentage_train ▁▂▄▂▄▄▅▄▅▄▄▆▆▆▆▆▇▆▇▆▆▇▆▇▇▇█▇▇▇█▇████████
+wandb:                      perfect_prediction_percentage_valid ▁▂▄▄▃▅▄▄▄▅▅▆▆▇▇▆▅▆▆▇▇▇█▇████▇█▇▇███████▇
+wandb:                                                precision ▁▆▅▂▅▃▆▁▅▃▇▇█▇▂▆▅▄▄▂▇▄▅▄▄▄▄▅▆▄▆▆▅▆▇▆▇▇▆▇
+wandb:                                                   recall ▁▅▅▅▅▆▅▅▆▆▆▆▅▆▇▆▇▇▇▇▇▇▇▇████▇█▇█▇██▇▇▇▇▇
+wandb:                              test_results/TOTAL_ACCURACY ▁
+wandb:                         test_results/TOTAL_TESTSET_ERROR ▁
+wandb: test_results/TOTAL_TESTSET_perfect_prediction_percentage ▁
+wandb:                          test_results/error_per_person_1 ▁
+wandb:                          test_results/error_per_person_2 ▁
+wandb:                          test_results/error_per_person_3 ▁
+wandb:                          test_results/error_per_person_4 ▁
+wandb:                          test_results/error_per_person_5 ▁
+wandb:                                    test_results/f1_score ▁
+wandb:                             test_results/layer_0/avg_PPP ▁
+wandb:                        test_results/layer_0/avg_accuracy ▁
+wandb:                     test_results/layer_0/avg_count_error ▁
+wandb:                        test_results/layer_0/avg_f1_score ▁
+wandb:                       test_results/layer_0/avg_precision ▁
+wandb:                          test_results/layer_0/avg_recall ▁
+wandb:                       test_results/layer_0/avg_test_time ▁
+wandb:                     test_results/layer_0/avg_total_error ▁
+wandb:                      test_results/layer_0/avg_train_time ▁
+wandb:                             test_results/layer_1/avg_PPP ▁
+wandb:                        test_results/layer_1/avg_accuracy ▁
+wandb:                     test_results/layer_1/avg_count_error ▁
+wandb:                        test_results/layer_1/avg_f1_score ▁
+wandb:                       test_results/layer_1/avg_precision ▁
+wandb:                          test_results/layer_1/avg_recall ▁
+wandb:                       test_results/layer_1/avg_test_time ▁
+wandb:                     test_results/layer_1/avg_total_error ▁
+wandb:                      test_results/layer_1/avg_train_time ▁
+wandb:                             test_results/layer_2/avg_PPP ▁
+wandb:                        test_results/layer_2/avg_accuracy ▁
+wandb:                     test_results/layer_2/avg_count_error ▁
+wandb:                        test_results/layer_2/avg_f1_score ▁
+wandb:                       test_results/layer_2/avg_precision ▁
+wandb:                          test_results/layer_2/avg_recall ▁
+wandb:                       test_results/layer_2/avg_test_time ▁
+wandb:                     test_results/layer_2/avg_total_error ▁
+wandb:                      test_results/layer_2/avg_train_time ▁
+wandb:                             test_results/layer_3/avg_PPP ▁
+wandb:                        test_results/layer_3/avg_accuracy ▁
+wandb:                     test_results/layer_3/avg_count_error ▁
+wandb:                        test_results/layer_3/avg_f1_score ▁
+wandb:                       test_results/layer_3/avg_precision ▁
+wandb:                          test_results/layer_3/avg_recall ▁
+wandb:                       test_results/layer_3/avg_test_time ▁
+wandb:                     test_results/layer_3/avg_total_error ▁
+wandb:                      test_results/layer_3/avg_train_time ▁
+wandb:                             test_results/layer_4/avg_PPP ▁
+wandb:                        test_results/layer_4/avg_accuracy ▁
+wandb:                     test_results/layer_4/avg_count_error ▁
+wandb:                        test_results/layer_4/avg_f1_score ▁
+wandb:                       test_results/layer_4/avg_precision ▁
+wandb:                          test_results/layer_4/avg_recall ▁
+wandb:                       test_results/layer_4/avg_test_time ▁
+wandb:                     test_results/layer_4/avg_total_error ▁
+wandb:                      test_results/layer_4/avg_train_time ▁
+wandb:                             test_results/layer_5/avg_PPP ▁
+wandb:                        test_results/layer_5/avg_accuracy ▁
+wandb:                     test_results/layer_5/avg_count_error ▁
+wandb:                        test_results/layer_5/avg_f1_score ▁
+wandb:                       test_results/layer_5/avg_precision ▁
+wandb:                          test_results/layer_5/avg_recall ▁
+wandb:                       test_results/layer_5/avg_test_time ▁
+wandb:                     test_results/layer_5/avg_total_error ▁
+wandb:                      test_results/layer_5/avg_train_time ▁
+wandb:                            test_results/mean_count_error ▁
+wandb:                                   test_results/precision ▁
+wandb:                                      test_results/recall ▁
+wandb:                                      test_results/repeat ▁
+wandb:                                   test_results/test_time ▁
+wandb:                                  test_results/train_time ▁
+wandb:                                        total_error_train █▅▅▃▃▃▃▃▃▂▂▂▂▃▂▂▂▂▂▂▂▂▂▂▂▁▁▁▁▂▁▂▁▁▁▁▁▁▁▁
+wandb:                                        total_error_valid ▄█▂▂▃▂▄▃▅▄▂▁▁▂▂▂▃▂▂▂▁▂▃▃▂▂▂▂▂▂▂▂▂▂▁▂▁▁▁▁
+wandb:                                               train_loss █▄▂▄▃▃▃▃▄▂▃▃▂▃▂▃▂▂▃▂▂▂▂▃▂▂▂▂▂▂▂▃▁▂▂▂▂▁▂▁
+wandb:                                               valid_loss █▇█▇▇█▇▇▇▅▆▅▄▄▄▃▃▄▄▃▃▄▂▄▂▁▁▂▁▁▂▂▁▂▂▁▂▂▂▃
+wandb: 
+wandb: Run summary:
+wandb:                                           accuracy_train 0.99375
+wandb:                                           accuracy_valid 0.68728
+wandb:                                                    epoch 69
+wandb:                                                 f1_score 0.62747
+wandb:                                            learning_rate 0.00012
+wandb:                      perfect_prediction_percentage_train 96.875
+wandb:                      perfect_prediction_percentage_valid 40.95745
+wandb:                                                precision 0.67774
+wandb:                                                   recall 0.61421
+wandb:                              test_results/TOTAL_ACCURACY 0.67124
+wandb:                         test_results/TOTAL_TESTSET_ERROR 1.99471
+wandb: test_results/TOTAL_TESTSET_perfect_prediction_percentage 43.38624
+wandb:                          test_results/error_per_person_1 0.26923
+wandb:                          test_results/error_per_person_2 0.75862
+wandb:                          test_results/error_per_person_3 2.45161
+wandb:                          test_results/error_per_person_4 5.4
+wandb:                          test_results/error_per_person_5 3.55172
+wandb:                                    test_results/f1_score 0.60839
+wandb:                             test_results/layer_0/avg_PPP 34.0388
+wandb:                        test_results/layer_0/avg_accuracy 0.61555
+wandb:                     test_results/layer_0/avg_count_error 1.51499
+wandb:                        test_results/layer_0/avg_f1_score 0.5515
+wandb:                       test_results/layer_0/avg_precision 0.52334
+wandb:                          test_results/layer_0/avg_recall 0.61425
+wandb:                       test_results/layer_0/avg_test_time 0.44489
+wandb:                     test_results/layer_0/avg_total_error 2.64021
+wandb:                      test_results/layer_0/avg_train_time 847.62808
+wandb:                             test_results/layer_1/avg_PPP 37.91887
+wandb:                        test_results/layer_1/avg_accuracy 0.66017
+wandb:                     test_results/layer_1/avg_count_error 1.19577
+wandb:                        test_results/layer_1/avg_f1_score 0.60003
+wandb:                       test_results/layer_1/avg_precision 0.6126
+wandb:                          test_results/layer_1/avg_recall 0.62233
+wandb:                       test_results/layer_1/avg_test_time 0.44489
+wandb:                     test_results/layer_1/avg_total_error 2.17284
+wandb:                      test_results/layer_1/avg_train_time 847.62808
+wandb:                             test_results/layer_2/avg_PPP 38.97707
+wandb:                        test_results/layer_2/avg_accuracy 0.67909
+wandb:                     test_results/layer_2/avg_count_error 1.05644
+wandb:                        test_results/layer_2/avg_f1_score 0.62257
+wandb:                       test_results/layer_2/avg_precision 0.64832
+wandb:                          test_results/layer_2/avg_recall 0.63167
+wandb:                       test_results/layer_2/avg_test_time 0.44489
+wandb:                     test_results/layer_2/avg_total_error 1.98765
+wandb:                      test_results/layer_2/avg_train_time 847.62808
+wandb:                             test_results/layer_3/avg_PPP 38.97707
+wandb:                        test_results/layer_3/avg_accuracy 0.69699
+wandb:                     test_results/layer_3/avg_count_error 0.93474
+wandb:                        test_results/layer_3/avg_f1_score 0.64508
+wandb:                       test_results/layer_3/avg_precision 0.67788
+wandb:                          test_results/layer_3/avg_recall 0.64424
+wandb:                       test_results/layer_3/avg_test_time 0.44489
+wandb:                     test_results/layer_3/avg_total_error 1.82716
+wandb:                      test_results/layer_3/avg_train_time 847.62808
+wandb:                             test_results/layer_4/avg_PPP 40.21164
+wandb:                        test_results/layer_4/avg_accuracy 0.70873
+wandb:                     test_results/layer_4/avg_count_error 0.84832
+wandb:                        test_results/layer_4/avg_f1_score 0.66057
+wandb:                       test_results/layer_4/avg_precision 0.69729
+wandb:                          test_results/layer_4/avg_recall 0.65625
+wandb:                       test_results/layer_4/avg_test_time 0.44489
+wandb:                     test_results/layer_4/avg_total_error 1.73016
+wandb:                      test_results/layer_4/avg_train_time 847.62808
+wandb:                             test_results/layer_5/avg_PPP 40.21164
+wandb:                        test_results/layer_5/avg_accuracy 0.71732
+wandb:                     test_results/layer_5/avg_count_error 0.79541
+wandb:                        test_results/layer_5/avg_f1_score 0.67089
+wandb:                       test_results/layer_5/avg_precision 0.70991
+wandb:                          test_results/layer_5/avg_recall 0.66189
+wandb:                       test_results/layer_5/avg_test_time 0.44489
+wandb:                     test_results/layer_5/avg_total_error 1.65961
+wandb:                      test_results/layer_5/avg_train_time 847.62808
+wandb:                            test_results/mean_count_error 0.93651
+wandb:                                   test_results/precision 0.64284
+wandb:                                      test_results/recall 0.60666
+wandb:                                      test_results/repeat 2
+wandb:                                   test_results/test_time 0.51401
+wandb:                                  test_results/train_time 845.23392
+wandb:                                        total_error_train 0.03125
+wandb:                                        total_error_valid 1.83511
+wandb:                                               train_loss 1.64855
+wandb:                                               valid_loss 2.13599
+wandb: 
+wandb: You can sync this run to the cloud by running:
+wandb: wandb sync /cluster/raid/home/jajo/AMAR/wandb/offline-run-20261026_200447-dp3cc73l
+wandb: Find logs at: ./wandb/offline-run-20261026_200447-dp3cc73l/logs
+Using device: cuda
+AMAR_WO_RVQ(
+  5.13 M, 99.935% Params, 790.2 MMac, 100.000% MACs, 
+  (feature_extractor): THATV(
+    4.93 M, 96.017% Params, 749.0 MMac, 94.786% MACs, 
+    (layer_left_pooling): AvgPool1d(0, 0.000% Params, 810.0 KMac, 0.103% MACs, kernel_size=(20,), stride=(20,), padding=(0,))
+    (layer_left_gaussian): Gaussian_Position(0, 0.000% Params, 0.0 Mac, 0.000% MACs, )
+    (layer_left_encoder): ModuleList(
+      (0-3): 4 x Encoder(
+        952.29 k, 18.535% Params, 155.3 MMac, 19.653% MACs, 
+        (layer_norm_0): LayerNorm(540, 0.011% Params, 40.5 KMac, 0.005% MACs, (270,), eps=1e-06, elementwise_affine=True)
+        (layer_attention): MultiheadAttention(
+          292.68 k, 5.697% Params, 56.32 MMac, 7.127% MACs, 
+          (out_proj): NonDynamicallyQuantizableLinear(0, 0.000% Params, 0.0 Mac, 0.000% MACs, in_features=270, out_features=270, bias=True)
+        )
+        (layer_dropout_0): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+        (layer_norm_1): LayerNorm(540, 0.011% Params, 40.5 KMac, 0.005% MACs, (270,), eps=1e-06, elementwise_affine=True)
+        (layer_cnn): ModuleList(
+          (0): Sequential(
+            73.71 k, 1.435% Params, 11.1 MMac, 1.404% MACs, 
+            (0): SamePadConv1d(
+              73.17 k, 1.424% Params, 10.98 MMac, 1.389% MACs, 
+              (layer_conv): Conv1d(73.17 k, 1.424% Params, 10.98 MMac, 1.389% MACs, 270, 270, kernel_size=(1,), stride=(1,))
+            )
+            (1): GroupNorm(540, 0.011% Params, 81.0 KMac, 0.010% MACs, 1, 270, eps=1e-05, affine=True)
+            (2): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+            (3): LeakyReLU(0, 0.000% Params, 40.5 KMac, 0.005% MACs, negative_slope=0.01)
+          )
+          (1): Sequential(
+            219.51 k, 4.272% Params, 32.97 MMac, 4.172% MACs, 
+            (0): SamePadConv1d(
+              218.97 k, 4.262% Params, 32.85 MMac, 4.157% MACs, 
+              (layer_conv): Conv1d(218.97 k, 4.262% Params, 32.85 MMac, 4.157% MACs, 270, 270, kernel_size=(3,), stride=(1,))
+            )
+            (1): GroupNorm(540, 0.011% Params, 81.0 KMac, 0.010% MACs, 1, 270, eps=1e-05, affine=True)
+            (2): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+            (3): LeakyReLU(0, 0.000% Params, 40.5 KMac, 0.005% MACs, negative_slope=0.01)
+          )
+          (2): Sequential(
+            365.31 k, 7.110% Params, 54.84 MMac, 6.940% MACs, 
+            (0): SamePadConv1d(
+              364.77 k, 7.100% Params, 54.72 MMac, 6.924% MACs, 
+              (layer_conv): Conv1d(364.77 k, 7.100% Params, 54.72 MMac, 6.924% MACs, 270, 270, kernel_size=(5,), stride=(1,))
+            )
+            (1): GroupNorm(540, 0.011% Params, 81.0 KMac, 0.010% MACs, 1, 270, eps=1e-05, affine=True)
+            (2): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+            (3): LeakyReLU(0, 0.000% Params, 40.5 KMac, 0.005% MACs, negative_slope=0.01)
+          )
+        )
+        (layer_dropout_1): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+      )
+    )
+    (layer_left_norm): LayerNorm(540, 0.011% Params, 40.5 KMac, 0.005% MACs, (270,), eps=1e-06, elementwise_affine=True)
+    (layer_left_cnn_0): SamePadConv1d(
+      276.61 k, 5.384% Params, 41.49 MMac, 5.251% MACs, 
+      (layer_conv): Conv1d(276.61 k, 5.384% Params, 41.49 MMac, 5.251% MACs, 270, 128, kernel_size=(8,), stride=(1,))
+    )
+    (layer_left_cnn_1): SamePadConv1d(
+      553.09 k, 10.765% Params, 82.96 MMac, 10.499% MACs, 
+      (layer_conv): Conv1d(553.09 k, 10.765% Params, 82.96 MMac, 10.499% MACs, 270, 128, kernel_size=(16,), stride=(1,))
+    )
+    (layer_left_dropout): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.5, inplace=False)
+    (layer_right_pooling): AvgPool1d(0, 0.000% Params, 0.0 Mac, 0.000% MACs, kernel_size=(20,), stride=(20,), padding=(0,))
+    (layer_right_encoder): ModuleList(
+      (0): Encoder(
+        227.55 k, 4.429% Params, 0.0 Mac, 0.000% MACs, 
+        (layer_norm_0): LayerNorm(300, 0.006% Params, 0.0 Mac, 0.000% MACs, (150,), eps=1e-06, elementwise_affine=True)
+        (layer_attention): MultiheadAttention(
+          90.6 k, 1.763% Params, 0.0 Mac, 0.000% MACs, 
+          (out_proj): NonDynamicallyQuantizableLinear(0, 0.000% Params, 0.0 Mac, 0.000% MACs, in_features=150, out_features=150, bias=True)
+        )
+        (layer_dropout_0): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+        (layer_norm_1): LayerNorm(300, 0.006% Params, 0.0 Mac, 0.000% MACs, (150,), eps=1e-06, elementwise_affine=True)
+        (layer_cnn): ModuleList(
+          (0): Sequential(
+            22.95 k, 0.447% Params, 0.0 Mac, 0.000% MACs, 
+            (0): SamePadConv1d(
+              22.65 k, 0.441% Params, 0.0 Mac, 0.000% MACs, 
+              (layer_conv): Conv1d(22.65 k, 0.441% Params, 0.0 Mac, 0.000% MACs, 150, 150, kernel_size=(1,), stride=(1,))
+            )
+            (1): GroupNorm(300, 0.006% Params, 0.0 Mac, 0.000% MACs, 1, 150, eps=1e-05, affine=True)
+            (2): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+            (3): LeakyReLU(0, 0.000% Params, 0.0 Mac, 0.000% MACs, negative_slope=0.01)
+          )
+          (1): Sequential(
+            45.45 k, 0.885% Params, 0.0 Mac, 0.000% MACs, 
+            (0): SamePadConv1d(
+              45.15 k, 0.879% Params, 0.0 Mac, 0.000% MACs, 
+              (layer_conv): Conv1d(45.15 k, 0.879% Params, 0.0 Mac, 0.000% MACs, 150, 150, kernel_size=(2,), stride=(1,))
+            )
+            (1): GroupNorm(300, 0.006% Params, 0.0 Mac, 0.000% MACs, 1, 150, eps=1e-05, affine=True)
+            (2): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+            (3): LeakyReLU(0, 0.000% Params, 0.0 Mac, 0.000% MACs, negative_slope=0.01)
+          )
+          (2): Sequential(
+            67.95 k, 1.323% Params, 0.0 Mac, 0.000% MACs, 
+            (0): SamePadConv1d(
+              67.65 k, 1.317% Params, 0.0 Mac, 0.000% MACs, 
+              (layer_conv): Conv1d(67.65 k, 1.317% Params, 0.0 Mac, 0.000% MACs, 150, 150, kernel_size=(3,), stride=(1,))
+            )
+            (1): GroupNorm(300, 0.006% Params, 0.0 Mac, 0.000% MACs, 1, 150, eps=1e-05, affine=True)
+            (2): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+            (3): LeakyReLU(0, 0.000% Params, 0.0 Mac, 0.000% MACs, negative_slope=0.01)
+          )
+        )
+        (layer_dropout_1): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+      )
+    )
+    (layer_right_norm): LayerNorm(300, 0.006% Params, 0.0 Mac, 0.000% MACs, (150,), eps=1e-06, elementwise_affine=True)
+    (layer_right_cnn_0): Conv1d(4.82 k, 0.094% Params, 0.0 Mac, 0.000% MACs, 150, 16, kernel_size=(2,), stride=(1,))
+    (layer_right_cnn_1): Conv1d(9.62 k, 0.187% Params, 0.0 Mac, 0.000% MACs, 150, 16, kernel_size=(4,), stride=(1,))
+    (layer_right_dropout): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.5, inplace=False)
+    (layer_leakyrelu): LeakyReLU(0, 0.000% Params, 38.4 KMac, 0.005% MACs, negative_slope=0.01)
+    (layer_token_proj): Linear(16.45 k, 0.320% Params, 2.46 MMac, 0.311% MACs, in_features=256, out_features=64, bias=True)
+    (layer_pool_score): Linear(65, 0.001% Params, 0.0 Mac, 0.000% MACs, in_features=64, out_features=1, bias=True)
+    (layer_pool_proj): Linear(16.45 k, 0.320% Params, 0.0 Mac, 0.000% MACs, in_features=256, out_features=64, bias=True)
+    (layer_output): Linear(18.5 k, 0.360% Params, 0.0 Mac, 0.000% MACs, in_features=288, out_features=64, bias=True)
+  )
+  (encoder): Transformer_Encoder(
+    100.99 k, 1.966% Params, 26.94 MMac, 3.410% MACs, 
+    (pos_encoder): FixedPositionalEncoding(0, 0.000% Params, 0.0 Mac, 0.000% MACs, )
+    (layer_embedding_encoder): ModuleList(
+      (0-3): 4 x Encoder(
+        25.22 k, 0.491% Params, 6.73 MMac, 0.852% MACs, 
+        (layer_norm_0): LayerNorm(128, 0.002% Params, 9.6 KMac, 0.001% MACs, (64,), eps=1e-06, elementwise_affine=True)
+        (layer_attention): MultiheadAttention(
+          16.64 k, 0.324% Params, 5.48 MMac, 0.693% MACs, 
+          (out_proj): NonDynamicallyQuantizableLinear(0, 0.000% Params, 0.0 Mac, 0.000% MACs, in_features=64, out_features=64, bias=True)
+        )
+        (layer_dropout_0): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.2, inplace=False)
+        (layer_norm_1): LayerNorm(128, 0.002% Params, 9.6 KMac, 0.001% MACs, (64,), eps=1e-06, elementwise_affine=True)
+        (ffn): Sequential(
+          8.32 k, 0.162% Params, 1.24 MMac, 0.157% MACs, 
+          (0): Linear(4.16 k, 0.081% Params, 614.46 KMac, 0.078% MACs, in_features=64, out_features=64, bias=True)
+          (1): ReLU(0, 0.000% Params, 9.6 KMac, 0.001% MACs, )
+          (2): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.2, inplace=False)
+          (3): Linear(4.16 k, 0.081% Params, 614.46 KMac, 0.078% MACs, in_features=64, out_features=64, bias=True)
+        )
+        (layer_dropout_1): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.2, inplace=False)
+      )
+    )
+    (layer_embedding_norm): LayerNorm(128, 0.002% Params, 9.6 KMac, 0.001% MACs, (64,), eps=1e-06, elementwise_affine=True)
+  )
+  (decoder): TransformerDecoder(
+    100.29 k, 1.952% Params, 14.26 MMac, 1.805% MACs, 
+    (decoder_layers): ModuleList(
+      (0-5): 6 x TransformerDecoderLayer(
+        99.78 k, 1.942% Params, 14.24 MMac, 1.802% MACs, 
+        (self_attn): MultiheadAttention(
+          16.64 k, 0.324% Params, 1.08 MMac, 0.137% MACs, 
+          (out_proj): NonDynamicallyQuantizableLinear(0, 0.000% Params, 0.0 Mac, 0.000% MACs, in_features=64, out_features=64, bias=True)
+        )
+        (dropout1): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+        (norm1): LayerNorm(128, 0.002% Params, 3.84 KMac, 0.000% MACs, (64,), eps=1e-05, elementwise_affine=True)
+        (cross_attn): MultiheadAttention(
+          16.64 k, 0.324% Params, 9.18 MMac, 1.162% MACs, 
+          (out_proj): NonDynamicallyQuantizableLinear(0, 0.000% Params, 0.0 Mac, 0.000% MACs, in_features=64, out_features=64, bias=True)
+        )
+        (dropout2): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+        (norm2): LayerNorm(128, 0.002% Params, 3.84 KMac, 0.000% MACs, (64,), eps=1e-05, elementwise_affine=True)
+        (ffn): Sequential(
+          66.11 k, 1.287% Params, 3.97 MMac, 0.502% MACs, 
+          (0): Linear(33.28 k, 0.648% Params, 1.97 MMac, 0.249% MACs, in_features=64, out_features=512, bias=True)
+          (1): ReLU(0, 0.000% Params, 30.72 KMac, 0.004% MACs, )
+          (2): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+          (3): Linear(32.83 k, 0.639% Params, 1.97 MMac, 0.249% MACs, in_features=512, out_features=64, bias=True)
+        )
+        (dropout3): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+        (norm3): LayerNorm(128, 0.002% Params, 3.84 KMac, 0.000% MACs, (64,), eps=1e-05, elementwise_affine=True)
+      )
+    )
+    (norm): LayerNorm(128, 0.002% Params, 0.0 Mac, 0.000% MACs, (64,), eps=1e-05, elementwise_affine=True)
+    (class_embed): Linear(390, 0.008% Params, 23.08 KMac, 0.003% MACs, in_features=64, out_features=6, bias=True)
+    (memory_pos_encoding): FixedPositionalEncoding(0, 0.000% Params, 0.0 Mac, 0.000% MACs, )
+  )
+)
+Parameters: 5137781 - FLOPs: 1580406576.0
+Repeat 0
+--- Epoch 0/70 ---
+  Time: 12.981820s
+  Loss Train: 2.518733 | Loss valid: 2.584423
+  Total Error Train: 2.656250 | Total Error valid: 2.781915
+  Perfect Prediction % Train: 9.375000 | Perfect Prediction % valid: 3.191489
+  Accuracy Train: 0.554692 | Accuracy valid: 0.483874
+  Precision: 0.023684 | Recall: 0.019780 | F1 Score: 0.021557
+------------------------------
+--- Epoch 10/70 ---
+  Time: 12.128674s
+  Loss Train: 2.217268 | Loss valid: 2.309150
+  Total Error Train: 2.187500 | Total Error valid: 2.882979
+  Perfect Prediction % Train: 25.000000 | Perfect Prediction % valid: 7.446809
+  Accuracy Train: 0.644729 | Accuracy valid: 0.559137
+  Precision: 0.457332 | Recall: 0.678461 | F1 Score: 0.541076
+------------------------------
+--- Epoch 20/70 ---
+  Time: 12.289703s
+  Loss Train: 1.878380 | Loss valid: 2.303583
+  Total Error Train: 0.875000 | Total Error valid: 3.132979
+  Perfect Prediction % Train: 46.875000 | Perfect Prediction % valid: 14.893617
+  Accuracy Train: 0.825000 | Accuracy valid: 0.567016
+  Precision: 0.524321 | Recall: 0.585962 | F1 Score: 0.510731
+------------------------------
+--- Epoch 30/70 ---
+  Time: 12.039397s
+  Loss Train: 1.731144 | Loss valid: 2.305651
+  Total Error Train: 0.281250 | Total Error valid: 2.287234
+  Perfect Prediction % Train: 75.000000 | Perfect Prediction % valid: 13.297872
+  Accuracy Train: 0.943750 | Accuracy valid: 0.619169
+  Precision: 0.643181 | Recall: 0.479850 | F1 Score: 0.521275
+------------------------------
+--- Epoch 40/70 ---
+  Time: 12.009437s
+  Loss Train: 1.719602 | Loss valid: 2.301393
+  Total Error Train: 0.250000 | Total Error valid: 2.159574
+  Perfect Prediction % Train: 78.125000 | Perfect Prediction % valid: 15.425532
+  Accuracy Train: 0.950000 | Accuracy valid: 0.630299
+  Precision: 0.663290 | Recall: 0.497694 | F1 Score: 0.528625
+------------------------------
+--- Epoch 50/70 ---
+  Time: 11.965663s
+  Loss Train: 1.761269 | Loss valid: 2.214389
+  Total Error Train: 0.187500 | Total Error valid: 2.042553
+  Perfect Prediction % Train: 81.250000 | Perfect Prediction % valid: 26.063830
+  Accuracy Train: 0.963068 | Accuracy valid: 0.657806
+  Precision: 0.662397 | Recall: 0.576245 | F1 Score: 0.594817
+------------------------------
+--- Epoch 60/70 ---
+  Time: 12.240263s
+  Loss Train: 1.694926 | Loss valid: 2.227521
+  Total Error Train: 0.156250 | Total Error valid: 1.898936
+  Perfect Prediction % Train: 87.500000 | Perfect Prediction % valid: 22.340426
+  Accuracy Train: 0.968750 | Accuracy valid: 0.671336
+  Precision: 0.674025 | Recall: 0.571647 | F1 Score: 0.604492
+------------------------------
+Epoch that the model was saved 43
+- Total Error 1.851852 - Perfect Prediction Percentage 23.809524
+Repeat 1
+--- Epoch 0/70 ---
+  Time: 11.996972s
+  Loss Train: 2.516048 | Loss valid: 2.590765
+  Total Error Train: 3.468750 | Total Error valid: 2.744681
+  Perfect Prediction % Train: 9.375000 | Perfect Prediction % valid: 3.191489
+  Accuracy Train: 0.455905 | Accuracy valid: 0.485833
+  Precision: 0.042222 | Recall: 0.014600 | F1 Score: 0.021193
+------------------------------
+--- Epoch 10/70 ---
+  Time: 12.225956s
+  Loss Train: 1.866482 | Loss valid: 2.004474
+  Total Error Train: 1.000000 | Total Error valid: 1.148936
+  Perfect Prediction % Train: 34.375000 | Perfect Prediction % valid: 37.765957
+  Accuracy Train: 0.800000 | Accuracy valid: 0.782355
+  Precision: 0.748848 | Recall: 0.832589 | F1 Score: 0.782061
+------------------------------
+--- Epoch 20/70 ---
+  Time: 12.270918s
+  Loss Train: 1.775833 | Loss valid: 2.010239
+  Total Error Train: 0.468750 | Total Error valid: 1.377660
+  Perfect Prediction % Train: 71.875000 | Perfect Prediction % valid: 38.297872
+  Accuracy Train: 0.906250 | Accuracy valid: 0.749819
+  Precision: 0.752959 | Recall: 0.750424 | F1 Score: 0.736188
+------------------------------
+--- Epoch 30/70 ---
+  Time: 12.487838s
+  Loss Train: 1.789574 | Loss valid: 2.065598
+  Total Error Train: 0.562500 | Total Error valid: 1.617021
+  Perfect Prediction % Train: 62.500000 | Perfect Prediction % valid: 38.297872
+  Accuracy Train: 0.888258 | Accuracy valid: 0.726573
+  Precision: 0.743817 | Recall: 0.709880 | F1 Score: 0.697738
+------------------------------
+--- Epoch 40/70 ---
+  Time: 12.014749s
+  Loss Train: 1.729910 | Loss valid: 1.968750
+  Total Error Train: 0.343750 | Total Error valid: 1.196809
+  Perfect Prediction % Train: 75.000000 | Perfect Prediction % valid: 56.382979
+  Accuracy Train: 0.931250 | Accuracy valid: 0.794474
+  Precision: 0.806519 | Recall: 0.805260 | F1 Score: 0.784234
+------------------------------
+--- Epoch 50/70 ---
+  Time: 12.099191s
+  Loss Train: 1.730544 | Loss valid: 1.955799
+  Total Error Train: 0.093750 | Total Error valid: 1.005319
+  Perfect Prediction % Train: 90.625000 | Perfect Prediction % valid: 55.851064
+  Accuracy Train: 0.981250 | Accuracy valid: 0.813724
+  Precision: 0.840272 | Recall: 0.785404 | F1 Score: 0.798338
+------------------------------
+--- Epoch 60/70 ---
+  Time: 12.210061s
+  Loss Train: 1.702816 | Loss valid: 1.971588
+  Total Error Train: 0.156250 | Total Error valid: 1.117021
+  Perfect Prediction % Train: 90.625000 | Perfect Prediction % valid: 54.787234
+  Accuracy Train: 0.968750 | Accuracy valid: 0.802048
+  Precision: 0.828477 | Recall: 0.785080 | F1 Score: 0.787117
+------------------------------
+Epoch that the model was saved 39
+- Total Error 1.132275 - Perfect Prediction Percentage 53.439153
+Repeat 2
+--- Epoch 0/70 ---
+  Time: 11.958478s
+  Loss Train: 2.529782 | Loss valid: 2.560201
+  Total Error Train: 2.531250 | Total Error valid: 2.574468
+  Perfect Prediction % Train: 9.375000 | Perfect Prediction % valid: 3.191489
+  Accuracy Train: 0.545886 | Accuracy valid: 0.509740
+  Precision: 0.205742 | Recall: 0.066491 | F1 Score: 0.099531
+------------------------------
+--- Epoch 10/70 ---
+  Time: 11.969259s
+  Loss Train: 1.813930 | Loss valid: 2.263661
+  Total Error Train: 0.812500 | Total Error valid: 2.042553
+  Perfect Prediction % Train: 46.875000 | Perfect Prediction % valid: 25.531915
+  Accuracy Train: 0.837500 | Accuracy valid: 0.626510
+  Precision: 0.660613 | Recall: 0.492849 | F1 Score: 0.525698
+------------------------------
+--- Epoch 20/70 ---
+  Time: 11.962898s
+  Loss Train: 1.775987 | Loss valid: 2.243299
+  Total Error Train: 0.437500 | Total Error valid: 2.085106
+  Perfect Prediction % Train: 68.750000 | Perfect Prediction % valid: 26.595745
+  Accuracy Train: 0.912500 | Accuracy valid: 0.626437
+  Precision: 0.691878 | Recall: 0.473784 | F1 Score: 0.514724
+------------------------------
+--- Epoch 30/70 ---
+  Time: 11.924845s
+  Loss Train: 1.764270 | Loss valid: 2.168697
+  Total Error Train: 0.437500 | Total Error valid: 2.170213
+  Perfect Prediction % Train: 75.000000 | Perfect Prediction % valid: 35.106383
+  Accuracy Train: 0.912500 | Accuracy valid: 0.640529
+  Precision: 0.584626 | Recall: 0.622221 | F1 Score: 0.588406
+------------------------------
+--- Epoch 40/70 ---
+  Time: 12.268362s
+  Loss Train: 1.707056 | Loss valid: 2.135761
+  Total Error Train: 0.156250 | Total Error valid: 2.313830
+  Perfect Prediction % Train: 90.625000 | Perfect Prediction % valid: 43.085106
+  Accuracy Train: 0.968750 | Accuracy valid: 0.638162
+  Precision: 0.576170 | Recall: 0.620944 | F1 Score: 0.582961
+------------------------------
+--- Epoch 50/70 ---
+  Time: 12.213341s
+  Loss Train: 1.759094 | Loss valid: 2.099269
+  Total Error Train: 0.187500 | Total Error valid: 2.000000
+  Perfect Prediction % Train: 87.500000 | Perfect Prediction % valid: 43.085106
+  Accuracy Train: 0.962500 | Accuracy valid: 0.676980
+  Precision: 0.648812 | Recall: 0.659350 | F1 Score: 0.631554
+------------------------------
+--- Epoch 60/70 ---
+  Time: 12.147307s
+  Loss Train: 1.683024 | Loss valid: 2.114536
+  Total Error Train: 0.093750 | Total Error valid: 1.909574
+  Perfect Prediction % Train: 93.750000 | Perfect Prediction % valid: 43.617021
+  Accuracy Train: 0.981250 | Accuracy valid: 0.686371
+  Precision: 0.681641 | Recall: 0.641420 | F1 Score: 0.636698
+------------------------------
+Epoch that the model was saved 57
+- Total Error 1.994709 - Perfect Prediction Percentage 43.386243
+
+Visualizations saved at visualizations/AMAR_WO_RVQ/thatv-nostats/classroom/3
+
+Detailed Performance Analysis:
+Mean Error: 0.3989 ± 0.4991
+
+Class-wise Mean Absolute Error:
+Class a: 0.7090
+Class b: 0.3333
+Class c: 0.3016
+Class d: 0.3862
+Class e: 0.2646
+
+Perfect Predictions: 43.39%
+Results saved to: output/single/AMAR_WO_RVQ_location_env-classroom_nall_r3_e70_20261026_201926.json
+Report saved to:  output/single/AMAR_WO_RVQ_location_env-classroom_nall_r3_e70_20261026_201926.txt
+================================================================================
+EXPERIMENT RESULTS - Model: AMAR_WO_RVQ, Task: location
+================================================================================
+LAYERED MODEL RESULTS:
+
+LAYER_0:
+  Avg Precision: 0.5233 ± 0.0888 (SE)
+  Avg Recall: 0.6143 ± 0.0775 (SE)
+  Avg Perfect Prediction %: 34.0388 ± 9.7434 (SE)
+  Avg F1 Score: 0.5515 ± 0.0829 (SE)
+  Avg Accuracy: 0.6155 ± 0.0598 (SE)
+  Avg Total Error: 2.6402 ± 0.5431 (SE)
+
+LAYER_1:
+  Avg Precision: 0.6126 ± 0.0651 (SE)
+  Avg Recall: 0.6223 ± 0.0722 (SE)
+  Avg Perfect Prediction %: 37.9189 ± 9.0842 (SE)
+  Avg F1 Score: 0.6000 ± 0.0728 (SE)
+  Avg Accuracy: 0.6602 ± 0.0517 (SE)
+  Avg Total Error: 2.1728 ± 0.4371 (SE)
+
+LAYER_2:
+  Avg Precision: 0.6483 ± 0.0610 (SE)
+  Avg Recall: 0.6317 ± 0.0668 (SE)
+  Avg Perfect Prediction %: 38.9771 ± 8.9705 (SE)
+  Avg F1 Score: 0.6226 ± 0.0673 (SE)
+  Avg Accuracy: 0.6791 ± 0.0483 (SE)
+  Avg Total Error: 1.9877 ± 0.3886 (SE)
+
+LAYER_3:
+  Avg Precision: 0.6779 ± 0.0509 (SE)
+  Avg Recall: 0.6442 ± 0.0625 (SE)
+  Avg Perfect Prediction %: 38.9771 ± 9.2723 (SE)
+  Avg F1 Score: 0.6451 ± 0.0593 (SE)
+  Avg Accuracy: 0.6970 ± 0.0418 (SE)
+  Avg Total Error: 1.8272 ± 0.3205 (SE)
+
+LAYER_4:
+  Avg Precision: 0.6973 ± 0.0465 (SE)
+  Avg Recall: 0.6563 ± 0.0632 (SE)
+  Avg Perfect Prediction %: 40.2116 ± 9.1999 (SE)
+  Avg F1 Score: 0.6606 ± 0.0577 (SE)
+  Avg Accuracy: 0.7087 ± 0.0408 (SE)
+  Avg Total Error: 1.7302 ± 0.2956 (SE)
+
+LAYER_5:
+  Avg Precision: 0.7099 ± 0.0440 (SE)
+  Avg Recall: 0.6619 ± 0.0620 (SE)
+  Avg Perfect Prediction %: 40.2116 ± 8.6994 (SE)
+  Avg F1 Score: 0.6709 ± 0.0547 (SE)
+  Avg Accuracy: 0.7173 ± 0.0384 (SE)
+  Avg Total Error: 1.6596 ± 0.2669 (SE)
+Total time: 2587.9123709201813 seconds

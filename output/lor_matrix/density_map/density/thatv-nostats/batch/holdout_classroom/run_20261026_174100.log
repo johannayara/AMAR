@@ -1,0 +1,530 @@
+wandb: Using wandb-core as the SDK backend. Please refer to https://wandb.me/wandb-core for more information.
+wandb: Tracking run with wandb version 0.18.3
+wandb: W&B syncing is set to `offline` in this directory.  
+wandb: Run `wandb online` or set WANDB_MODE=online to enable cloud syncing.
+wandb: - 0.000 MB of 0.000 MB uploadedwandb:                                                                                
+wandb: 
+wandb: Run history:
+wandb:                                             epoch ▁▁▁▁▂▂▂▂▂▂▃▃▃▃▃▄▄▄▄▄▄▅▅▅▅▅▅▆▆▆▆▇▇▇▇▇▇███
+wandb:                                     learning_rate ███████▇▇▇▇▇▆▆▆▅▅▅▅▄▄▄▃▃▃▃▂▂▂▂▁▁▁▁▁▁▁▁▁▁
+wandb:           test_results_per_env/classroom/accuracy ▁
+wandb:  test_results_per_env/classroom/balanced_accuracy ▁
+wandb:                test_results_per_env/classroom/mae ▁
+wandb: test_results_per_env/classroom/occupancy_accuracy ▁
+wandb:       test_results_per_env/classroom/occupancy_f1 ▁
+wandb:                                          train_kd ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:                                        train_loss █▇▆▅▅▄▄▅▅▅▅▄▄▄▄▄▄▄▃▃▃▃▃▃▃▂▃▂▂▂▁▂▁▁▂▁▁▁▁▁
+wandb:                                    valid_accuracy ▅▃▁▄▂▄▃▄▄▄▃▃▄▄▅▄▃▆▃▄▅▆▄▆▆▆▅▆▆▆▇▇▇▇▇▇▇▇▇█
+wandb:                           valid_accuracy_smoothed ▃▃▁▂▁▂▂▂▃▃▂▂▂▂▃▂▂▂▃▂▃▄▄▄▄▅▅▅▅▅▆▆▆▆▇▇▇▇▇█
+wandb:                           valid_balanced_accuracy ▃▃▁▃▃▃▄▄▃▄▃▄▃▅▄▄▃▅▄▅▅▆▅▆▇▆▅▆▆▆▇▇▇▇▇▇▇▇▇█
+wandb:                  valid_balanced_accuracy_smoothed ▂▂▁▁▁▂▂▃▂▃▂▃▃▃▃▃▃▃▄▄▅▅▅▅▅▅▆▆▆▆▇▇▇▇▇▇▇███
+wandb:                                          valid_kd ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:                                        valid_loss █▆▆▄▅▄▄▄▄▄▄▄▄▄▄▄▃▃▃▃▃▃▃▂▂▂▂▂▂▂▁▁▁▁▁▁▁▁▁▁
+wandb:                                         valid_mae █▆███▇▅▅▅▅▆▅▅▄▅▄▅▃▅▃▃▃▄▃▂▃▃▂▂▂▂▂▂▂▂▂▁▁▁▁
+wandb:                                valid_mae_smoothed █▇▇██▇▆▆▆▅▅▅▅▅▅▅▅▄▄▄▃▃▃▃▃▃▂▂▂▂▂▂▂▂▂▁▁▁▁▁
+wandb:                          valid_occupancy_accuracy ▁▂▃▂▃▃▅▄▄▄▄▅▄▅▅▄▅▅▅▆▆▆▆▆▇▆▆▇▇▇▇▇████████
+wandb:                 valid_occupancy_accuracy_smoothed ▁▁▂▂▂▃▃▄▄▄▄▄▄▄▅▅▅▅▅▅▅▅▆▆▆▆▆▆▇▇▇▇▇▇██████
+wandb:                                valid_occupancy_f1 ▃▁▄▃▂▄▅▅▅▅▅▃▅▅▅▅▄▅▅▆▆▆▆▆▆▇▇▇▇▇▇▇▇███████
+wandb:                       valid_occupancy_f1_smoothed ▂▁▂▂▂▃▃▄▄▄▄▃▄▄▄▅▄▄▅▅▅▅▅▆▆▆▆▆▇▇▇▇▇▇▇█████
+wandb:                         valid_occupancy_threshold ▃▄▄▁▇▁▃▃▃▂▂▇▅▂▄▃▇▃▁▄▂▅▇▆▅▇▆▅▇▇██▇▇▆▇▇██▇
+wandb:                valid_occupancy_threshold_smoothed ▁▂▂▁▂▁▂▁▁▁▃▄▂▃▂▃▂▂▄▂▄▅▅▅▆▆▆▇▆▆████▇▇▇███
+wandb: 
+wandb: Run summary:
+wandb:                                             epoch 49
+wandb:                                     learning_rate 0.00012
+wandb:           test_results_per_env/classroom/accuracy 0.17331
+wandb:  test_results_per_env/classroom/balanced_accuracy 0.15685
+wandb:    test_results_per_env/classroom/empty_threshold nan
+wandb:                test_results_per_env/classroom/mae 2.09463
+wandb: test_results_per_env/classroom/occupancy_accuracy 0.45369
+wandb:       test_results_per_env/classroom/occupancy_f1 0.31273
+wandb:                                          train_kd 0
+wandb:                                        train_loss 0.13984
+wandb:                                    valid_accuracy 0.55053
+wandb:                           valid_accuracy_smoothed 0.52657
+wandb:                           valid_balanced_accuracy 0.67374
+wandb:                  valid_balanced_accuracy_smoothed 0.65452
+wandb:                             valid_empty_threshold nan
+wandb:                    valid_empty_threshold_smoothed nan
+wandb:                                          valid_kd 0
+wandb:                                        valid_loss 0.15144
+wandb:                                         valid_mae 0.45479
+wandb:                                valid_mae_smoothed 0.47907
+wandb:                          valid_occupancy_accuracy 0.875
+wandb:                 valid_occupancy_accuracy_smoothed 0.87641
+wandb:                                valid_occupancy_f1 0.8769
+wandb:                       valid_occupancy_f1_smoothed 0.87841
+wandb:                         valid_occupancy_threshold 0.65
+wandb:                valid_occupancy_threshold_smoothed 0.65017
+wandb:                              valid_peak_threshold nan
+wandb:                     valid_peak_threshold_smoothed nan
+wandb: 
+wandb: You can sync this run to the cloud by running:
+wandb: wandb sync /cluster/raid/home/jajo/AMAR/wandb/offline-run-20261026_174128-wo71gi79
+wandb: Find logs at: ./wandb/offline-run-20261026_174128-wo71gi79/logs
+wandb: Tracking run with wandb version 0.18.3
+wandb: W&B syncing is set to `offline` in this directory.  
+wandb: Run `wandb online` or set WANDB_MODE=online to enable cloud syncing.
+wandb: - 0.000 MB of 0.000 MB uploadedwandb:                                                                                
+wandb: 
+wandb: Run history:
+wandb:                                             epoch ▁▁▁▁▂▂▂▂▂▂▃▃▃▃▃▄▄▄▄▄▄▅▅▅▅▅▆▆▆▆▆▆▇▇▇▇▇▇██
+wandb:                                     learning_rate ███████▇▇▇▇▇▇▆▆▆▅▅▅▄▄▄▃▃▃▂▂▂▂▁▁▁▁▁▁▁▁▁▁▁
+wandb:           test_results_per_env/classroom/accuracy ▁
+wandb:  test_results_per_env/classroom/balanced_accuracy ▁
+wandb:                test_results_per_env/classroom/mae ▁
+wandb: test_results_per_env/classroom/occupancy_accuracy ▁
+wandb:       test_results_per_env/classroom/occupancy_f1 ▁
+wandb:                                          train_kd ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:                                        train_loss █▃▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▁▂▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:                                    valid_accuracy ▄▂▁▂▁▁▂▅▂▃▁▄▃▃▂▃▃▂▃▄▃▅▄▄▅▆▆▅▆▅▇▆▆▇▇▇▇▇██
+wandb:                           valid_accuracy_smoothed ▄▃▂▂▁▁▁▂▂▂▂▁▂▂▂▂▂▂▂▂▂▂▃▃▄▅▅▅▅▆▅▆▆▆▇▇▇███
+wandb:                           valid_balanced_accuracy ▃▁▁▂▂▁▂▄▂▃▂▂▄▃▃▃▃▃▃▃▃▄▅▅▅▆▆▆▆▆▆▇▇▇█▇▇▇██
+wandb:                  valid_balanced_accuracy_smoothed ▃▂▁▁▁▁▁▂▂▂▂▁▂▂▂▃▃▂▂▃▃▄▄▄▄▅▆▆▆▆▆▇▇▇▇█████
+wandb:                                          valid_kd ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:                                        valid_loss █▆▅▄▄▄▄▄▄▄▄▃▃▃▄▃▃▃▃▃▂▂▂▂▂▂▂▂▂▂▁▁▁▁▁▁▁▁▁▁
+wandb:                                         valid_mae ▃█▆▅▅▅▆▃▅▄▅█▄▄▄▄▄▄▄▄▄▃▂▂▃▂▂▂▂▂▂▂▂▂▁▁▁▁▁▁
+wandb:                                valid_mae_smoothed ▅▇▇▇▇▇█▆▆▆▇█▇▇▆▆▆▆▆▆▅▄▄▄▄▃▃▃▂▂▂▂▂▁▁▁▁▁▁▁
+wandb:                          valid_occupancy_accuracy ▂▁▃▂▃▄▃▄▄▄▄▂▄▅▄▄▅▅▅▅▆▆▆▆▆▇▆▇▇▇▇▇▇██▇████
+wandb:                 valid_occupancy_accuracy_smoothed ▁▁▁▂▂▃▃▃▃▄▃▃▄▄▄▄▅▅▅▅▅▅▆▆▆▆▆▇▇▇▇▇▇███████
+wandb:                                valid_occupancy_f1 ▃▄▃▄▅▅▅▅▅▄▅▁▆▆▆▆▆▆▆▆▆▆▆▇▆▆▇▇▇▇▇▇███▇████
+wandb:                       valid_occupancy_f1_smoothed ▁▁▂▂▃▃▃▃▃▃▂▃▄▄▄▄▄▅▅▅▅▅▅▆▆▆▆▆▆▆▇▇▇▇██████
+wandb:                         valid_occupancy_threshold ▃▂▄▂▃▃▁▄▂▆▂█▁▂▂▆▂▁▃▂▄▄▅▅▅▆▆▅▅▆▅▅▆▅▆▆▆▆▅▆
+wandb:                valid_occupancy_threshold_smoothed ▂▂▂▂▂▂▁▂▂▄▂▅▃▂▂▂▁▂▂▂▄▄▅▅▅▇▇▇▇▇▇▇▇▇▇████▇
+wandb: 
+wandb: Run summary:
+wandb:                                             epoch 49
+wandb:                                     learning_rate 0.00012
+wandb:           test_results_per_env/classroom/accuracy 0.16693
+wandb:  test_results_per_env/classroom/balanced_accuracy 0.1142
+wandb:    test_results_per_env/classroom/empty_threshold nan
+wandb:                test_results_per_env/classroom/mae 1.98352
+wandb: test_results_per_env/classroom/occupancy_accuracy 0.44806
+wandb:       test_results_per_env/classroom/occupancy_f1 0.3098
+wandb:                                          train_kd 0
+wandb:                                        train_loss 0.13741
+wandb:                                    valid_accuracy 0.53457
+wandb:                           valid_accuracy_smoothed 0.5214
+wandb:                           valid_balanced_accuracy 0.66449
+wandb:                  valid_balanced_accuracy_smoothed 0.6545
+wandb:                             valid_empty_threshold nan
+wandb:                    valid_empty_threshold_smoothed nan
+wandb:                                          valid_kd 0
+wandb:                                        valid_loss 0.15123
+wandb:                                         valid_mae 0.47074
+wandb:                                valid_mae_smoothed 0.48593
+wandb:                          valid_occupancy_accuracy 0.87926
+wandb:                 valid_occupancy_accuracy_smoothed 0.8724
+wandb:                                valid_occupancy_f1 0.88293
+wandb:                       valid_occupancy_f1_smoothed 0.87474
+wandb:                         valid_occupancy_threshold 0.6
+wandb:                valid_occupancy_threshold_smoothed 0.6224
+wandb:                              valid_peak_threshold nan
+wandb:                     valid_peak_threshold_smoothed nan
+wandb: 
+wandb: You can sync this run to the cloud by running:
+wandb: wandb sync /cluster/raid/home/jajo/AMAR/wandb/offline-run-20261026_175258-gjexluqt
+wandb: Find logs at: ./wandb/offline-run-20261026_175258-gjexluqt/logs
+wandb: Tracking run with wandb version 0.18.3
+wandb: W&B syncing is set to `offline` in this directory.  
+wandb: Run `wandb online` or set WANDB_MODE=online to enable cloud syncing.
+wandb: - 0.000 MB of 0.000 MB uploadedwandb:                                                                                
+wandb: 
+wandb: Run history:
+wandb:                                             epoch ▁▁▁▁▂▂▂▂▂▂▃▃▃▃▃▄▄▄▄▄▄▅▅▅▅▅▆▆▆▆▆▇▇▇▇▇▇███
+wandb:                                     learning_rate ███████▇▇▇▇▇▇▆▆▆▅▅▅▅▄▄▄▃▃▃▃▂▂▂▁▁▁▁▁▁▁▁▁▁
+wandb:           test_results_per_env/classroom/accuracy ▁
+wandb:  test_results_per_env/classroom/balanced_accuracy ▁
+wandb:                test_results_per_env/classroom/mae ▁
+wandb: test_results_per_env/classroom/occupancy_accuracy ▁
+wandb:       test_results_per_env/classroom/occupancy_f1 ▁
+wandb:                                          train_kd ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:                                        train_loss █▃▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:                                    valid_accuracy ▃▁▂▂▂▁▂▂▃▄▃▁▃▄▁▁▄▃▃▃▃▄▃▄▄▅▅▄▅▆▆▆▆▆▇▇█▇▇█
+wandb:                           valid_accuracy_smoothed ▂▁▁▁▁▁▁▁▁▂▂▁▂▂▂▂▂▂▂▂▃▂▃▄▄▄▅▅▅▅▆▆▆▇▇█▇███
+wandb:                           valid_balanced_accuracy ▂▂▂▂▃▂▁▂▃▃▂▃▃▂▄▃▃▃▄▃▄▄▅▅▆▅▆▆▆▆▇▇▆▇▇█▇▇██
+wandb:                  valid_balanced_accuracy_smoothed ▁▁▁▁▁▁▁▁▁▂▂▂▂▂▃▂▂▃▃▃▃▃▄▅▅▅▆▆▆▆▆▇▇▇▇█████
+wandb:                                          valid_kd ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:                                        valid_loss █▆▅▄▅▅▄▄▄▄▄▄▃▄▄▄▃▃▃▃▃▂▃▂▂▂▂▂▂▂▁▁▁▁▁▁▁▁▁▁
+wandb:                                         valid_mae █▆▇▆▅█▆▄▅▅▅▅▅▅▄▄▄▅▅▄▄▃▃▂▂▃▂▂▂▂▂▂▂▁▁▁▂▂▁▁
+wandb:                                valid_mae_smoothed █▇▇▇▆▆▇▆▆▅▅▅▅▅▅▅▅▅▅▅▄▄▄▃▃▂▂▂▂▂▂▂▂▁▁▁▁▁▁▁
+wandb:                          valid_occupancy_accuracy ▁▂▃▃▃▄▃▅▅▄▅▅▅▄▄▆▅▅▆▆▆▆▆▇▆▇▇▇██▇█████████
+wandb:                 valid_occupancy_accuracy_smoothed ▁▁▂▂▂▃▃▃▄▄▄▄▄▄▅▅▅▅▅▅▆▆▆▆▆▇▇▇▇▇▇█████████
+wandb:                                valid_occupancy_f1 ▃▁▄▄▃▅▄▅▅▅▅▅▅▅▄▆▅▆▆▆▆▆▆▆▆▇▇▇▇█▇█▇▇██████
+wandb:                       valid_occupancy_f1_smoothed ▂▁▂▂▂▃▃▄▄▄▄▄▄▄▄▄▄▅▅▅▅▆▅▆▆▆▆▆▇▇▇█████████
+wandb:                         valid_occupancy_threshold ▃▄▃▃▆▄▁▃▄▂▄▄▂▂█▃▂▁▃▃▆▃▆▆▆▇▇▆▇▆▅▅▆▅▇▆▇███
+wandb:                valid_occupancy_threshold_smoothed ▁▂▂▁▃▂▁▁▂▁▃▂▂▄▄▃▂▂▂▂▃▄▄▅▅▆▆▆▆▆▅▅▅▆▆▇▇███
+wandb: 
+wandb: Run summary:
+wandb:                                             epoch 49
+wandb:                                     learning_rate 0.00012
+wandb:           test_results_per_env/classroom/accuracy 0.21956
+wandb:  test_results_per_env/classroom/balanced_accuracy 0.27076
+wandb:    test_results_per_env/classroom/empty_threshold nan
+wandb:                test_results_per_env/classroom/mae 2.09942
+wandb: test_results_per_env/classroom/occupancy_accuracy 0.46932
+wandb:       test_results_per_env/classroom/occupancy_f1 0.2455
+wandb:                                          train_kd 0
+wandb:                                        train_loss 0.13954
+wandb:                                    valid_accuracy 0.51862
+wandb:                           valid_accuracy_smoothed 0.5103
+wandb:                           valid_balanced_accuracy 0.65251
+wandb:                  valid_balanced_accuracy_smoothed 0.64342
+wandb:                             valid_empty_threshold nan
+wandb:                    valid_empty_threshold_smoothed nan
+wandb:                                          valid_kd 0
+wandb:                                        valid_loss 0.15124
+wandb:                                         valid_mae 0.5
+wandb:                                valid_mae_smoothed 0.504
+wandb:                          valid_occupancy_accuracy 0.86383
+wandb:                 valid_occupancy_accuracy_smoothed 0.866
+wandb:                                valid_occupancy_f1 0.86251
+wandb:                       valid_occupancy_f1_smoothed 0.86689
+wandb:                         valid_occupancy_threshold 0.67
+wandb:                valid_occupancy_threshold_smoothed 0.64934
+wandb:                              valid_peak_threshold nan
+wandb:                     valid_peak_threshold_smoothed nan
+wandb: 
+wandb: You can sync this run to the cloud by running:
+wandb: wandb sync /cluster/raid/home/jajo/AMAR/wandb/offline-run-20261026_180430-7pwzwxcp
+wandb: Find logs at: ./wandb/offline-run-20261026_180430-7pwzwxcp/logs
+Using device: cuda
+Training rooms: ['empty_room', 'meeting_room'] (3386 train / 376 valid) | Test rooms: ['classroom']
+DensityMapNet(
+  5.11 M, 99.947% Params, 847.98 MMac, 100.000% MACs, 
+  (backbone): THATV(
+    4.96 M, 97.039% Params, 839.29 MMac, 98.976% MACs, 
+    (layer_left_pooling): AvgPool1d(0, 0.000% Params, 810.0 KMac, 0.096% MACs, kernel_size=(20,), stride=(20,), padding=(0,))
+    (layer_left_gaussian): Gaussian_Position(0, 0.000% Params, 0.0 Mac, 0.000% MACs, )
+    (layer_left_encoder): ModuleList(
+      (0-3): 4 x Encoder(
+        952.29 k, 18.623% Params, 155.3 MMac, 18.314% MACs, 
+        (layer_norm_0): LayerNorm(540, 0.011% Params, 40.5 KMac, 0.005% MACs, (270,), eps=1e-06, elementwise_affine=True)
+        (layer_attention): MultiheadAttention(
+          292.68 k, 5.724% Params, 56.32 MMac, 6.641% MACs, 
+          (out_proj): NonDynamicallyQuantizableLinear(0, 0.000% Params, 0.0 Mac, 0.000% MACs, in_features=270, out_features=270, bias=True)
+        )
+        (layer_dropout_0): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+        (layer_norm_1): LayerNorm(540, 0.011% Params, 40.5 KMac, 0.005% MACs, (270,), eps=1e-06, elementwise_affine=True)
+        (layer_cnn): ModuleList(
+          (0): Sequential(
+            73.71 k, 1.441% Params, 11.1 MMac, 1.309% MACs, 
+            (0): SamePadConv1d(
+              73.17 k, 1.431% Params, 10.98 MMac, 1.294% MACs, 
+              (layer_conv): Conv1d(73.17 k, 1.431% Params, 10.98 MMac, 1.294% MACs, 270, 270, kernel_size=(1,), stride=(1,))
+            )
+            (1): BatchNorm1d(540, 0.011% Params, 81.0 KMac, 0.010% MACs, 270, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (2): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+            (3): LeakyReLU(0, 0.000% Params, 40.5 KMac, 0.005% MACs, negative_slope=0.01)
+          )
+          (1): Sequential(
+            219.51 k, 4.293% Params, 32.97 MMac, 3.888% MACs, 
+            (0): SamePadConv1d(
+              218.97 k, 4.282% Params, 32.85 MMac, 3.873% MACs, 
+              (layer_conv): Conv1d(218.97 k, 4.282% Params, 32.85 MMac, 3.873% MACs, 270, 270, kernel_size=(3,), stride=(1,))
+            )
+            (1): BatchNorm1d(540, 0.011% Params, 81.0 KMac, 0.010% MACs, 270, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (2): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+            (3): LeakyReLU(0, 0.000% Params, 40.5 KMac, 0.005% MACs, negative_slope=0.01)
+          )
+          (2): Sequential(
+            365.31 k, 7.144% Params, 54.84 MMac, 6.467% MACs, 
+            (0): SamePadConv1d(
+              364.77 k, 7.133% Params, 54.72 MMac, 6.452% MACs, 
+              (layer_conv): Conv1d(364.77 k, 7.133% Params, 54.72 MMac, 6.452% MACs, 270, 270, kernel_size=(5,), stride=(1,))
+            )
+            (1): BatchNorm1d(540, 0.011% Params, 81.0 KMac, 0.010% MACs, 270, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (2): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+            (3): LeakyReLU(0, 0.000% Params, 40.5 KMac, 0.005% MACs, negative_slope=0.01)
+          )
+        )
+        (layer_dropout_1): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+      )
+    )
+    (layer_left_norm): LayerNorm(540, 0.011% Params, 40.5 KMac, 0.005% MACs, (270,), eps=1e-06, elementwise_affine=True)
+    (layer_left_cnn_0): SamePadConv1d(
+      276.61 k, 5.409% Params, 41.49 MMac, 4.893% MACs, 
+      (layer_conv): Conv1d(276.61 k, 5.409% Params, 41.49 MMac, 4.893% MACs, 270, 128, kernel_size=(8,), stride=(1,))
+    )
+    (layer_left_cnn_1): SamePadConv1d(
+      553.09 k, 10.816% Params, 82.96 MMac, 9.784% MACs, 
+      (layer_conv): Conv1d(553.09 k, 10.816% Params, 82.96 MMac, 9.784% MACs, 270, 128, kernel_size=(16,), stride=(1,))
+    )
+    (layer_left_dropout): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.5, inplace=False)
+    (layer_right_pooling): AvgPool1d(0, 0.000% Params, 810.0 KMac, 0.096% MACs, kernel_size=(20,), stride=(20,), padding=(0,))
+    (layer_right_encoder): ModuleList(
+      (0): Encoder(
+        227.55 k, 4.450% Params, 84.12 MMac, 9.920% MACs, 
+        (layer_norm_0): LayerNorm(300, 0.006% Params, 40.5 KMac, 0.005% MACs, (150,), eps=1e-06, elementwise_affine=True)
+        (layer_attention): MultiheadAttention(
+          90.6 k, 1.772% Params, 47.1 MMac, 5.555% MACs, 
+          (out_proj): NonDynamicallyQuantizableLinear(0, 0.000% Params, 0.0 Mac, 0.000% MACs, in_features=150, out_features=150, bias=True)
+        )
+        (layer_dropout_0): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+        (layer_norm_1): LayerNorm(300, 0.006% Params, 40.5 KMac, 0.005% MACs, (150,), eps=1e-06, elementwise_affine=True)
+        (layer_cnn): ModuleList(
+          (0): Sequential(
+            22.95 k, 0.449% Params, 6.24 MMac, 0.736% MACs, 
+            (0): SamePadConv1d(
+              22.65 k, 0.443% Params, 6.12 MMac, 0.721% MACs, 
+              (layer_conv): Conv1d(22.65 k, 0.443% Params, 6.12 MMac, 0.721% MACs, 150, 150, kernel_size=(1,), stride=(1,))
+            )
+            (1): BatchNorm1d(300, 0.006% Params, 81.0 KMac, 0.010% MACs, 150, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (2): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+            (3): LeakyReLU(0, 0.000% Params, 40.5 KMac, 0.005% MACs, negative_slope=0.01)
+          )
+          (1): Sequential(
+            45.45 k, 0.889% Params, 12.31 MMac, 1.452% MACs, 
+            (0): SamePadConv1d(
+              45.15 k, 0.883% Params, 12.19 MMac, 1.438% MACs, 
+              (layer_conv): Conv1d(45.15 k, 0.883% Params, 12.19 MMac, 1.438% MACs, 150, 150, kernel_size=(2,), stride=(1,))
+            )
+            (1): BatchNorm1d(300, 0.006% Params, 81.0 KMac, 0.010% MACs, 150, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (2): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+            (3): LeakyReLU(0, 0.000% Params, 40.5 KMac, 0.005% MACs, negative_slope=0.01)
+          )
+          (2): Sequential(
+            67.95 k, 1.329% Params, 18.39 MMac, 2.168% MACs, 
+            (0): SamePadConv1d(
+              67.65 k, 1.323% Params, 18.27 MMac, 2.154% MACs, 
+              (layer_conv): Conv1d(67.65 k, 1.323% Params, 18.27 MMac, 2.154% MACs, 150, 150, kernel_size=(3,), stride=(1,))
+            )
+            (1): BatchNorm1d(300, 0.006% Params, 81.0 KMac, 0.010% MACs, 150, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (2): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+            (3): LeakyReLU(0, 0.000% Params, 40.5 KMac, 0.005% MACs, negative_slope=0.01)
+          )
+        )
+        (layer_dropout_1): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.1, inplace=False)
+      )
+    )
+    (layer_right_norm): LayerNorm(300, 0.006% Params, 40.5 KMac, 0.005% MACs, (150,), eps=1e-06, elementwise_affine=True)
+    (layer_right_cnn_0): Conv1d(4.82 k, 0.094% Params, 1.3 MMac, 0.153% MACs, 150, 16, kernel_size=(2,), stride=(1,))
+    (layer_right_cnn_1): Conv1d(9.62 k, 0.188% Params, 2.57 MMac, 0.303% MACs, 150, 16, kernel_size=(4,), stride=(1,))
+    (layer_right_dropout): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.5, inplace=False)
+    (layer_leakyrelu): LeakyReLU(0, 0.000% Params, 46.98 KMac, 0.006% MACs, negative_slope=0.01)
+    (layer_token_proj): Linear(25.7 k, 0.503% Params, 3.84 MMac, 0.453% MACs, in_features=256, out_features=100, bias=True)
+    (layer_pool_score): Linear(101, 0.002% Params, 15.0 KMac, 0.002% MACs, in_features=100, out_features=1, bias=True)
+    (layer_pool_proj): Linear(25.7 k, 0.503% Params, 25.7 KMac, 0.003% MACs, in_features=256, out_features=100, bias=True)
+    (layer_output): Linear(28.9 k, 0.565% Params, 28.9 KMac, 0.003% MACs, in_features=288, out_features=100, bias=True)
+  )
+  (decoder_fc): Sequential(
+    103.42 k, 2.023% Params, 104.45 KMac, 0.012% MACs, 
+    (0): Linear(103.42 k, 2.023% Params, 103.42 KMac, 0.012% MACs, in_features=100, out_features=1024, bias=True)
+    (1): LeakyReLU(0, 0.000% Params, 1.02 KMac, 0.000% MACs, negative_slope=0.01)
+    (2): Dropout(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.3, inplace=False)
+  )
+  (decoder_conv): Sequential(
+    45.27 k, 0.885% Params, 8.58 MMac, 1.012% MACs, 
+    (0): ConvTranspose2d(32.8 k, 0.641% Params, 2.1 MMac, 0.248% MACs, 64, 32, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1))
+    (1): LeakyReLU(0, 0.000% Params, 2.05 KMac, 0.000% MACs, negative_slope=0.01)
+    (2): Dropout2d(0, 0.000% Params, 0.0 Mac, 0.000% MACs, p=0.3, inplace=False)
+    (3): ConvTranspose2d(8.21 k, 0.161% Params, 2.1 MMac, 0.248% MACs, 32, 16, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1))
+    (4): LeakyReLU(0, 0.000% Params, 4.1 KMac, 0.000% MACs, negative_slope=0.01)
+    (5): ConvTranspose2d(4.11 k, 0.080% Params, 4.21 MMac, 0.497% MACs, 16, 16, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1))
+    (6): LeakyReLU(0, 0.000% Params, 16.38 KMac, 0.002% MACs, negative_slope=0.01)
+    (7): Conv2d(145, 0.003% Params, 148.48 KMac, 0.018% MACs, 16, 1, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+  )
+)
+Parameters: 5113488 - FLOPs: 1695956290.0
+Repeat 0
+Epoch 0/50 - 13.234s - Loss 0.345195 - ValidLoss 0.200204 - Valid Acc 0.3883 - Valid Bal 0.4679 - Valid MAE 1.0372 - Thr 0.43 - EmptyThr nan - PeakThr nan
+Epoch 1/50 - 12.212s - Loss 0.174391 - ValidLoss 0.189103 - Valid Acc 0.3218 - Valid Bal 0.4494 - Valid MAE 0.8298 - Thr 0.51 - EmptyThr nan - PeakThr nan
+Epoch 2/50 - 12.847s - Loss 0.169567 - ValidLoss 0.185755 - Valid Acc 0.2207 - Valid Bal 0.3797 - Valid MAE 1.0319 - Thr 0.48 - EmptyThr nan - PeakThr nan
+Epoch 3/50 - 13.159s - Loss 0.163030 - ValidLoss 0.174077 - Valid Acc 0.3830 - Valid Bal 0.4548 - Valid MAE 1.0293 - Thr 0.33 - EmptyThr nan - PeakThr nan
+Epoch 4/50 - 12.696s - Loss 0.160939 - ValidLoss 0.176697 - Valid Acc 0.2473 - Valid Bal 0.3982 - Valid MAE 1.0133 - Thr 0.63 - EmptyThr nan - PeakThr nan
+Epoch 5/50 - 12.632s - Loss 0.159965 - ValidLoss 0.173411 - Valid Acc 0.3856 - Valid Bal 0.4747 - Valid MAE 0.8324 - Thr 0.40 - EmptyThr nan - PeakThr nan
+Epoch 6/50 - 12.762s - Loss 0.157960 - ValidLoss 0.173393 - Valid Acc 0.3777 - Valid Bal 0.4596 - Valid MAE 0.9362 - Thr 0.34 - EmptyThr nan - PeakThr nan
+Epoch 7/50 - 13.076s - Loss 0.157247 - ValidLoss 0.171256 - Valid Acc 0.3378 - Valid Bal 0.4754 - Valid MAE 0.8138 - Thr 0.44 - EmptyThr nan - PeakThr nan
+Epoch 8/50 - 12.963s - Loss 0.155565 - ValidLoss 0.173106 - Valid Acc 0.3803 - Valid Bal 0.5047 - Valid MAE 0.7739 - Thr 0.45 - EmptyThr nan - PeakThr nan
+Epoch 9/50 - 12.960s - Loss 0.156292 - ValidLoss 0.175196 - Valid Acc 0.3830 - Valid Bal 0.4945 - Valid MAE 0.7899 - Thr 0.42 - EmptyThr nan - PeakThr nan
+Epoch 10/50 - 12.727s - Loss 0.156457 - ValidLoss 0.171339 - Valid Acc 0.3590 - Valid Bal 0.4742 - Valid MAE 0.8191 - Thr 0.40 - EmptyThr nan - PeakThr nan
+Epoch 11/50 - 12.798s - Loss 0.156654 - ValidLoss 0.170959 - Valid Acc 0.4069 - Valid Bal 0.5134 - Valid MAE 0.7128 - Thr 0.40 - EmptyThr nan - PeakThr nan
+Epoch 12/50 - 12.575s - Loss 0.156631 - ValidLoss 0.172227 - Valid Acc 0.3191 - Valid Bal 0.4530 - Valid MAE 0.8537 - Thr 0.37 - EmptyThr nan - PeakThr nan
+Epoch 13/50 - 13.271s - Loss 0.155789 - ValidLoss 0.170679 - Valid Acc 0.3298 - Valid Bal 0.4715 - Valid MAE 0.8457 - Thr 0.65 - EmptyThr nan - PeakThr nan
+Epoch 14/50 - 12.788s - Loss 0.156909 - ValidLoss 0.173403 - Valid Acc 0.3564 - Valid Bal 0.4932 - Valid MAE 0.7553 - Thr 0.56 - EmptyThr nan - PeakThr nan
+Epoch 15/50 - 12.831s - Loss 0.154039 - ValidLoss 0.169664 - Valid Acc 0.3511 - Valid Bal 0.4740 - Valid MAE 0.7846 - Thr 0.38 - EmptyThr nan - PeakThr nan
+Epoch 16/50 - 12.885s - Loss 0.155747 - ValidLoss 0.169875 - Valid Acc 0.3989 - Valid Bal 0.5496 - Valid MAE 0.6676 - Thr 0.51 - EmptyThr nan - PeakThr nan
+Epoch 17/50 - 13.007s - Loss 0.154731 - ValidLoss 0.170288 - Valid Acc 0.3617 - Valid Bal 0.4938 - Valid MAE 0.7580 - Thr 0.34 - EmptyThr nan - PeakThr nan
+Epoch 18/50 - 12.738s - Loss 0.155258 - ValidLoss 0.169403 - Valid Acc 0.3085 - Valid Bal 0.4667 - Valid MAE 0.8617 - Thr 0.45 - EmptyThr nan - PeakThr nan
+Epoch 19/50 - 12.649s - Loss 0.156483 - ValidLoss 0.167434 - Valid Acc 0.3644 - Valid Bal 0.5076 - Valid MAE 0.7234 - Thr 0.66 - EmptyThr nan - PeakThr nan
+Epoch 20/50 - 13.050s - Loss 0.154000 - ValidLoss 0.167419 - Valid Acc 0.3165 - Valid Bal 0.4717 - Valid MAE 0.8059 - Thr 0.43 - EmptyThr nan - PeakThr nan
+Epoch 21/50 - 13.026s - Loss 0.154446 - ValidLoss 0.165453 - Valid Acc 0.4362 - Valid Bal 0.5472 - Valid MAE 0.6489 - Thr 0.35 - EmptyThr nan - PeakThr nan
+Epoch 22/50 - 12.470s - Loss 0.153625 - ValidLoss 0.166010 - Valid Acc 0.3324 - Valid Bal 0.4949 - Valid MAE 0.7713 - Thr 0.51 - EmptyThr nan - PeakThr nan
+Epoch 23/50 - 12.817s - Loss 0.151177 - ValidLoss 0.164225 - Valid Acc 0.3830 - Valid Bal 0.5277 - Valid MAE 0.6463 - Thr 0.62 - EmptyThr nan - PeakThr nan
+Epoch 24/50 - 12.841s - Loss 0.151140 - ValidLoss 0.163360 - Valid Acc 0.4441 - Valid Bal 0.5517 - Valid MAE 0.6170 - Thr 0.36 - EmptyThr nan - PeakThr nan
+Epoch 25/50 - 12.706s - Loss 0.151031 - ValidLoss 0.164127 - Valid Acc 0.4176 - Valid Bal 0.5553 - Valid MAE 0.6303 - Thr 0.52 - EmptyThr nan - PeakThr nan
+Epoch 26/50 - 12.674s - Loss 0.150983 - ValidLoss 0.163438 - Valid Acc 0.4441 - Valid Bal 0.5802 - Valid MAE 0.5798 - Thr 0.62 - EmptyThr nan - PeakThr nan
+Epoch 27/50 - 12.473s - Loss 0.149266 - ValidLoss 0.161063 - Valid Acc 0.3803 - Valid Bal 0.5321 - Valid MAE 0.6862 - Thr 0.59 - EmptyThr nan - PeakThr nan
+Epoch 28/50 - 11.977s - Loss 0.149270 - ValidLoss 0.161127 - Valid Acc 0.4415 - Valid Bal 0.5835 - Valid MAE 0.5878 - Thr 0.55 - EmptyThr nan - PeakThr nan
+Epoch 29/50 - 12.229s - Loss 0.147027 - ValidLoss 0.159970 - Valid Acc 0.4761 - Valid Bal 0.6136 - Valid MAE 0.5372 - Thr 0.62 - EmptyThr nan - PeakThr nan
+Epoch 30/50 - 12.268s - Loss 0.148407 - ValidLoss 0.158444 - Valid Acc 0.4229 - Valid Bal 0.5711 - Valid MAE 0.5984 - Thr 0.65 - EmptyThr nan - PeakThr nan
+Epoch 31/50 - 12.054s - Loss 0.144303 - ValidLoss 0.158325 - Valid Acc 0.4362 - Valid Bal 0.5852 - Valid MAE 0.5984 - Thr 0.59 - EmptyThr nan - PeakThr nan
+Epoch 32/50 - 12.071s - Loss 0.145556 - ValidLoss 0.159308 - Valid Acc 0.4069 - Valid Bal 0.5545 - Valid MAE 0.6277 - Thr 0.56 - EmptyThr nan - PeakThr nan
+Epoch 33/50 - 12.206s - Loss 0.148310 - ValidLoss 0.157933 - Valid Acc 0.4521 - Valid Bal 0.5906 - Valid MAE 0.5559 - Thr 0.65 - EmptyThr nan - PeakThr nan
+Epoch 34/50 - 12.223s - Loss 0.142381 - ValidLoss 0.156172 - Valid Acc 0.4548 - Valid Bal 0.6020 - Valid MAE 0.5505 - Thr 0.63 - EmptyThr nan - PeakThr nan
+Epoch 35/50 - 12.059s - Loss 0.142753 - ValidLoss 0.155418 - Valid Acc 0.4707 - Valid Bal 0.6056 - Valid MAE 0.5426 - Thr 0.54 - EmptyThr nan - PeakThr nan
+Epoch 36/50 - 12.138s - Loss 0.143528 - ValidLoss 0.155867 - Valid Acc 0.4973 - Valid Bal 0.6365 - Valid MAE 0.5080 - Thr 0.63 - EmptyThr nan - PeakThr nan
+Epoch 37/50 - 11.949s - Loss 0.141716 - ValidLoss 0.153888 - Valid Acc 0.4787 - Valid Bal 0.6153 - Valid MAE 0.5346 - Thr 0.68 - EmptyThr nan - PeakThr nan
+Epoch 38/50 - 12.044s - Loss 0.140539 - ValidLoss 0.153785 - Valid Acc 0.4947 - Valid Bal 0.6321 - Valid MAE 0.5106 - Thr 0.69 - EmptyThr nan - PeakThr nan
+Epoch 39/50 - 12.162s - Loss 0.142212 - ValidLoss 0.153599 - Valid Acc 0.4814 - Valid Bal 0.6173 - Valid MAE 0.5293 - Thr 0.66 - EmptyThr nan - PeakThr nan
+Epoch 40/50 - 12.089s - Loss 0.140807 - ValidLoss 0.153258 - Valid Acc 0.5027 - Valid Bal 0.6366 - Valid MAE 0.5027 - Thr 0.65 - EmptyThr nan - PeakThr nan
+Epoch 41/50 - 12.120s - Loss 0.140143 - ValidLoss 0.152590 - Valid Acc 0.4867 - Valid Bal 0.6204 - Valid MAE 0.5213 - Thr 0.64 - EmptyThr nan - PeakThr nan
+Epoch 42/50 - 12.493s - Loss 0.143679 - ValidLoss 0.151570 - Valid Acc 0.4894 - Valid Bal 0.6227 - Valid MAE 0.5133 - Thr 0.59 - EmptyThr nan - PeakThr nan
+Epoch 43/50 - 12.362s - Loss 0.141267 - ValidLoss 0.150967 - Valid Acc 0.5000 - Valid Bal 0.6289 - Valid MAE 0.5080 - Thr 0.61 - EmptyThr nan - PeakThr nan
+Epoch 44/50 - 13.161s - Loss 0.138532 - ValidLoss 0.152715 - Valid Acc 0.5133 - Valid Bal 0.6462 - Valid MAE 0.4973 - Thr 0.63 - EmptyThr nan - PeakThr nan
+Epoch 45/50 - 12.717s - Loss 0.138456 - ValidLoss 0.151313 - Valid Acc 0.5213 - Valid Bal 0.6508 - Valid MAE 0.4814 - Thr 0.62 - EmptyThr nan - PeakThr nan
+Epoch 46/50 - 12.322s - Loss 0.139350 - ValidLoss 0.151771 - Valid Acc 0.5160 - Valid Bal 0.6473 - Valid MAE 0.4894 - Thr 0.69 - EmptyThr nan - PeakThr nan
+Epoch 47/50 - 12.500s - Loss 0.140316 - ValidLoss 0.152051 - Valid Acc 0.5133 - Valid Bal 0.6404 - Valid MAE 0.4920 - Thr 0.68 - EmptyThr nan - PeakThr nan
+Epoch 48/50 - 12.177s - Loss 0.139873 - ValidLoss 0.149878 - Valid Acc 0.5319 - Valid Bal 0.6609 - Valid MAE 0.4734 - Thr 0.64 - EmptyThr nan - PeakThr nan
+Epoch 49/50 - 12.234s - Loss 0.139845 - ValidLoss 0.151437 - Valid Acc 0.5505 - Valid Bal 0.6737 - Valid MAE 0.4548 - Thr 0.65 - EmptyThr nan - PeakThr nan
+Epoch that the model was saved 49
+Best smoothed balanced count accuracy: 0.654524, smoothed count MAE: 0.479066
+  [classroom] COUNT Acc 0.1733 - Bal 0.1568 - MAE 2.0946 - Occ Acc 0.4537 - Occ F1 0.3127 (Thr 0.65, EmptyThr nan)
+Repeat 1
+Epoch 0/50 - 12.081s - Loss 0.285881 - ValidLoss 0.203823 - Valid Acc 0.3963 - Valid Bal 0.4960 - Valid MAE 0.7234 - Thr 0.45 - EmptyThr nan - PeakThr nan
+Epoch 1/50 - 12.103s - Loss 0.172315 - ValidLoss 0.189829 - Valid Acc 0.3085 - Valid Bal 0.4085 - Valid MAE 1.2074 - Thr 0.39 - EmptyThr nan - PeakThr nan
+Epoch 2/50 - 12.648s - Loss 0.166733 - ValidLoss 0.179533 - Valid Acc 0.2633 - Valid Bal 0.4156 - Valid MAE 0.9707 - Thr 0.52 - EmptyThr nan - PeakThr nan
+Epoch 3/50 - 12.703s - Loss 0.162560 - ValidLoss 0.177265 - Valid Acc 0.3245 - Valid Bal 0.4369 - Valid MAE 0.9069 - Thr 0.42 - EmptyThr nan - PeakThr nan
+Epoch 4/50 - 12.867s - Loss 0.162355 - ValidLoss 0.175631 - Valid Acc 0.2819 - Valid Bal 0.4347 - Valid MAE 0.9016 - Thr 0.43 - EmptyThr nan - PeakThr nan
+Epoch 5/50 - 12.791s - Loss 0.162432 - ValidLoss 0.178805 - Valid Acc 0.3404 - Valid Bal 0.4698 - Valid MAE 0.8165 - Thr 0.46 - EmptyThr nan - PeakThr nan
+Epoch 6/50 - 12.463s - Loss 0.158442 - ValidLoss 0.175611 - Valid Acc 0.2633 - Valid Bal 0.4113 - Valid MAE 0.9309 - Thr 0.43 - EmptyThr nan - PeakThr nan
+Epoch 7/50 - 12.364s - Loss 0.159241 - ValidLoss 0.172672 - Valid Acc 0.3191 - Valid Bal 0.4364 - Valid MAE 0.9654 - Thr 0.34 - EmptyThr nan - PeakThr nan
+Epoch 8/50 - 12.471s - Loss 0.158517 - ValidLoss 0.173040 - Valid Acc 0.4096 - Valid Bal 0.5331 - Valid MAE 0.6410 - Thr 0.53 - EmptyThr nan - PeakThr nan
+Epoch 9/50 - 12.646s - Loss 0.156964 - ValidLoss 0.173163 - Valid Acc 0.3085 - Valid Bal 0.4502 - Valid MAE 0.8670 - Thr 0.41 - EmptyThr nan - PeakThr nan
+Epoch 10/50 - 12.798s - Loss 0.157842 - ValidLoss 0.173777 - Valid Acc 0.3324 - Valid Bal 0.4862 - Valid MAE 0.8112 - Thr 0.66 - EmptyThr nan - PeakThr nan
+Epoch 11/50 - 12.721s - Loss 0.155931 - ValidLoss 0.170435 - Valid Acc 0.3404 - Valid Bal 0.4601 - Valid MAE 0.8750 - Thr 0.37 - EmptyThr nan - PeakThr nan
+Epoch 12/50 - 12.706s - Loss 0.154464 - ValidLoss 0.170298 - Valid Acc 0.3005 - Valid Bal 0.4440 - Valid MAE 0.8644 - Thr 0.39 - EmptyThr nan - PeakThr nan
+Epoch 13/50 - 12.617s - Loss 0.155838 - ValidLoss 0.172796 - Valid Acc 0.2819 - Valid Bal 0.4374 - Valid MAE 1.1596 - Thr 0.77 - EmptyThr nan - PeakThr nan
+Epoch 14/50 - 12.741s - Loss 0.155779 - ValidLoss 0.169561 - Valid Acc 0.3803 - Valid Bal 0.5026 - Valid MAE 0.7846 - Thr 0.33 - EmptyThr nan - PeakThr nan
+Epoch 15/50 - 12.740s - Loss 0.151989 - ValidLoss 0.169535 - Valid Acc 0.3404 - Valid Bal 0.4934 - Valid MAE 0.7713 - Thr 0.40 - EmptyThr nan - PeakThr nan
+Epoch 16/50 - 12.888s - Loss 0.156812 - ValidLoss 0.169515 - Valid Acc 0.3511 - Valid Bal 0.4839 - Valid MAE 0.8059 - Thr 0.37 - EmptyThr nan - PeakThr nan
+Epoch 17/50 - 12.887s - Loss 0.153183 - ValidLoss 0.170079 - Valid Acc 0.3138 - Valid Bal 0.4689 - Valid MAE 0.7952 - Thr 0.38 - EmptyThr nan - PeakThr nan
+Epoch 18/50 - 12.759s - Loss 0.154905 - ValidLoss 0.167794 - Valid Acc 0.3484 - Valid Bal 0.4956 - Valid MAE 0.7394 - Thr 0.65 - EmptyThr nan - PeakThr nan
+Epoch 19/50 - 12.655s - Loss 0.158118 - ValidLoss 0.169397 - Valid Acc 0.3564 - Valid Bal 0.4970 - Valid MAE 0.7926 - Thr 0.37 - EmptyThr nan - PeakThr nan
+Epoch 20/50 - 12.829s - Loss 0.151997 - ValidLoss 0.166178 - Valid Acc 0.3457 - Valid Bal 0.4853 - Valid MAE 0.7952 - Thr 0.36 - EmptyThr nan - PeakThr nan
+Epoch 21/50 - 12.731s - Loss 0.154499 - ValidLoss 0.167362 - Valid Acc 0.3245 - Valid Bal 0.4730 - Valid MAE 0.7660 - Thr 0.48 - EmptyThr nan - PeakThr nan
+Epoch 22/50 - 12.787s - Loss 0.153212 - ValidLoss 0.164847 - Valid Acc 0.3324 - Valid Bal 0.4806 - Valid MAE 0.8112 - Thr 0.40 - EmptyThr nan - PeakThr nan
+Epoch 23/50 - 12.511s - Loss 0.151920 - ValidLoss 0.165950 - Valid Acc 0.3910 - Valid Bal 0.5387 - Valid MAE 0.6649 - Thr 0.45 - EmptyThr nan - PeakThr nan
+Epoch 24/50 - 12.858s - Loss 0.150600 - ValidLoss 0.166250 - Valid Acc 0.3271 - Valid Bal 0.4804 - Valid MAE 0.8059 - Thr 0.49 - EmptyThr nan - PeakThr nan
+Epoch 25/50 - 13.000s - Loss 0.149937 - ValidLoss 0.163214 - Valid Acc 0.3564 - Valid Bal 0.5123 - Valid MAE 0.7048 - Thr 0.53 - EmptyThr nan - PeakThr nan
+Epoch 26/50 - 12.407s - Loss 0.151323 - ValidLoss 0.162427 - Valid Acc 0.4229 - Valid Bal 0.5672 - Valid MAE 0.6117 - Thr 0.54 - EmptyThr nan - PeakThr nan
+Epoch 27/50 - 12.262s - Loss 0.149150 - ValidLoss 0.162137 - Valid Acc 0.4069 - Valid Bal 0.5535 - Valid MAE 0.6144 - Thr 0.58 - EmptyThr nan - PeakThr nan
+Epoch 28/50 - 12.140s - Loss 0.147997 - ValidLoss 0.161828 - Valid Acc 0.3963 - Valid Bal 0.5422 - Valid MAE 0.6383 - Thr 0.61 - EmptyThr nan - PeakThr nan
+Epoch 29/50 - 12.149s - Loss 0.148259 - ValidLoss 0.160937 - Valid Acc 0.4176 - Valid Bal 0.5688 - Valid MAE 0.6064 - Thr 0.57 - EmptyThr nan - PeakThr nan
+Epoch 30/50 - 12.453s - Loss 0.146348 - ValidLoss 0.160046 - Valid Acc 0.4654 - Valid Bal 0.6042 - Valid MAE 0.5452 - Thr 0.57 - EmptyThr nan - PeakThr nan
+Epoch 31/50 - 12.355s - Loss 0.147698 - ValidLoss 0.159630 - Valid Acc 0.4601 - Valid Bal 0.6007 - Valid MAE 0.5638 - Thr 0.62 - EmptyThr nan - PeakThr nan
+Epoch 32/50 - 12.338s - Loss 0.148797 - ValidLoss 0.160127 - Valid Acc 0.4574 - Valid Bal 0.5997 - Valid MAE 0.5718 - Thr 0.64 - EmptyThr nan - PeakThr nan
+Epoch 33/50 - 12.273s - Loss 0.145529 - ValidLoss 0.157114 - Valid Acc 0.4388 - Valid Bal 0.5882 - Valid MAE 0.5745 - Thr 0.59 - EmptyThr nan - PeakThr nan
+Epoch 34/50 - 12.210s - Loss 0.143380 - ValidLoss 0.157037 - Valid Acc 0.4628 - Valid Bal 0.6064 - Valid MAE 0.5426 - Thr 0.60 - EmptyThr nan - PeakThr nan
+Epoch 35/50 - 12.184s - Loss 0.145831 - ValidLoss 0.156565 - Valid Acc 0.4335 - Valid Bal 0.5786 - Valid MAE 0.5957 - Thr 0.63 - EmptyThr nan - PeakThr nan
+Epoch 36/50 - 12.206s - Loss 0.144717 - ValidLoss 0.155862 - Valid Acc 0.4495 - Valid Bal 0.5954 - Valid MAE 0.5718 - Thr 0.65 - EmptyThr nan - PeakThr nan
+Epoch 37/50 - 12.217s - Loss 0.144243 - ValidLoss 0.154848 - Valid Acc 0.4894 - Valid Bal 0.6274 - Valid MAE 0.5160 - Thr 0.59 - EmptyThr nan - PeakThr nan
+Epoch 38/50 - 12.305s - Loss 0.141523 - ValidLoss 0.154596 - Valid Acc 0.4814 - Valid Bal 0.6232 - Valid MAE 0.5346 - Thr 0.61 - EmptyThr nan - PeakThr nan
+Epoch 39/50 - 12.318s - Loss 0.140710 - ValidLoss 0.154935 - Valid Acc 0.4867 - Valid Bal 0.6287 - Valid MAE 0.5293 - Thr 0.63 - EmptyThr nan - PeakThr nan
+Epoch 40/50 - 12.556s - Loss 0.142443 - ValidLoss 0.153434 - Valid Acc 0.5080 - Valid Bal 0.6432 - Valid MAE 0.5000 - Thr 0.61 - EmptyThr nan - PeakThr nan
+Epoch 41/50 - 12.825s - Loss 0.137914 - ValidLoss 0.153102 - Valid Acc 0.5319 - Valid Bal 0.6620 - Valid MAE 0.4734 - Thr 0.64 - EmptyThr nan - PeakThr nan
+Epoch 42/50 - 13.057s - Loss 0.141150 - ValidLoss 0.152617 - Valid Acc 0.4894 - Valid Bal 0.6254 - Valid MAE 0.5213 - Thr 0.58 - EmptyThr nan - PeakThr nan
+Epoch 43/50 - 12.892s - Loss 0.140907 - ValidLoss 0.152796 - Valid Acc 0.5080 - Valid Bal 0.6444 - Valid MAE 0.5027 - Thr 0.66 - EmptyThr nan - PeakThr nan
+Epoch 44/50 - 13.087s - Loss 0.139884 - ValidLoss 0.152688 - Valid Acc 0.5080 - Valid Bal 0.6435 - Valid MAE 0.5027 - Thr 0.67 - EmptyThr nan - PeakThr nan
+Epoch 45/50 - 12.771s - Loss 0.138226 - ValidLoss 0.152297 - Valid Acc 0.5080 - Valid Bal 0.6451 - Valid MAE 0.4973 - Thr 0.65 - EmptyThr nan - PeakThr nan
+Epoch 46/50 - 12.794s - Loss 0.137837 - ValidLoss 0.152085 - Valid Acc 0.5160 - Valid Bal 0.6536 - Valid MAE 0.4867 - Thr 0.61 - EmptyThr nan - PeakThr nan
+Epoch 47/50 - 12.696s - Loss 0.139246 - ValidLoss 0.152327 - Valid Acc 0.5505 - Valid Bal 0.6774 - Valid MAE 0.4601 - Thr 0.62 - EmptyThr nan - PeakThr nan
+Epoch 48/50 - 13.085s - Loss 0.138258 - ValidLoss 0.151921 - Valid Acc 0.5053 - Valid Bal 0.6411 - Valid MAE 0.5027 - Thr 0.64 - EmptyThr nan - PeakThr nan
+Epoch 49/50 - 12.870s - Loss 0.137411 - ValidLoss 0.151227 - Valid Acc 0.5346 - Valid Bal 0.6645 - Valid MAE 0.4707 - Thr 0.60 - EmptyThr nan - PeakThr nan
+Epoch that the model was saved 49
+Best smoothed balanced count accuracy: 0.654498, smoothed count MAE: 0.485925
+  [classroom] COUNT Acc 0.1669 - Bal 0.1142 - MAE 1.9835 - Occ Acc 0.4481 - Occ F1 0.3098 (Thr 0.60, EmptyThr nan)
+Repeat 2
+Epoch 0/50 - 12.902s - Loss 0.276568 - ValidLoss 0.198764 - Valid Acc 0.3590 - Valid Bal 0.4629 - Valid MAE 0.9761 - Thr 0.42 - EmptyThr nan - PeakThr nan
+Epoch 1/50 - 12.830s - Loss 0.175889 - ValidLoss 0.187555 - Valid Acc 0.3165 - Valid Bal 0.4644 - Valid MAE 0.8298 - Thr 0.48 - EmptyThr nan - PeakThr nan
+Epoch 2/50 - 12.949s - Loss 0.167631 - ValidLoss 0.180055 - Valid Acc 0.3431 - Valid Bal 0.4566 - Valid MAE 0.8910 - Thr 0.41 - EmptyThr nan - PeakThr nan
+Epoch 3/50 - 12.537s - Loss 0.162601 - ValidLoss 0.174375 - Valid Acc 0.3511 - Valid Bal 0.4599 - Valid MAE 0.8457 - Thr 0.42 - EmptyThr nan - PeakThr nan
+Epoch 4/50 - 12.425s - Loss 0.160083 - ValidLoss 0.178219 - Valid Acc 0.3484 - Valid Bal 0.4852 - Valid MAE 0.7979 - Thr 0.57 - EmptyThr nan - PeakThr nan
+Epoch 5/50 - 12.593s - Loss 0.161859 - ValidLoss 0.175978 - Valid Acc 0.4122 - Valid Bal 0.4735 - Valid MAE 0.8245 - Thr 0.38 - EmptyThr nan - PeakThr nan
+Epoch 6/50 - 12.791s - Loss 0.159576 - ValidLoss 0.175387 - Valid Acc 0.3112 - Valid Bal 0.4541 - Valid MAE 0.8617 - Thr 0.46 - EmptyThr nan - PeakThr nan
+Epoch 7/50 - 12.908s - Loss 0.158786 - ValidLoss 0.170491 - Valid Acc 0.3351 - Valid Bal 0.4320 - Valid MAE 0.9814 - Thr 0.33 - EmptyThr nan - PeakThr nan
+Epoch 8/50 - 12.821s - Loss 0.157958 - ValidLoss 0.171856 - Valid Acc 0.3404 - Valid Bal 0.4704 - Valid MAE 0.8245 - Thr 0.42 - EmptyThr nan - PeakThr nan
+Epoch 9/50 - 12.578s - Loss 0.159812 - ValidLoss 0.169360 - Valid Acc 0.3750 - Valid Bal 0.4890 - Valid MAE 0.7128 - Thr 0.47 - EmptyThr nan - PeakThr nan
+Epoch 10/50 - 13.603s - Loss 0.155848 - ValidLoss 0.171959 - Valid Acc 0.4069 - Valid Bal 0.4950 - Valid MAE 0.7606 - Thr 0.38 - EmptyThr nan - PeakThr nan
+Epoch 11/50 - 13.166s - Loss 0.156675 - ValidLoss 0.172044 - Valid Acc 0.3617 - Valid Bal 0.5112 - Valid MAE 0.7420 - Thr 0.67 - EmptyThr nan - PeakThr nan
+Epoch 12/50 - 15.537s - Loss 0.156839 - ValidLoss 0.170639 - Valid Acc 0.3644 - Valid Bal 0.4926 - Valid MAE 0.7553 - Thr 0.46 - EmptyThr nan - PeakThr nan
+Epoch 13/50 - 14.694s - Loss 0.155210 - ValidLoss 0.170756 - Valid Acc 0.3218 - Valid Bal 0.4697 - Valid MAE 0.7926 - Thr 0.47 - EmptyThr nan - PeakThr nan
+Epoch 14/50 - 12.873s - Loss 0.154435 - ValidLoss 0.167555 - Valid Acc 0.3803 - Valid Bal 0.5058 - Valid MAE 0.7473 - Thr 0.38 - EmptyThr nan - PeakThr nan
+Epoch 15/50 - 13.734s - Loss 0.157089 - ValidLoss 0.173316 - Valid Acc 0.3910 - Valid Bal 0.5045 - Valid MAE 0.7686 - Thr 0.40 - EmptyThr nan - PeakThr nan
+Epoch 16/50 - 13.147s - Loss 0.156584 - ValidLoss 0.170904 - Valid Acc 0.3245 - Valid Bal 0.4770 - Valid MAE 0.7872 - Thr 0.66 - EmptyThr nan - PeakThr nan
+Epoch 17/50 - 13.348s - Loss 0.157037 - ValidLoss 0.170918 - Valid Acc 0.3750 - Valid Bal 0.5237 - Valid MAE 0.7048 - Thr 0.55 - EmptyThr nan - PeakThr nan
+Epoch 18/50 - 13.354s - Loss 0.155176 - ValidLoss 0.170196 - Valid Acc 0.3165 - Valid Bal 0.4684 - Valid MAE 0.8245 - Thr 0.45 - EmptyThr nan - PeakThr nan
+Epoch 19/50 - 13.297s - Loss 0.153249 - ValidLoss 0.168405 - Valid Acc 0.3936 - Valid Bal 0.4991 - Valid MAE 0.6968 - Thr 0.39 - EmptyThr nan - PeakThr nan
+Epoch 20/50 - 11.985s - Loss 0.154233 - ValidLoss 0.165484 - Valid Acc 0.3750 - Valid Bal 0.4971 - Valid MAE 0.7234 - Thr 0.35 - EmptyThr nan - PeakThr nan
+Epoch 21/50 - 12.150s - Loss 0.151346 - ValidLoss 0.165002 - Valid Acc 0.3723 - Valid Bal 0.5139 - Valid MAE 0.7447 - Thr 0.44 - EmptyThr nan - PeakThr nan
+Epoch 22/50 - 12.546s - Loss 0.150073 - ValidLoss 0.165583 - Valid Acc 0.3803 - Valid Bal 0.5166 - Valid MAE 0.7367 - Thr 0.43 - EmptyThr nan - PeakThr nan
+Epoch 23/50 - 12.628s - Loss 0.151488 - ValidLoss 0.164730 - Valid Acc 0.3644 - Valid Bal 0.5090 - Valid MAE 0.7447 - Thr 0.43 - EmptyThr nan - PeakThr nan
+Epoch 24/50 - 13.414s - Loss 0.155019 - ValidLoss 0.163342 - Valid Acc 0.3644 - Valid Bal 0.5139 - Valid MAE 0.6782 - Thr 0.60 - EmptyThr nan - PeakThr nan
+Epoch 25/50 - 13.835s - Loss 0.149821 - ValidLoss 0.163006 - Valid Acc 0.4149 - Valid Bal 0.5470 - Valid MAE 0.6543 - Thr 0.44 - EmptyThr nan - PeakThr nan
+Epoch 26/50 - 12.766s - Loss 0.150565 - ValidLoss 0.165101 - Valid Acc 0.3617 - Valid Bal 0.5187 - Valid MAE 0.6835 - Thr 0.58 - EmptyThr nan - PeakThr nan
+Epoch 27/50 - 13.218s - Loss 0.151266 - ValidLoss 0.161217 - Valid Acc 0.4043 - Valid Bal 0.5540 - Valid MAE 0.6303 - Thr 0.57 - EmptyThr nan - PeakThr nan
+Epoch 28/50 - 13.556s - Loss 0.148656 - ValidLoss 0.161436 - Valid Acc 0.4149 - Valid Bal 0.5563 - Valid MAE 0.6117 - Thr 0.56 - EmptyThr nan - PeakThr nan
+Epoch 29/50 - 13.412s - Loss 0.149316 - ValidLoss 0.159685 - Valid Acc 0.4521 - Valid Bal 0.5913 - Valid MAE 0.5559 - Thr 0.58 - EmptyThr nan - PeakThr nan
+Epoch 30/50 - 13.850s - Loss 0.144804 - ValidLoss 0.160769 - Valid Acc 0.4441 - Valid Bal 0.5899 - Valid MAE 0.5745 - Thr 0.62 - EmptyThr nan - PeakThr nan
+Epoch 31/50 - 13.971s - Loss 0.145099 - ValidLoss 0.157075 - Valid Acc 0.4495 - Valid Bal 0.5922 - Valid MAE 0.5665 - Thr 0.63 - EmptyThr nan - PeakThr nan
+Epoch 32/50 - 13.104s - Loss 0.146528 - ValidLoss 0.158482 - Valid Acc 0.4043 - Valid Bal 0.5492 - Valid MAE 0.6117 - Thr 0.57 - EmptyThr nan - PeakThr nan
+Epoch 33/50 - 13.489s - Loss 0.146129 - ValidLoss 0.157613 - Valid Acc 0.4681 - Valid Bal 0.6089 - Valid MAE 0.5559 - Thr 0.61 - EmptyThr nan - PeakThr nan
+Epoch 34/50 - 13.418s - Loss 0.142575 - ValidLoss 0.155741 - Valid Acc 0.4441 - Valid Bal 0.5848 - Valid MAE 0.5718 - Thr 0.57 - EmptyThr nan - PeakThr nan
+Epoch 35/50 - 13.242s - Loss 0.145378 - ValidLoss 0.155529 - Valid Acc 0.4707 - Valid Bal 0.6080 - Valid MAE 0.5426 - Thr 0.57 - EmptyThr nan - PeakThr nan
+Epoch 36/50 - 13.122s - Loss 0.143880 - ValidLoss 0.155141 - Valid Acc 0.4574 - Valid Bal 0.5934 - Valid MAE 0.5718 - Thr 0.52 - EmptyThr nan - PeakThr nan
+Epoch 37/50 - 13.250s - Loss 0.140347 - ValidLoss 0.155033 - Valid Acc 0.4574 - Valid Bal 0.5911 - Valid MAE 0.5665 - Thr 0.53 - EmptyThr nan - PeakThr nan
+Epoch 38/50 - 13.029s - Loss 0.141587 - ValidLoss 0.153671 - Valid Acc 0.4840 - Valid Bal 0.6211 - Valid MAE 0.5239 - Thr 0.59 - EmptyThr nan - PeakThr nan
+Epoch 39/50 - 13.701s - Loss 0.141883 - ValidLoss 0.153539 - Valid Acc 0.4761 - Valid Bal 0.6141 - Valid MAE 0.5319 - Thr 0.54 - EmptyThr nan - PeakThr nan
+Epoch 40/50 - 13.013s - Loss 0.142577 - ValidLoss 0.153669 - Valid Acc 0.4734 - Valid Bal 0.6110 - Valid MAE 0.5452 - Thr 0.63 - EmptyThr nan - PeakThr nan
+Epoch 41/50 - 12.328s - Loss 0.139380 - ValidLoss 0.152973 - Valid Acc 0.5053 - Valid Bal 0.6413 - Valid MAE 0.5000 - Thr 0.64 - EmptyThr nan - PeakThr nan
+Epoch 42/50 - 13.418s - Loss 0.140138 - ValidLoss 0.153121 - Valid Acc 0.5080 - Valid Bal 0.6437 - Valid MAE 0.4947 - Thr 0.58 - EmptyThr nan - PeakThr nan
+Epoch 43/50 - 12.889s - Loss 0.141373 - ValidLoss 0.152229 - Valid Acc 0.4920 - Valid Bal 0.6251 - Valid MAE 0.5106 - Thr 0.63 - EmptyThr nan - PeakThr nan
+Epoch 44/50 - 13.349s - Loss 0.139272 - ValidLoss 0.151797 - Valid Acc 0.5319 - Valid Bal 0.6623 - Valid MAE 0.4734 - Thr 0.65 - EmptyThr nan - PeakThr nan
+Epoch 45/50 - 12.883s - Loss 0.141919 - ValidLoss 0.152410 - Valid Acc 0.4894 - Valid Bal 0.6274 - Valid MAE 0.5266 - Thr 0.66 - EmptyThr nan - PeakThr nan
+Epoch 46/50 - 13.305s - Loss 0.140837 - ValidLoss 0.151619 - Valid Acc 0.5000 - Valid Bal 0.6343 - Valid MAE 0.5160 - Thr 0.65 - EmptyThr nan - PeakThr nan
+Epoch 47/50 - 12.224s - Loss 0.140074 - ValidLoss 0.152045 - Valid Acc 0.5160 - Valid Bal 0.6468 - Valid MAE 0.4973 - Thr 0.68 - EmptyThr nan - PeakThr nan
+Epoch 48/50 - 12.738s - Loss 0.140153 - ValidLoss 0.151443 - Valid Acc 0.5133 - Valid Bal 0.6439 - Valid MAE 0.5000 - Thr 0.62 - EmptyThr nan - PeakThr nan
+Epoch 49/50 - 12.772s - Loss 0.139545 - ValidLoss 0.151242 - Valid Acc 0.5186 - Valid Bal 0.6525 - Valid MAE 0.5000 - Thr 0.67 - EmptyThr nan - PeakThr nan
+Epoch that the model was saved 49
+Best smoothed balanced count accuracy: 0.643424, smoothed count MAE: 0.503996
+  [classroom] COUNT Acc 0.2196 - Bal 0.2708 - MAE 2.0994 - Occ Acc 0.4693 - Occ F1 0.2455 (Thr 0.67, EmptyThr nan)
+  Checkpoint saved to visualizations/cross_domain/empty_room_meeting_room/26/model.pth
+  [sample 1880] true [] m | pred [] m
+  [sample 112] true (2.55, 4.55) m | pred (3.91, 6.09) m
+  [sample 788] true (2.55, 4.55), (1.00, 6.00) m | pred (1.41, 2.66), (3.59, 2.66), (2.34, 4.22), (1.41, 6.09), (3.59, 6.41) m
+  [sample 1156] true (4.10, 3.10), (2.55, 4.55), (1.00, 6.00) m | pred [] m
+  [sample 1306] true (4.10, 6.00), (4.10, 3.10), (2.55, 4.55), (1.00, 6.00) m | pred (4.84, 2.66), (4.84, 5.47) m
+  [sample 1539] true (4.10, 6.00), (4.10, 3.10), (2.55, 4.55), (1.00, 6.00), (1.00, 3.10) m | pred [] m
+
+Visualizations saved at visualizations/cross_domain/empty_room_meeting_room/26/classroom
+
+Detailed Performance Analysis:
+Mean Error: 0.5307 ± 0.2830
+
+Class-wise Mean Absolute Error:
+Class a: 0.5279
+Class b: 0.5502
+Class c: 0.4732
+Class d: 0.5205
+Class e: 0.5816
+
+Perfect Predictions: 8.93%
+
+[classroom] avg over 3 repeats: Accuracy 0.1866 ± 0.0166 | Balanced 0.1806 ± 0.0467 | MAE 2.0592 ± 0.0379 | Occ Acc 0.4570 ± 0.0064 | Occ F1 0.2893 ± 0.0219
+================================================================================
+EXPERIMENT RESULTS - Model: density_map, Task: location
+================================================================================
+PER_ENV_RESULTS:
+
+classroom:
+  GROUP-COUNT METRICS:
+  Exact-count Accuracy: 0.1866 ± 0.0166 (SE)
+  Balanced-count Accuracy: 0.1806 ± 0.0467 (SE)
+  Count MAE: 2.0592 ± 0.0379 (SE)
+  Occupancy Accuracy: 0.4570 ± 0.0064 (SE)
+  Occupancy F1: 0.2893 ± 0.0219 (SE)
+  Per-count Accuracy: 0:0.448, 1:0.397, 2:0.226, 3:0.010, 4:0.003, 5:0.000
+
+Results saved to: output/cross_domain/density_map_location_train-empty_room+meeting_room_test-classroom_r3_e50_20261026_181635.json
+Report saved to:  output/cross_domain/density_map_location_train-empty_room+meeting_room_test-classroom_r3_e50_20261026_181635.txt
+Total time: 2130.9350991249084 seconds
