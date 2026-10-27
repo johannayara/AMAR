@@ -239,9 +239,6 @@ preset = {
     },
 
     ## NTU-Fi HAR (src/data/ntu_har.py) cross-dataset activity transfer
-    ## (scripts/run_ntu_to_wimans.py, scripts/run_few_shot_ntu_to_wimans.py). "path" is the dataset
-    ## root holding the train_amp/ and test_amp/ folders of the SenseFi benchmark layout
-    ## (<root>/train_amp/<class>/<class><i>.mat). "activity_map" maps an NTU-Fi HAR class onto a
     ## WiMANS activity; None keeps the identity intersection of the two vocabularies, which is the
     ## only label space a cross-dataset run is well defined on. "features" is the feature count both
     ## sides are aligned to: 270 is WiMANS's native (time, 3 TX, 3 RX, 30 subcarrier) flattening, and

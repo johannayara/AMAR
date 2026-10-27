@@ -19,8 +19,8 @@ export AMAR_ENCODER_NORM=group
 ## python scripts/run_hwild_to_wimans.py --repeat 3 --epochs 200 --train_rooms "Conference, Laboratory, empty_room, classroom" --test_rooms "meeting_room, Lounge, Office" > "./output/hwild_wimans/run_$(date +%Y%m%d_%H%M).log" 2>&1
 python scripts/run_few_shot_hwild_to_wimans.py --repeat 3 \
   --teacher_epochs 200 --student_epochs 200 \
-  --train_rooms "Conference, Laboratory, classroom" \
-  --test_rooms "meeting_room, Lounge, Office, empty_room" \
+  --train_rooms "Conference, Laboratory, Lounge, Office" \
+  --test_rooms "meeting_room, classroom, empty_room" \
   --few_shot_ratio 0.1 --kd_weight 0.1 > "./output/few_shot_hwild_wimans/group/run_$(date +%Y%m%d_%H%M).log" 2>&1
 
 end=$(date +%s)
