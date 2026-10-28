@@ -5,28 +5,6 @@
 #SBATCH --time 2:00:00
 #SBATCH --gres gpu:a100:1
 #SBATCH --array=0-5
-
-#
-## Does the stage-1 empty gate do anything? Offline, on saved checkpoints, no retraining.
-##
-## One array task per checkpoint: reload it, rebuild the run's validation split, run inference on the
-## held-out room once, then score the SAME predicted maps under a list of gate values
-## (scripts/sweep_gate_checkpoint.py). The "off" row must reproduce the run's reported numbers up to the
-## last-repeat-vs-aggregate difference; the other rows price the gate.
-##
-## Every run committed up to 2026-10-27 had the gate disabled (preset density.staged_count was None,
-## read as falsy), which shows in those logs as "EmptyThr nan" and in their per-count tables as a near
-## zero accuracy on the true-empty class. This is the measurement that says whether enabling it is
-## worth a re-run.
-##
-## Combo count = ${#combos[@]}, so --array must be 0-(count-1). After editing the combo list below or
-## COMBOS, run `scripts/sweep_gate_checkpoint.sh --list` and set --array to the range it prints -- the
-## header cannot be computed.
-##
-## Submit from the repository root:
-##     sbatch scripts/sweep_gate_checkpoint.sh
-##     sbatch --array=0-1 scripts/sweep_gate_checkpoint.sh
-##     MAX_JOBS=2 ./scripts/sweep_gate_checkpoint.sh          # locally, bounded parallelism
 ##
 ## Environment variables:
 ##     COMBOS       newline- or ';'-separated "<checkpoint>|<test room>|<train rooms>" overrides

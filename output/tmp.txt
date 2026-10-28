@@ -1,0 +1,12 @@
+Using device: cuda
+Checkpoint: layout 'empty_room', backbone 'default', grid 32 | scoring room: meeting_room
+Decision: Thr 0.5400 - EmptyThr nan (calibrated nan) - peakThr 0.5590 - mass/person 62.011
+Scored 1881 frames of meeting_room
+
+rule       exact  balanced       MAE    occAcc     occF1   massAcc   massMAE    posErr      miss        fp
+----------------------------------------------------------------------------------------------------------
+old       0.2010    0.2809    1.8575    0.5122    0.1510    0.3275    1.2079    0.9108    0.0000    3.5878
+new       0.2010    0.2809    1.8575    0.5122    0.1510    0.3275    1.2079   10.4788    0.6959    0.0394
+
+position_error_m: old 0.9108 -> new 10.4788 (fp 3.588 -> 0.039)
+run reported 0.7875; this last-repeat 'old' row is 0.9108 (aggregate vs last repeat differ, so expect a small gap)
