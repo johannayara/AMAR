@@ -597,7 +597,8 @@ def train_student_localizer(model, teacher, optimizer, data_train_set, data_vali
 def run_few_shot_localization(hwild_sets_by_room, wimans_sets_by_room, var_few_shot_ratio=0.05,
                               var_kd_weight=1.0, var_repeat=3, var_teacher_epochs=None,
                               var_student_epochs=None, var_init_from_teacher=True, var_bounds=None,
-                              save_path="./visualizations/few_shot_localization"):
+                              save_path="./visualizations/few_shot_localization",
+                              var_support_rooms=None, var_query_rooms=None):
     """
     [description]
     : H-WILD -> WiMANS few-shot localization by knowledge distillation.
@@ -614,9 +615,16 @@ def run_few_shot_localization(hwild_sets_by_room, wimans_sets_by_room, var_few_s
       student toward weak targets; var_kd_weight=0 gives the pure few-shot ablation and is the honest
       reference. See the report for both.
     : hwild_sets_by_room: dict room -> (X, Y) normalized in the shared frame; the teacher's data
-    : wimans_sets_by_room: dict room -> (X, Y) normalized in the shared frame; the support/valid/query
-      pool
-    : var_few_shot_ratio: fraction of the WiMANS pool used to fine-tune the student
+    : wimans_sets_by_room: dict room -> (X, Y) normalized in the shared frame; every loaded room.
+      Rooms not named in var_query_rooms are used only as support data.
+    : var_support_rooms: room names the few-shot support set is drawn from. None (default) draws it
+      from the query rooms, so the support is spread over every scored room; naming rooms fine-tunes
+      the student on those only. A named room may be outside var_query_rooms, which is the "give the
+      student a slice of one room, score it on the others" protocol; a named room that is also
+      scored on has its support frames removed from the query set.
+    : var_query_rooms: room names the validation and query splits are drawn from. None (default)
+      uses every loaded room.
+    : var_few_shot_ratio: fraction of the support rooms' frames used to fine-tune the student
     : var_kd_weight: weight of the distillation term (0 = supervised few-shot only)
     : var_teacher_epochs / var_student_epochs: default preset["hwild"]["epoch"]
     : var_init_from_teacher: warm-start the student from the teacher's weights (standard KD init)
@@ -664,13 +672,32 @@ def run_few_shot_localization(hwild_sets_by_room, wimans_sets_by_room, var_few_s
                                  for var_idx, var_room in enumerate(var_wimans_rooms)])
     var_w_x = var_w_x.reshape(len(var_w_x), var_w_x.shape[1], -1)
     var_num = len(var_w_x)
-    var_num_few = max(1, int(round(var_few_shot_ratio * var_num)))
-    if var_num_few >= var_num - 1:
+    ## Which pool rows are scored on (var_query_rooms, default every loaded room) and which may
+    ## supply the few-shot support set (var_support_rooms, default the query rooms). A support room
+    ## that is not a query room is loaded but never scored, so the student can be given a slice of
+    ## one room and scored on the others; a support room that is also a query room has its support
+    ## frames removed from the query set, so no query frame is one the student was fine-tuned on.
+    var_query_room_idx = ([var_idx for var_idx, var_room in enumerate(var_wimans_rooms)
+                           if var_room in var_query_rooms]
+                          if var_query_rooms is not None else list(range(len(var_wimans_rooms))))
+    var_support_room_idx = ([var_idx for var_idx, var_room in enumerate(var_wimans_rooms)
+                             if var_room in var_support_rooms]
+                            if var_support_rooms is not None else var_query_room_idx)
+    if not var_query_room_idx:
+        raise ValueError(f"var_query_rooms={var_query_rooms} matches none of {var_wimans_rooms}")
+    if not var_support_room_idx:
+        raise ValueError(f"var_support_rooms={var_support_rooms} matches none of {var_wimans_rooms}")
+    var_is_query_row = np.isin(var_w_room, var_query_room_idx)
+    var_support_rows = np.where(np.isin(var_w_room, var_support_room_idx))[0]
+    var_num_query = int(var_is_query_row.sum())
+    var_num_few = max(1, int(round(var_few_shot_ratio * len(var_support_rows))))
+    if var_num_few >= var_num_query - 1:
         raise ValueError(f"var_few_shot_ratio={var_few_shot_ratio} leaves no query data "
-                         f"({var_num_few}/{var_num}). Lower the ratio or provide more WiMANS frames.")
-    var_perm = np.random.RandomState(39).permutation(var_num)
-    var_few_idx = np.sort(var_perm[:var_num_few])
-    var_rest_idx = np.sort(var_perm[var_num_few:])
+                         f"({var_num_few}/{var_num_query}). Lower the ratio or provide more frames.")
+    var_few_idx = np.sort(np.random.RandomState(39).permutation(var_support_rows)[:var_num_few])
+    var_is_support = np.zeros(var_num, dtype=bool)
+    var_is_support[var_few_idx] = True
+    var_rest_idx = np.where(var_is_query_row & ~var_is_support)[0]
     var_num_valid = max(1, int(round(0.1 * len(var_rest_idx))))
     var_valid_idx = var_rest_idx[:var_num_valid]
     var_query_idx = var_rest_idx[var_num_valid:]
@@ -680,8 +707,12 @@ def run_few_shot_localization(hwild_sets_by_room, wimans_sets_by_room, var_few_s
                                           torch.from_numpy(var_w_y[var_valid_idx]))
     print(f"H-WILD teacher: {len(var_teacher_x)} windows ({len(var_t_train)} train / "
           f"{len(var_teacher_valid_set)} valid)")
-    print(f"WiMANS pool: {var_num} frames -> support {var_num_few} ({var_few_shot_ratio:.2%}) | "
-          f"student validation {var_num_valid} | query {len(var_query_idx)}")
+    var_support_label = (",".join(var_wimans_rooms[var_idx] for var_idx in var_support_room_idx)
+                         if var_support_rooms is not None
+                         else f"query pool ({len(var_wimans_rooms)} rooms)")
+    print(f"WiMANS query pool: {var_num_query} frames | support {var_num_few} "
+          f"({var_few_shot_ratio:.2%}) from {var_support_label} | student validation "
+          f"{var_num_valid} | query {len(var_query_idx)}")
     print(f"kd_weight {var_kd_weight} | init_from_teacher {var_init_from_teacher}")
     #
     ## ------------------------------------------ teacher --------------------------------------------

@@ -4,8 +4,11 @@
 
                 Teacher : RoomLocalizer trained on every train rooms, then frozen.
                 Student : RoomLocalizer warm-started from the teacher and fine-tuned on a small
-                          fraction of the test frames (--few_shot_ratio) with the supervised Huber
+                          fraction of the support pool (--few_shot_ratio) with the supervised Huber
                           position loss plus --kd_weight * a smooth-L1 match to the frozen teacher.
+                          The support pool is --support_rooms when given and --test_rooms otherwise,
+                          so the student can be fine-tuned on one room while the query set is still
+                          scored on every --test_rooms room.
                 Test    : the test frames held out of both the support set and the student's
                           validation slice, so the reported error is on frames neither model was
                           tuned on. Teacher and constant-position baseline are reported alongside.
@@ -18,6 +21,11 @@
                 Example:
                     python scripts/run_few_shot_hwild_to_wimans.py --few_shot_ratio 0.05 --kd_weight 1.0
                     python scripts/run_few_shot_hwild_to_wimans.py --few_shot_ratio 0.05 --kd_weight 0
+                    # fine-tune on 10% of classroom only, still scored on all three WiMANS rooms
+                    python scripts/run_few_shot_hwild_to_wimans.py \
+                        --train_rooms Conference,Laboratory,Lounge,Office \
+                        --test_rooms meeting_room,classroom,empty_room \
+                        --support_rooms classroom --few_shot_ratio 0.1 --kd_weight 0
 """
 #
 ##
@@ -55,10 +63,19 @@ def parse_args():
     var_args.add_argument("--train_rooms", default=None, type=str,
                           help="comma-separated teacher rooms (default: H-WILD)")
     var_args.add_argument("--test_rooms", default=None, type=str,
-                          help="comma-separated rooms forming the support/query pool "
+                          help="comma-separated rooms forming the query pool "
                                "(default: WiMANS)")
+    var_args.add_argument("--support_rooms", default=None, type=str,
+                          help="comma-separated rooms the few-shot support set is drawn from. "
+                               "Default: the query pool itself, so the support is spread across "
+                               "every --test_rooms room. Set it to fine-tune the student on one "
+                               "room (e.g. classroom) while the query set stays scored on all of "
+                               "--test_rooms; the support rooms are loaded even when they are not "
+                               "in --test_rooms, so the student can be given data from a room the "
+                               "query never scores.")
     var_args.add_argument("--few_shot_ratio", default=0.05, type=float,
-                          help="fraction of the WiMANS pool used to fine-tune the student")
+                          help="fraction of the support pool (see --support_rooms) used to "
+                               "fine-tune the student")
     var_args.add_argument("--kd_weight", default=1.0, type=float,
                           help="weight of the teacher distillation term (0 = supervised few-shot only)")
     var_args.add_argument("--repeat", default=3, type=int, help="number of repeated experiments")
@@ -102,6 +119,31 @@ def standardize_windows(var_x):
 
 
 
+def load_room_set(var_room, var_args, var_load_kwargs, var_tag):
+    """
+    [description]
+    : load one room of either dataset as a (X, XY) set in the transmitter-anchored frame. WiMANS
+      positions are already meters from the transmitter (preset["layouts"]); only the single-occupant
+      frames are kept, since the localizer predicts one position.
+    : return: (X, XY)
+    """
+    #
+    if var_room in hwild_room_names():
+        var_x, var_y, var_meta = load_hwild_room(var_room, var_frame="tx", **var_load_kwargs)
+        print(f"[{var_tag}]{var_room:12s} X {var_x.shape} XY {var_y.shape} "
+              f"({var_meta['num_files']} captures)")
+        return var_x, var_y
+    if var_room in WIMANS_ROOMS:
+        var_x, var_y = load_wimans_room_targets(var_room, var_max_samples=var_args.max_samples,
+                                                var_length=preset["hwild"]["window"])
+        if len(var_x) == 0:
+            raise ValueError(f"no single-occupant WiMANS frames for {var_room!r}")
+        print(f"[{var_tag}]{var_room:12s} X {var_x.shape} XY {var_y.shape} "
+              f"({len(np.unique(var_y.round(3), axis=0))} distinct positions)")
+        return var_x, var_y
+    raise ValueError(f"unknown room {var_room!r}; not in {hwild_room_names() + list(WIMANS_ROOMS)}")
+
+
 def run():
     """
     [description]
@@ -119,10 +161,15 @@ def run():
                        if var_args.train_rooms else hwild_room_names())
     var_test_rooms = ([var_room.strip() for var_room in var_args.test_rooms.split(',')]
                       if var_args.test_rooms else list(WIMANS_ROOMS))
+    var_support_rooms = ([var_room.strip() for var_room in var_args.support_rooms.split(',')]
+                         if var_args.support_rooms else None)
     ## the teacher's data and the student's support/query pool must be disjoint, or the "held-out"
     ## query frames would be frames the teacher was trained on
     if set(var_train_rooms) & set(var_test_rooms):
         raise ValueError(f"train rooms {var_train_rooms} and test rooms {var_test_rooms} overlap")
+    if var_support_rooms and set(var_train_rooms) & set(var_support_rooms):
+        raise ValueError(f"train rooms {var_train_rooms} and support rooms {var_support_rooms} "
+                         f"overlap")
     #
     if var_args.window is not None:
         preset["hwild"]["window"] = var_args.window
@@ -137,41 +184,22 @@ def run():
     ## --------------------------- load both datasets in the TX frame -------------------------------
     var_load_kwargs = {"var_root": var_args.data_root, "var_users": var_users,
                        "var_interference": var_interference, "var_max_files": var_args.max_files}
-    train_sets_by_room, test_sets_by_room = {}, {}
+    train_sets_by_room, test_sets_by_room, support_sets_by_room = {}, {}, {}
     for var_room in var_train_rooms:
-        if var_room in hwild_room_names():
-            var_x, var_y, var_meta = load_hwild_room(var_room, var_frame="tx", **var_load_kwargs)
-            train_sets_by_room[var_room] = (var_x, var_y)
-            print(f"[train] {var_room:12s} X {var_x.shape} XY {var_y.shape} "
-                f"({var_meta['num_files']} captures)")
-        elif var_room in WIMANS_ROOMS:
-            var_x, var_y = load_wimans_room_targets(var_room, var_max_samples=var_args.max_samples,
-                                                    var_length=preset["hwild"]["window"])
-            if len(var_x) == 0:
-                raise ValueError(f"no single-occupant WiMANS frames for {var_room!r}")
-            train_sets_by_room[var_room] = (var_x, var_y)
-            print(f"[train] {var_room:12s} X {var_x.shape} XY {var_y.shape} "
-                  f"({len(np.unique(var_y.round(3), axis=0))} distinct positions)")
-    ## WiMANS positions are already meters from the transmitter (preset["layouts"]); only the
-    ## single-occupant frames are kept, since the localizer predicts one position.
+        train_sets_by_room[var_room] = load_room_set(var_room, var_args, var_load_kwargs, "train] ")
     for var_room in var_test_rooms:
-        if var_room in hwild_room_names():
-            var_x, var_y, var_meta = load_hwild_room(var_room, var_frame="tx", **var_load_kwargs)
-            test_sets_by_room[var_room] = (var_x, var_y)
-            print(f"[test]  {var_room:12s} X {var_x.shape} XY {var_y.shape} "
-                f"({var_meta['num_files']} captures)")
-        elif var_room in WIMANS_ROOMS:
-            var_x, var_y = load_wimans_room_targets(var_room, var_max_samples=var_args.max_samples,
-                                                    var_length=preset["hwild"]["window"])
-            if len(var_x) == 0:
-                raise ValueError(f"no single-occupant WiMANS frames for {var_room!r}")
-            test_sets_by_room[var_room] = (var_x, var_y)
-            print(f"[test]  {var_room:12s} X {var_x.shape} XY {var_y.shape} "
-                f"({len(np.unique(var_y.round(3), axis=0))} distinct positions)")
+        test_sets_by_room[var_room] = load_room_set(var_room, var_args, var_load_kwargs, "test]  ")
+    ## the support rooms are loaded even when they are not scored on, so the student can be given
+    ## data from a room the query set never touches
+    for var_room in (var_support_rooms or []):
+        if var_room in test_sets_by_room:
+            continue
+        support_sets_by_room[var_room] = load_room_set(var_room, var_args, var_load_kwargs, "support]")
     #
     ## ------------------------------------ shared frame --------------------------------------------
     var_all_xy = np.concatenate([var_y for _, var_y in list(train_sets_by_room.values())
-                                 + list(test_sets_by_room.values())])
+                                 + list(test_sets_by_room.values())
+                                 + list(support_sets_by_room.values())])
     var_margin = 0.5
     var_rect = (float(var_all_xy[:, 0].min() - var_margin), float(var_all_xy[:, 0].max() + var_margin),
                 float(var_all_xy[:, 1].min() - var_margin), float(var_all_xy[:, 1].max() + var_margin))
@@ -180,31 +208,37 @@ def run():
           f"(span {var_rect[1] - var_rect[0]:.2f} x {var_rect[3] - var_rect[2]:.2f} m)")
     #
     if var_args.standardize == "window":
-        for var_sets in (train_sets_by_room, test_sets_by_room):
+        for var_sets in (train_sets_by_room, test_sets_by_room, support_sets_by_room):
             for var_room, (var_x, var_y) in var_sets.items():
                 var_sets[var_room] = (standardize_windows(var_x), var_y)
         print("CSI: per-window z-score (gain/AGC removed)")
     else:
         print("CSI: raw amplitude")
     #
-    for var_sets in (train_sets_by_room, test_sets_by_room):
+    for var_sets in (train_sets_by_room, test_sets_by_room, support_sets_by_room):
         for var_room, (var_x, var_y) in var_sets.items():
             var_sets[var_room] = (var_x, normalize_xy_meters(var_y, var_rect))
     #
     ## --------------------------------------- run the model ----------------------------------------
+    ## one pool holding every loaded room; the runner is told which rooms are scored on and which
+    ## may supply the few-shot support, so a support room the query never scores can still be loaded
+    var_pool_sets_by_room = {**test_sets_by_room, **support_sets_by_room}
     var_save_path = reserve_viz_dir(path=f"few_shot_hwild_to_wimans/{'_'.join(var_train_rooms)}")
     var_results = run_few_shot_localization(
-        train_sets_by_room, test_sets_by_room,
+        train_sets_by_room, var_pool_sets_by_room,
         var_few_shot_ratio=var_args.few_shot_ratio, var_kd_weight=var_args.kd_weight,
         var_repeat=var_args.repeat, var_teacher_epochs=var_args.teacher_epochs,
         var_student_epochs=var_args.student_epochs,
         var_init_from_teacher=not var_args.no_init_from_teacher,
-        var_bounds=var_rect, save_path=var_save_path)
+        var_bounds=var_rect, save_path=var_save_path,
+        var_support_rooms=var_support_rooms, var_query_rooms=var_test_rooms)
     #
     var_result = {
         "protocol": "train H-WILD (teacher) -> few-shot KD fine-tune on WiMANS -> test held-out WiMANS",
         "train_rooms": var_train_rooms,
         "test_rooms": var_test_rooms,
+        "support_rooms": (var_support_rooms if var_support_rooms else var_test_rooms),
+        "support_rooms_explicit": bool(var_support_rooms),
         "few_shot_ratio": var_args.few_shot_ratio,
         "kd_weight": var_args.kd_weight,
         "init_from_teacher": not var_args.no_init_from_teacher,
@@ -234,6 +268,7 @@ def run():
     var_formatted = format_few_shot_result(var_args.few_shot_ratio, var_args.kd_weight, var_results)
     var_stem = build_run_stem("few_shot_hwild_to_wimans", "localization",
                               f"train-{join_envs(var_train_rooms)}", f"test-{join_envs(var_test_rooms)}",
+                              *([f"sup-{join_envs(var_support_rooms)}"] if var_support_rooms else []),
                               f"fs{var_args.few_shot_ratio}", f"kd{var_args.kd_weight}",
                               f"r{var_args.repeat}", var_args.standardize, run_timestamp())
     var_json_path, var_txt_path = save_run_outputs(
