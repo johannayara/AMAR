@@ -204,7 +204,10 @@ def run():
                           if var_args.wimans_rooms else None),
         var_standardize=var_args.standardize,
         var_few_shot_ratio=var_args.few_shot_ratio,
-        var_vocabulary=var_args.activities)
+        var_vocabulary=var_args.activities,
+        ## this runner is scored on the per-room query frames and never touches the pool they were cut
+        ## from, so the pool is released instead of staying resident beside them
+        var_with_pool=False)
     var_shared = var_task["var_shared"]
     preset["nn"]["num_classes"] = var_task["var_num_classes"]
     preset["task"] = "activity"

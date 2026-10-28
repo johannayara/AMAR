@@ -217,7 +217,11 @@ def run():
                           if var_args.wimans_rooms else None),
         var_standardize=var_args.standardize,
         var_few_shot_ratio=var_args.few_shot_ratio,
-        var_vocabulary=var_args.activities)
+        var_vocabulary=var_args.activities,
+        ## this runner slices the pool with support_idx/valid_idx/query_idx and never touches the
+        ## per-room query tensors, whose copy of 80% of the pool is what pushes the union vocabulary
+        ## past a 16 GB job
+        var_with_query=False)
     var_shared = var_task["var_shared"]
     preset["nn"]["num_classes"] = var_task["var_num_classes"]
     preset["task"] = "activity"
@@ -246,7 +250,7 @@ def run():
         var_teacher_epochs=var_args.teacher_epochs, var_student_epochs=var_args.student_epochs,
         var_init_from_teacher=not var_args.no_init_from_teacher,
         var_compile=not var_args.no_compile, var_repeat=var_args.repeat, var_task="activity",
-        var_env="ntu_har", save_path=var_save_path)
+        var_env="ntu_har", save_path=var_save_path, var_class_names=var_shared)
     for var_room, var_metrics in var_baseline.items():
         if var_room in var_per_env:
             var_per_env[var_room].update(var_metrics)
@@ -291,7 +295,7 @@ def run():
     var_formatted = format_result(var_result, var_shared, var_majority_name)
     var_stem = build_run_stem("few_shot_ntu_to_wimans", "activity",
                               f"vocab-{var_task['var_vocabulary']}",
-                              f"test-{join_envs(list(var_task['query_by_env']))}",
+                              f"test-{join_envs(list(var_task['pool_by_env']))}",
                               f"fs{var_args.few_shot_ratio}", f"kd{var_args.kd_weight}",
                               f"r{var_args.repeat}", var_args.standardize, run_timestamp())
     var_json_path, var_txt_path = save_run_outputs(

@@ -429,6 +429,29 @@ same `--activities`: the pool, and therefore the query frames, depend on the voc
 `output/few_shot_ntu_to_wimans/*.json|txt` and figures to
 `visualizations/few_shot_ntu_to_wimans/`.
 
+### What the head does with the query frames
+
+`src/models/set_clustering.py` draws the set-prediction head's own grouping. The head emits
+`num_obj_queries` slots and the loss matches them to a sample's occupants with the Hungarian
+algorithm, so every occupant lands on one slot and the samples that land on the same slot are the group
+the head treats as one thing. On the last repeat the few-shot runner draws that for the teacher and the
+student, per environment, into
+`visualizations/few_shot_ntu_to_wimans/<run>/<environment>/clustering_teacher_r<k>.png` and
+`clustering_student_r<k>.png`, and puts the per-slot summary (`samples`, `top_activity`, `purity`,
+`predicted_class`) under `per_env.<environment>.clustering` in the run's JSON.
+
+Each figure has: the query embeddings of the matched slots in a t-SNE coloured by slot; the same points
+labelled with each slot's dominant activity; the slot × true-activity contingency; and one panel per
+used slot with its cross-attention profile over the window, one line per attention head
+(`TransformerDecoderLayer` already keeps the per-head weights; `TransformerDecoder.forward` gained
+`return_embedding` so the figure can also show the embeddings `class_embed` reads off). Attention is
+plotted against *relative* packet position, so the profiles of a teacher whose backbone sees 500-packet
+NTU-Fi HAR windows and a student on 3000-packet WiMANS windows share one x-axis.
+
+Note the slot index of a *target* carries no meaning — `build_activity_set_labels` permutes the target
+query order per sample — but the model's slots are shared across samples, and those are what the
+matching recovers.
+
 ## Available Models
 
 | Model | Type | Description | Reference |

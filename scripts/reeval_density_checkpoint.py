@@ -56,9 +56,9 @@ import torch
 
 from configs.preset import preset
 from src.models.density_map import (
-    _peaks_with_values, build_kernels, density_map_maxima, evaluate_count_rule,
-    layout_free_calibration, normalized_to_meters, occupancy_to_positions, position_error_metrics,
-    resolve_count_decision, sample_location_occupancy,
+    _peaks_with_values, build_kernels, calibrate_empty_threshold, density_map_maxima,
+    evaluate_count_rule, layout_free_calibration, normalized_to_meters, occupancy_to_positions,
+    position_error_metrics, resolve_count_decision, sample_location_occupancy,
 )
 from src.utils import select_device
 from visualize_density_checkpoint import load_model, load_room, predict_density
@@ -98,13 +98,16 @@ def parse_args():
 def parse_gate(var_gate, var_calibrated):
     """
     [description]
-    : resolve the --gate argument into the value evaluate_count_rule takes (None disables the gate).
+    : resolve the --gate argument into the value evaluate_count_rule takes (None disables the gate). A
+      calibrated value that is not finite is unusable, so it falls back to no gate.
     """
     var_gate = str(var_gate).strip().lower()
     if var_gate in ("off", "none", "false"):
         return None
     if var_gate in ("calibrated", "calib", "true"):
-        return None if var_calibrated is None else float(var_calibrated)
+        if var_calibrated is None or not np.isfinite(var_calibrated):
+            return None
+        return float(var_calibrated)
     return float(var_gate)
 
 
@@ -168,13 +171,14 @@ def score(var_pred_density, var_true_y, var_env, var_kernels, var_occ_threshold,
     return {**var_metrics, **var_old_metrics}
 
 
-def format_rows(var_rows):
+def format_rows(var_rows, var_label_width=18):
     """
     [description]
     : render the metric rows as one aligned table.
     """
     var_lines = []
-    var_head = f"{'rule':<6}" + "".join(f"{var_label:>10}" for _, var_label, _ in METRIC_ORDER)
+    var_head = (f"{'rule':<{var_label_width}}"
+                + "".join(f"{var_label:>10}" for _, var_label, _ in METRIC_ORDER))
     var_lines.append(var_head)
     var_lines.append("-" * len(var_head))
     for var_name, var_metrics in var_rows:
@@ -182,7 +186,7 @@ def format_rows(var_rows):
         for var_key, _, var_fmt in METRIC_ORDER:
             var_value = var_metrics.get(var_key)
             var_cells += f"{'nan' if var_value is None else var_fmt % var_value:>10}"
-        var_lines.append(f"{var_name:<6}{var_cells}")
+        var_lines.append(f"{var_name:<{var_label_width}}{var_cells}")
     return "\n".join(var_lines)
 
 
@@ -206,11 +210,17 @@ def run():
         var_model, var_train_envs, var_grid_size, var_sigma, var_device, var_args.users)
     var_calibrated_empty, var_occ_threshold = resolve_count_decision(
         var_valid_occ, var_valid_count, var_valid_max)
+    if var_calibrated_empty is None:
+        ## the preset ships density.staged_count=False, so resolve_count_decision reports "gate
+        ## disabled" rather than "what the gate would be"; --gate calibrated needs the latter
+        var_calibrated_empty = float(calibrate_empty_threshold(var_valid_max, var_valid_count)[0])
     var_peak_threshold, var_mass = layout_free_calibration(var_valid_density, var_valid_count)
     var_empty_threshold = parse_gate(var_args.gate, var_calibrated_empty)
+    var_calibrated_log = ("nan (unusable: no empty frames in the split)"
+                          if not np.isfinite(var_calibrated_empty) else f"{var_calibrated_empty:.4f}")
     print(f"Decision: Thr {var_occ_threshold:.4f} - EmptyThr "
           f"{'nan' if var_empty_threshold is None else '%.4f' % var_empty_threshold}"
-          f" (calibrated {'nan' if var_calibrated_empty is None else '%.4f' % var_calibrated_empty})"
+          f" (calibrated {var_calibrated_log})"
           f" - peakThr {var_peak_threshold:.4f} - mass/person {var_mass:.3f}")
 
     #

@@ -36,7 +36,7 @@ from src.utils import calculate_scores
 
 #
 ##
-## The activity vocabularies a cross-dataset run can be built on (see resolve_activity_map).
+## The activity vocabularies a cross-dataset run can be built on (see resolve_vocabulary).
 ACTIVITY_VOCABULARIES = ("shared", "walk_nothing", "union")
 ## WiMANS labels an occupant standing still as "nothing"; NTU-Fi HAR has no such capture, so the
 ## activity only ever appears on the target side.
@@ -51,30 +51,12 @@ def wimans_activities():
     return [var_name for var_name in preset["encoding"]["activity"] if var_name != "nan"]
 
 
-def parse_activity_map(var_spec):
+def resolve_vocabulary(var_vocabulary=None, var_ntu_classes=None):
     """
     [description]
-    : parse "--activity_map 'walk=walk,fall=lie_down'" into {ntu_class: wimans_activity}.
-    """
-    #
-    ##
-    var_map = {}
-    for var_item in (var_spec or "").split(","):
-        var_item = var_item.strip()
-        if not var_item:
-            continue
-        var_ntu, var_sep, var_wimans = var_item.partition("=")
-        if not var_sep:
-            raise ValueError(f"--activity_map expects NTU=WiMANS pairs, got {var_item!r}")
-        var_map[var_ntu.strip()] = var_wimans.strip()
-    return var_map
-
-
-def resolve_activity_map(var_map=None, var_ntu_classes=None, var_vocabulary=None):
-    """
-    [description]
-    : the NTU-Fi HAR class -> shared-activity map a run uses, plus the resulting shared vocabulary.
-    : var_map: explicit {ntu_class: wimans_activity}; it overrides var_vocabulary.
+    : the label space a cross-dataset run uses. Activities are matched by name -- a class keeps its
+      own name on both sides -- so the vocabulary fixes which NTU-Fi HAR classes the source provides
+      and which activity names the class ordering holds.
     : var_vocabulary: which activities the label space holds.
         "shared"       (default) the identity intersection of the two vocabularies: only activity
                        names both datasets use, so every target test frame is a class the source also
@@ -83,50 +65,36 @@ def resolve_activity_map(var_map=None, var_ntu_classes=None, var_vocabulary=None
         "walk_nothing" that intersection plus WiMANS's idle activity "nothing", so the target test is
                        walking against nothing. The source has no "nothing" captures, so the class is
                        target-only and only the few-shot student can learn it.
-        "union"        every NTU-Fi HAR class and every WiMANS activity, mapped by name: "walk" is
-                       shared, box/circle/clean exist on the source only and nothing/rotation/jump/
-                       wave/lie_down/pick_up/sit_down/stand_up on the target only. Both datasets keep
-                       all their labels and the transfer test spans the full vocabulary.
-    : return: (var_map (dict), var_shared (sorted list of shared activity names))
+        "union"        every NTU-Fi HAR class and every WiMANS activity: "walk" is shared,
+                       box/circle/clean exist on the source only and nothing/rotation/jump/wave/
+                       lie_down/pick_up/sit_down/stand_up on the target only. Both datasets keep all
+                       their labels and the transfer test spans the full vocabulary.
+    : return: (var_ntu_kept (sorted NTU-Fi HAR class names the source loads), var_shared (sorted list
+      of activity names, the class ordering))
     """
     #
     ##
     var_ntu_classes = (list(var_ntu_classes) if var_ntu_classes is not None
                        else ntu_har_class_names())
     var_wimans = wimans_activities()
-    if var_map is not None:
-        for var_ntu, var_wimans_name in var_map.items():
-            if var_ntu not in var_ntu_classes:
-                raise ValueError(f"activity map source {var_ntu!r} is not an NTU-Fi HAR class; "
-                                 f"available {var_ntu_classes}")
-            if var_wimans_name not in var_wimans:
-                raise ValueError(f"activity map target {var_wimans_name!r} is not a WiMANS activity; "
-                                 f"available {var_wimans}")
-        var_shared = sorted(set(var_map.values()))
+    var_vocabulary = var_vocabulary or "shared"
+    if var_vocabulary == "shared":
+        var_ntu_kept = [var_name for var_name in var_ntu_classes if var_name in var_wimans]
+        var_shared = sorted(var_ntu_kept)
+    elif var_vocabulary == "walk_nothing":
+        var_ntu_kept = [var_name for var_name in var_ntu_classes if var_name in var_wimans]
+        var_shared = sorted(set(var_ntu_kept) | {WIMANS_IDLE_ACTIVITY})
+    elif var_vocabulary == "union":
+        var_ntu_kept = list(var_ntu_classes)
+        var_shared = sorted(set(var_ntu_classes) | set(var_wimans))
     else:
-        var_vocabulary = var_vocabulary or "shared"
-        var_common = {var_name: var_name for var_name in var_ntu_classes if var_name in var_wimans}
-        if var_vocabulary == "shared":
-            var_map, var_shared = var_common, sorted(set(var_common.values()))
-        elif var_vocabulary == "walk_nothing":
-            var_map = var_common
-            var_shared = sorted(set(var_common.values()) | {WIMANS_IDLE_ACTIVITY})
-        elif var_vocabulary == "union":
-            ## every class keeps its own name; source-only classes (box/circle/clean) are simply
-            ## never produced by a WiMANS frame and target-only activities never by an NTU-Fi HAR one
-            var_map = {var_name: var_name for var_name in var_ntu_classes}
-            var_shared = sorted(set(var_ntu_classes) | set(var_wimans))
-        else:
-            raise ValueError(f"var_vocabulary must be one of {ACTIVITY_VOCABULARIES}, "
-                             f"got {var_vocabulary!r}")
-    if not var_map:
+        raise ValueError(f"var_vocabulary must be one of {ACTIVITY_VOCABULARIES}, "
+                         f"got {var_vocabulary!r}")
+    if not var_ntu_kept:
         raise ValueError(
-            f"NTU-Fi HAR and WiMANS share no activity name under vocabulary "
-            f"{var_vocabulary!r}, so the cross-dataset run is undefined. Pass an explicit "
-            f"--activity_map, e.g. --activity_map 'walk=walk,fall=lie_down', or --activities union.")
-    if not var_shared:
-        raise ValueError(f"vocabulary {var_vocabulary!r} is empty")
-    return var_map, var_shared
+            f"NTU-Fi HAR and WiMANS share no activity name under vocabulary {var_vocabulary!r}, so "
+            f"the cross-dataset run is undefined. Use --activities union.")
+    return sorted(var_ntu_kept), var_shared
 
 
 def build_activity_set_labels(var_class_indices, var_num_queries, var_num_classes, var_seed=39):
@@ -154,7 +122,7 @@ def build_activity_set_labels(var_class_indices, var_num_queries, var_num_classe
     return var_y
 
 
-def standardize_windows(var_x, var_valid_lengths=None):
+def standardize_windows(var_x, var_valid_lengths=None, var_in_place=False):
     """
     [description]
     : z-score every CSI window over its time x feature entries. This removes the per-device gain/AGC
@@ -164,6 +132,9 @@ def standardize_windows(var_x, var_valid_lengths=None):
     : var_valid_lengths: per-window number of real packets. WiMANS windows carry leading zero padding
       (the repo's convention, see load_data_x); passing the lengths restricts the statistics to the
       real tail, so the padding does not bias them.
+    : var_in_place: write into var_x instead of returning a copy, for callers that own the array. The
+      WiMANS pool is (N, 3000, 270) float32 -- several GB on the full vocabulary -- so the copy is
+      worth avoiding there; the numbers are identical either way.
     : return: same shape, float32
     """
     #
@@ -172,9 +143,13 @@ def standardize_windows(var_x, var_valid_lengths=None):
     if var_valid_lengths is None:
         var_mu = var_x.mean(axis=(1, 2), keepdims=True)
         var_sd = var_x.std(axis=(1, 2), keepdims=True) + 1e-6
+        if var_in_place:
+            var_x -= var_mu
+            var_x /= var_sd
+            return var_x
         return ((var_x - var_mu) / var_sd).astype(np.float32)
     #
-    var_out = var_x.copy()
+    var_out = var_x if var_in_place else var_x.copy()
     for var_i, var_length in enumerate(var_valid_lengths):
         var_start = var_x.shape[1] - int(var_length)
         var_tail = var_x[var_i, var_start:]
@@ -270,7 +245,8 @@ def load_wimans_activity(var_activities, var_rooms=None, var_num_users=None, var
             var_x[var_i], var_lengths[var_i] = harmonize_wimans_features(var_amp, var_features,
                                                                         var_length)
         if var_standardize == "window":
-            var_x = standardize_windows(var_x, var_lengths)
+            ## in place: the pool is freshly allocated here and is the largest array in the run
+            var_x = standardize_windows(var_x, var_lengths, var_in_place=True)
         elif var_standardize != "none":
             raise ValueError(f"var_standardize must be 'window' or 'none', got {var_standardize!r}")
         var_out[var_room] = (var_x, var_class_indices)
@@ -355,54 +331,59 @@ def majority_query_metrics(var_majority, var_query_class_indices, var_num_classe
     return calculate_scores(var_true, var_pred)
 
 
-def prepare_transfer_task(var_activity_map=None, var_ntu_root=None, var_ntu_splits=None,
+def prepare_transfer_task(var_ntu_root=None, var_ntu_splits=None,
                           var_features=None, var_wimans_rooms=None, var_wimans_users=None,
                           var_band=None, var_length=None, var_standardize="window",
                           var_max_ntu_files=None, var_max_wimans_samples=None,
-                          var_few_shot_ratio=0.05, var_seed=39, var_vocabulary=None):
+                          var_few_shot_ratio=0.05, var_seed=39, var_vocabulary=None,
+                          var_with_pool=True, var_with_query=True):
     """
     [description]
     : load both sides of the NTU-Fi HAR -> WiMANS shared-activity task and split the WiMANS pool into
       support / student-validation / query. Both runners call this, so they train on the same source
       data and are scored on the same target frames.
-    : var_vocabulary: "shared" (default) / "walk_nothing" / "union", see resolve_activity_map; ignored
-      when var_activity_map is given.
+    : var_vocabulary: "shared" (default) / "walk_nothing" / "union", see resolve_vocabulary.
+    : var_with_pool / var_with_query: whether to hand back the per-room WiMANS pool and the per-room
+      query frames. The pool is (frames, 3000, 270) float32 -- 5.8 GB over the full union vocabulary
+      (1782 frames) -- and the query frames are a second copy of 80% of it, so a runner that needs
+      only one of the two asks for only that one and the other is not materialized. The few-shot
+      runner indexes the pool with support_idx/valid_idx/query_idx; the pure-split runner is scored on
+      the query frames. Only the returned dict is affected: the split indices and the per-query
+      activity labels are always built.
     : return: dict with
-        var_map                    NTU-Fi HAR class -> shared activity
         var_shared                 shared activity names, the class ordering
         var_vocabulary             the vocabulary the class ordering came from
         var_num_classes            len(var_shared) + 1 (the no-object class)
         var_ntu_classes            NTU-Fi HAR classes kept
         train_sets_by_env          {"ntu_har": (X, y)}
         ntu_class_indices          per-NTU-sample shared activity indices
-        pool_by_env                {room: (X, y)} the whole WiMANS pool
+        pool_by_env                {room: (X, y)} the whole WiMANS pool, {} unless var_with_pool
         support_idx/valid_idx/query_idx   global pool indices
-        query_by_env               {room: (X, y)} the held-out query frames
+        query_by_env               {room: (X, y)} the held-out query frames, {} unless var_with_query
         query_class_indices_by_env per-query shared activity indices
     """
     #
     ##
-    var_map, var_shared = resolve_activity_map(
-        var_activity_map,
-        var_ntu_classes=ntu_har_class_names(var_ntu_root, var_ntu_splits),
-        var_vocabulary=var_vocabulary)
+    var_ntu_kept, var_shared = resolve_vocabulary(
+        var_vocabulary, var_ntu_classes=ntu_har_class_names(var_ntu_root, var_ntu_splits))
+    var_vocabulary = var_vocabulary or "shared"
     var_num_classes = len(var_shared) + 1
     var_num_queries = preset["nn"]["num_obj_queries"]
     var_features = var_features or preset.get("ntu_har", {}).get("features", NTU_HAR_FEATURES)
     #
     ## --------------------------------------- NTU-Fi HAR -------------------------------------------
     var_ntu_x, var_ntu_local_y, var_ntu_classes = load_ntu_har(
-        var_root=var_ntu_root, var_splits=var_ntu_splits, var_classes=sorted(var_map),
+        var_root=var_ntu_root, var_splits=var_ntu_splits, var_classes=var_ntu_kept,
         var_features=var_features, var_max_files=var_max_ntu_files)
     if var_standardize == "window":
-        var_ntu_x = standardize_windows(var_ntu_x)
+        var_ntu_x = standardize_windows(var_ntu_x, var_in_place=True)
     elif var_standardize != "none":
         raise ValueError(f"var_standardize must be 'window' or 'none', got {var_standardize!r}")
-    var_ntu_class_indices = [[var_shared.index(var_map[var_ntu_classes[int(var_local)]])]
+    ## a class keeps its own name, so the local NTU-Fi HAR index maps straight into the shared ordering
+    var_ntu_class_indices = [[var_shared.index(var_ntu_classes[int(var_local)])]
                              for var_local in var_ntu_local_y]
     var_ntu_y = build_activity_set_labels(var_ntu_class_indices, var_num_queries, var_num_classes)
-    print(f"[NTU-Fi HAR] {var_ntu_x.shape} | classes {var_ntu_classes} -> "
-          f"{[var_map[c] for c in var_ntu_classes]}")
+    print(f"[NTU-Fi HAR] {var_ntu_x.shape} | classes {var_ntu_classes}")
     #
     ## ----------------------------------------- WiMANS --------------------------------------------
     var_wimans = load_wimans_activity(var_shared, var_rooms=var_wimans_rooms,
@@ -416,31 +397,34 @@ def prepare_transfer_task(var_activity_map=None, var_ntu_root=None, var_ntu_spli
                                      build_activity_set_labels(var_wimans[var_room][1],
                                                                var_num_queries, var_num_classes))
         var_sizes.append(len(var_x))
+    var_room_names = list(var_wimans)
     var_support_idx, var_valid_idx, var_query_idx = split_target_pool(var_sizes, var_few_shot_ratio,
                                                                      var_seed=var_seed)
     #
     ## the query frames per room, so the pure-split runner can be scored on the same frames the
-    ## few-shot runner holds out
+    ## few-shot runner holds out; the per-query activity labels are cheap and always built
     var_query_by_env, var_query_class_indices_by_env = {}, {}
     for var_room, (var_start, var_size) in zip(var_pool_by_env, _env_slices(var_sizes)):
         var_mask = (var_query_idx >= var_start) & (var_query_idx < var_start + var_size)
         var_sel = var_query_idx[var_mask] - var_start
-        var_x, var_y = var_pool_by_env[var_room]
-        var_query_by_env[var_room] = (var_x[var_sel], var_y[var_sel])
+        if var_with_query:
+            var_x, var_y = var_pool_by_env[var_room]
+            var_query_by_env[var_room] = (var_x[var_sel], var_y[var_sel])
         var_query_class_indices_by_env[var_room] = [var_wimans[var_room][1][int(var_i)]
                                                     for var_i in var_sel]
+    if not var_with_pool:
+        ## the pool's only other use is run_cross_domain's concatenation, which the pure-split runner
+        ## does off the query frames; releasing it here keeps the two views from being resident at once
+        var_pool_by_env = {}
     #
     print(f"\nShared activities ({len(var_shared)}): {var_shared} | no-object class "
-          f"{var_num_classes - 1} | num_classes {var_num_classes} | vocabulary "
-          f"{var_vocabulary or ('explicit map' if var_activity_map is not None else 'shared')}")
-    print(f"Activity map (NTU-Fi HAR -> class): {var_map}")
-    print(f"WiMANS pool {int(np.sum(var_sizes))} frames {dict(zip(var_pool_by_env, var_sizes))} -> "
+          f"{var_num_classes - 1} | num_classes {var_num_classes} | vocabulary {var_vocabulary}")
+    print(f"WiMANS pool {int(np.sum(var_sizes))} frames {dict(zip(var_room_names, var_sizes))} -> "
           f"support {len(var_support_idx)} ({var_few_shot_ratio:.2%}) | student validation "
           f"{len(var_valid_idx)} | query {len(var_query_idx)}")
     return {
-        "var_map": var_map,
         "var_shared": var_shared,
-        "var_vocabulary": var_vocabulary or ("map" if var_activity_map is not None else "shared"),
+        "var_vocabulary": var_vocabulary,
         "var_num_classes": var_num_classes,
         "var_ntu_classes": var_ntu_classes,
         "train_sets_by_env": {"ntu_har": (var_ntu_x, var_ntu_y)},

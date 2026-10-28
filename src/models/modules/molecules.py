@@ -378,7 +378,7 @@ class TransformerDecoder(nn.Module):
         self.register_buffer('tgt_embed', tgt_embed)
         self.memory_pos_encoding = None
 
-    def forward(self, context_tokens, src_key_padding_mask=None):
+    def forward(self, context_tokens, src_key_padding_mask=None, return_embedding=False):
         """
         Args:
             context_tokens: Context token representations from JEPA encoder 
@@ -388,6 +388,10 @@ class TransformerDecoder(nn.Module):
             src_key_padding_mask: Padding mask for context tokens
                                  Shape: (batch_size, max_context_tokens)
                                  True for padded positions
+            return_embedding: also return the last layer's query embeddings (B, num_queries, d_model),
+                              i.e. what class_embed is applied to; the per-head cross-attention of
+                              each layer is on that layer's cross_attn_weights either way
+                              (src/models/set_clustering.py reads both)
         Returns:
             outputs: List of output predictions from each decoder layer
                     Shape: [num_layers, batch_size, num_queries, num_classes]
@@ -419,6 +423,8 @@ class TransformerDecoder(nn.Module):
             pred = self.class_embed(output)
             intermediate.append(pred)
 
+        if return_embedding:
+            return torch.stack(intermediate), output
         return torch.stack(intermediate)  # Shape: [num_layers, B, num_queries, num_classes]
 
 

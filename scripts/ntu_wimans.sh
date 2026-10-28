@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 #SBATCH --cpus-per-task 1
-#SBATCH --mem 16G
+## The union vocabulary loads the whole WiMANS pool (1782 frames x 3000 x 270 float32 = 5.8 GB) and
+## the source side grows 6x, so 16G is not enough for the second run below; lower it only for a
+## walk_nothing-only run.
+#SBATCH --mem 32G
 #SBATCH --qos normal
-#SBATCH --time 4:00:00
+#SBATCH --time 8:00:00
 #SBATCH --gres gpu:v100:1
 
 set -euo pipefail

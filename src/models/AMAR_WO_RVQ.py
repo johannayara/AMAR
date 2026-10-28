@@ -12,6 +12,7 @@ import torch.nn as nn
 from torch.utils.data import TensorDataset
 from ptflops import get_model_complexity_info
 from src.models.modules.molecules import Backbone, Transformer_Encoder, TransformerDecoder
+from src.models.set_clustering import visualize_query_clustering
 from src.models.that_variance import build_thatv, parse_backbone
 from src.models.losses.supervised_loss import HungarianMatchingLoss, SetDistillationLoss
 from src.train import train
@@ -1179,7 +1180,7 @@ def run_few_shot_cross_domain(train_sets_by_env, test_sets_by_env, var_support_i
                               var_kd_temperature=1.0, var_teacher_epochs=None, var_student_epochs=None,
                               var_init_from_teacher=True, var_compile=True, var_repeat=3,
                               var_task="activity", var_env="ntu_har",
-                              save_path="./visualizations/temp"):
+                              save_path="./visualizations/temp", var_class_names=None):
     """
     [description]
     : Cross-dataset few-shot activity distillation for AMAR_WO_RVQ (NTU-Fi HAR -> WiMANS).
@@ -1198,6 +1199,11 @@ def run_few_shot_cross_domain(train_sets_by_env, test_sets_by_env, var_support_i
       built by src.data.activity_transfer.split_target_pool
     : var_kd_weight: weight of the distillation term (0 = supervised few-shot only)
     : var_init_from_teacher: warm-start the student from the teacher's weights
+    : var_class_names: activity names in the class ordering (without the no-object class). Given, the
+      last repeat also draws the set-prediction head's grouping of the query frames -- which model slot
+      each occupant was matched to, what each slot predicts and what its attention heads read
+      (src/models/set_clustering.py) -- for the teacher and the student into
+      <save_path>/<environment>/clustering_*.png, and the per-slot summary goes into the result dict.
     : return: dict {target environment: {'avg_student_<metric>', 'avg_teacher_<metric>', ...}}
     """
     #
@@ -1260,6 +1266,8 @@ def run_few_shot_cross_domain(train_sets_by_env, test_sets_by_env, var_support_i
                            for var_name in var_target_names}
     var_time_teacher, var_time_student = [], []
     var_predict_y_last = {}
+    ## {environment: {"teacher"/"student": per-slot summary}}, filled on the last repeat only
+    var_clustering = {var_name: {} for var_name in var_target_names}
     #
     for var_r in range(var_repeat):
         wandb.init(project="FINAL_AMAR",
@@ -1363,6 +1371,14 @@ def run_few_shot_cross_domain(train_sets_by_env, test_sets_by_env, var_support_i
                   f"(acc {var_s_metrics['accuracy']:.4f}, PPP "
                   f"{var_s_metrics['perfect_prediction_percentage']:.4f}) | teacher F1 "
                   f"{var_t_metrics['f1_score']:.4f} (acc {var_t_metrics['accuracy']:.4f})")
+            if var_class_names is not None and var_r == var_repeat - 1:
+                ## the live models are needed, so this is done on the last repeat's, beside the
+                ## confusion matrices the aggregation below draws from that same repeat
+                for var_who, var_model_here in (("teacher", teacher), ("student", student)):
+                    var_clustering[var_name][var_who] = visualize_query_clustering(
+                        var_model_here, test_sets_by_env[var_name][0], var_q_y, var_class_names,
+                        save_path=os.path.join(save_path, var_name), var_index=var_sel,
+                        var_model_name=f"{var_who}_r{var_r}")
         wandb.finish()
         del teacher_optimizer, teacher_loss, student_optimizer, student_loss, kd_loss
         del teacher_best_weight, student_best_weight
@@ -1382,6 +1398,8 @@ def run_few_shot_cross_domain(train_sets_by_env, test_sets_by_env, var_support_i
                 var_env_result[f"se_{var_who}_{var_metric}"] = var_se
         var_env_result["avg_teacher_train_time"] = float(np.mean(var_time_teacher))
         var_env_result["avg_student_train_time"] = float(np.mean(var_time_student))
+        if var_clustering[var_name]:
+            var_env_result["clustering"] = var_clustering[var_name]
         all_envs_results[var_name] = var_env_result
     #
     for var_name, (var_true_y, var_pred_y) in var_predict_y_last.items():

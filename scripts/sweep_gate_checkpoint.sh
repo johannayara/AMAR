@@ -4,7 +4,7 @@
 #SBATCH --qos normal
 #SBATCH --time 2:00:00
 #SBATCH --gres gpu:a100:1
-#SBATCH --array=0-3
+#SBATCH --array=0-5
 
 #
 ## Does the stage-1 empty gate do anything? Offline, on saved checkpoints, no retraining.
@@ -43,14 +43,16 @@
 #
 set -euo pipefail
 
-GATES="${GATES:-off,calibrated,0.01,0.02,0.04,0.06,0.08,0.10,0.15,0.20,0.30}"
+## GATES is passed through only when set, so the python default (off,calibrated,peakThr,q05..q90,
+## anchored on the effective range) is the single source of truth
+GATES="${GATES:-}"
 PEAK_RULE="${PEAK_RULE:-new}"
 USERS="${USERS:-0, 1,2,3,4,5}"
 MAX_JOBS="${MAX_JOBS:-4}"
 OUT_ROOT="${OUT_ROOT:-output/gate_sweep}"
 
 ## ---- combo list: checkpoint | test room | training rooms ----------------------------------------
-## Defaults are the four checkpoints behind the runs discussed so far, all of which exist on disk.
+## Defaults are the checkpoints behind the runs discussed so far, all of which exist on disk.
 combos=()
 if [[ -n "${COMBOS:-}" ]]; then
     while IFS= read -r var_line; do
@@ -59,6 +61,15 @@ if [[ -n "${COMBOS:-}" ]]; then
         [[ -n "${var_line}" ]] && combos+=("${var_line}")
     done < <(printf '%s\n' "${COMBOS}" | tr ';' '\n')
 else
+    ## the canonical cross-domain baseline: default density_map (THAT backbone, density head), Adam,
+    ## BCE loss (run_density_map_cross_domain's default var_loss_mode), layout_free. Same fold and the
+    ## same 150 epochs as the sgd and dem runs below, so the three are directly comparable.
+    ## 36 and 37 are that config from two dates: 36 ran with the empty gate calibrated (its log carries
+    ## finite EmptyThr values) and 37 with the gate off in effect (EmptyThr nan), so the pair shows how
+    ## much the selection epoch, not just the sweep's decision, moves these numbers. 21/23/24 are the
+    ## 10-26 LoR-matrix default runs at 50 epochs on the current code, for a current-code reference.
+    combos+=("visualizations/cross_domain/empty_room_classroom/36/model.pth|meeting_room|empty_room,classroom")
+    combos+=("visualizations/cross_domain/empty_room_classroom/37/model.pth|meeting_room|empty_room,classroom")
     combos+=("visualizations/cross_domain/empty_room_classroom/33/model.pth|meeting_room|empty_room,classroom")
     combos+=("visualizations/cross_domain/empty_room_classroom/44/model.pth|meeting_room|empty_room,classroom")
     combos+=("visualizations/density_map/default/classroom/1/model.pth|classroom|classroom")
@@ -96,10 +107,11 @@ run_combo() {
     local extra=()
     [[ -n "${BACKBONE:-}" ]] && extra+=(--backbone "${BACKBONE}")
     [[ -n "${ENCODER_NORM:-}" ]] && extra+=(--encoder-norm "${ENCODER_NORM}")
-    echo "=== checkpoint=${checkpoint} env=${env} train=${train_envs} gates=${GATES} peak_rule=${PEAK_RULE}"
+    [[ -n "${GATES}" ]] && extra+=(--gates "${GATES}")
+    echo "=== checkpoint=${checkpoint} env=${env} train=${train_envs} gates=${GATES:-<default>} peak_rule=${PEAK_RULE}"
     python scripts/sweep_gate_checkpoint.py \
         --checkpoint "${checkpoint}" --env "${env}" --train_envs "${train_envs}" \
-        --users "${USERS}" --gates "${GATES}" --peak_rule "${PEAK_RULE}" \
+        --users "${USERS}" --peak_rule "${PEAK_RULE}" \
         --out "${out_dir}/gate_sweep.json" "${extra[@]}" \
         > "${out_dir}/run.log" 2>&1
     echo "  -> ${out_dir}/run.log"
