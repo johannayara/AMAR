@@ -699,8 +699,13 @@ def run_few_shot_localization(hwild_sets_by_room, wimans_sets_by_room, var_few_s
     var_is_support[var_few_idx] = True
     var_rest_idx = np.where(var_is_query_row & ~var_is_support)[0]
     var_num_valid = max(1, int(round(0.1 * len(var_rest_idx))))
-    var_valid_idx = var_rest_idx[:var_num_valid]
-    var_query_idx = var_rest_idx[var_num_valid:]
+    ## The validation slice is drawn from a permutation of the remainder, not from its lowest pool
+    ## indices: np.where returns ascending indices, and the pool is concatenated room by room, so
+    ## taking the first num_valid would make the student's validation set the start of the first query
+    ## room -- selecting the checkpoint on one room -- and leave the per-room query counts unequal.
+    var_rest_perm = np.random.RandomState(39).permutation(var_rest_idx)
+    var_valid_idx = np.sort(var_rest_perm[:var_num_valid])
+    var_query_idx = np.sort(var_rest_perm[var_num_valid:])
     var_student_train_set = TensorDataset(torch.from_numpy(var_w_x[var_few_idx]),
                                           torch.from_numpy(var_w_y[var_few_idx]))
     var_student_valid_set = TensorDataset(torch.from_numpy(var_w_x[var_valid_idx]),

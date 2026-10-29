@@ -258,10 +258,12 @@ def load_wimans_activity(var_activities, var_rooms=None, var_num_users=None, var
 def split_target_pool(var_sizes, var_few_shot_ratio, var_valid_ratio=0.1, var_seed=39):
     """
     [description]
-    : split the concatenated target pool into support / student-validation / query the way
-      run_few_shot_localization does: one fixed-seed permutation, the support set is the first
-      few_shot_ratio of it, the student's validation set the first valid_ratio of the remainder, and
-      the query set the rest.
+    : split the concatenated target pool into support / student-validation / query: one fixed-seed
+      permutation, the support set is the first few_shot_ratio of it, the student's validation set the
+      first valid_ratio of the remainder, and the query set the rest. Each split is returned sorted,
+      but only for indexing convenience -- the validation slice is cut from the permutation order, not
+      from the sorted indices, so it spans every environment and activity rather than sitting at the
+      start of the pool.
     : The pure-split and the few-shot runner both call this with the same arguments, so both are
       scored on exactly the same query frames and their numbers are directly comparable.
     : var_sizes: per-environment pool sizes, in concatenation order
@@ -276,9 +278,16 @@ def split_target_pool(var_sizes, var_few_shot_ratio, var_valid_ratio=0.1, var_se
                          f"({var_num_few}/{var_num}). Lower the ratio or provide more frames.")
     var_perm = np.random.RandomState(var_seed).permutation(var_num)
     var_support_idx = np.sort(var_perm[:var_num_few])
-    var_rest_idx = np.sort(var_perm[var_num_few:])
+    ## The remainder keeps the permutation order while the validation slice is cut off it: sorting it
+    ## first would make "the first valid_ratio of the remainder" mean "the remainder's lowest pool
+    ## indices", and the pool is concatenated room by room in annotation order -- WiMANS groups a
+    ## room's frames by activity -- so the student's validation set would be one room's first
+    ## activities rather than a slice of every room. That would select the checkpoint on one room and
+    ## leave the per-room query counts unequal (378/532/534 instead of ~481 each on the union pool).
+    var_rest_idx = var_perm[var_num_few:]
     var_num_valid = max(1, int(round(var_valid_ratio * len(var_rest_idx))))
-    return var_support_idx, var_rest_idx[:var_num_valid], var_rest_idx[var_num_valid:]
+    return (var_support_idx, np.sort(var_rest_idx[:var_num_valid]),
+            np.sort(var_rest_idx[var_num_valid:]))
 
 
 def _env_slices(var_sizes):
