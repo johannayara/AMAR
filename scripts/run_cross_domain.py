@@ -282,6 +282,9 @@ def run():
     elif var_model == "density_map_dem":
         all_envs_results = run_density_map_dem_cross_domain(train_sets_by_env, test_sets_by_env,
                                                             var_repeat, var_task, save_path)
+    elif var_model == "dummy_model":
+        all_envs_results = run_dummy_cross_domain(train_sets_by_env, test_sets_by_env,
+                                                  var_repeat, var_task, var_train_envs, save_path)
     else:
         all_envs_results = run_cross_domain(train_sets_by_env, test_sets_by_env,
                                             var_repeat, var_task, var_train_envs, save_path)

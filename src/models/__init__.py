@@ -18,7 +18,7 @@ from .AMAR import run_AMAR
 from .room_localization import (run_localization_cross_domain, load_room_model, predict_room_xy)
 from .room_density import run_room_density_cross_domain
 from .set_clustering import forward_with_evidence, match_samples_to_slots, visualize_query_clustering
-from .dummy_model import run_DUMMY
+from .dummy_model import run_DUMMY, run_dummy_cross_domain
 
 #
 ##
@@ -51,4 +51,5 @@ __all__ = ["run_bce_ablstm",
            "visualize_query_clustering",
            "match_samples_to_slots",
            "forward_with_evidence",
-           "run_DUMMY"]
+           "run_DUMMY",
+           "run_dummy_cross_domain"]
