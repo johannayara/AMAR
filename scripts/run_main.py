@@ -44,8 +44,6 @@ def master_splitter(preset, var_task, var_model, var_users, var_env = "empty_roo
 
 
     if var_model in ("density_map", "density_map_dem"):
-        ## Density-map group counting: the model predicts per-location occupancy and renders the map
-        ## from the room's location kernels, so var_task does not select a label set.
         y = encode_occupancy_y(data_pd_y, var_env)
 
     else:
@@ -58,9 +56,6 @@ def master_splitter(preset, var_task, var_model, var_users, var_env = "empty_roo
             ## MultiSenseX location-only: binary presence of a person at each of the 5 locations.
             y = (encode_data_y(data_pd_y, "location").sum(axis=1) > 0).astype(np.float32)
 
-
-    ## Fixed split: the test set is identical for every training-set size, so a sample-count study
-    ## compares like with like.
     var_indices = np.arange(len(X))
     var_num_users = data_pd_y["number_of_users"].to_numpy()
     var_idx_train, var_idx_test = train_test_split(var_indices,
@@ -69,8 +64,7 @@ def master_splitter(preset, var_task, var_model, var_users, var_env = "empty_roo
                                                    random_state=103)
     #
     if 0 < var_train_samples < len(var_idx_train):
-        ## Subsample the training split only, stratified by the number of people, so the study
-        ## measures the effect of the training-set size and not of a changing class mix.
+        # ensure that the frequency of counts stays the same by using the stratify option on number of people. 
         var_idx_train, _ = train_test_split(var_idx_train,
                                             train_size=var_train_samples,
                                             shuffle=True,
@@ -305,9 +299,7 @@ def run():
 
     else:
         raise Exception("Not valid name for model")   
-    
-    ## Every run gets its own figure/checkpoint directory; see reserve_viz_dir for why the backbone
-    ## is in the path and why the numeric leaf is reserved atomically.
+    var_backbone = str(preset["nn"].get("backbone", "default"))
     save_path = reserve_viz_dir(path = f"{var_model}/{var_backbone}/{var_env}")
    
     #
@@ -324,13 +316,10 @@ def run():
     result["epochs"] = preset["nn"]["epoch"]
     result["data"] = preset["data"]
     result["nn"] = preset["nn"]
-    ## the density head/loss config and the explicit --hp overrides, so every JSON is self-describing
-    ## (the metrics are the top-level avg_* fields; this is the config that produced them)
     result["density"] = preset["density"]
     result["hp_overrides"] = var_hp_applied
 
-    ## write the JSON and the human-readable report to auto-named files, so concurrent or repeated
-    ## runs never collide and never have to be renamed by hand
+    ## write the JSON and the human-readable report to auto-named files
     formatted = format_result(var_model, var_task, result)
     save_dir = preset["path"].get("save_dir", "output")
     sample_tag = "all" if not var_args.train_samples else str(var_args.train_samples)

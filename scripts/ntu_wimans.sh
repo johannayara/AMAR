@@ -31,11 +31,6 @@ python scripts/run_few_shot_ntu_to_wimans.py --activities union \
   --teacher_epochs 200 --student_epochs 200 \
   > "./output/few_shot_ntu_wimans/har/run_union_${var_stamp}.log" 2>&1
 
-## The source-only model each run above distils from, scored on the same query frames: same
-## --activities, same --few_shot_ratio.
-## python scripts/run_ntu_to_wimans.py --activities walk_nothing --few_shot_ratio 0.1 --repeat 3 --epochs 200
-## python scripts/run_ntu_to_wimans.py --activities union --few_shot_ratio 0.1 --repeat 3 --epochs 200
-
 end=$(date +%s)
 
 echo "Total runtime: $((end - start)) seconds"
