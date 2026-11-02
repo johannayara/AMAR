@@ -363,6 +363,17 @@ frequent NTU-Fi HAR activity" baseline.** On a single-activity vocabulary that b
 perfect, so a run that only matches it has learned nothing; the comparison to make is model vs
 baseline, not model alone.
 
+**Read `microF1`/`presentF1`, not `Acc(TN-inflated)`.** Each WiMANS query frame holds one activity, so
+of the vocabulary's `C` activity classes `C-1` are absent from it. `calculate_scores`' `accuracy` is a
+mean of per-class accuracies in which an absent, correctly-not-predicted class is a true negative, so
+it is dominated by those negatives and sits near `(C-2)/C` whatever the model does — on the 14-class
+union vocabulary that is `0.857`, which is exactly the majority baseline's number, and a *random*
+single-activity guess scores `0.868` against the few-shot student's `0.879`. The same averaging over
+all classes deflates `f1_score` (absent classes contribute `0`). The report therefore also prints
+`micro_f1` (pooled `2TP/(2TP+FP+FN)`), `present_f1` and `present_recall` (macro over the classes the
+ground truth actually contains), which are not distorted by absence, and the few-shot report prints
+how many of `num_obj_queries` slots the Hungarian matching used.
+
 Beyond `--activities` and `--wimans_rooms`/`--standardize`, both runners read the data setup from the
 preset — dataset roots, features, band, window length and occupant filter have no dedicated flags.
 `--hp <dotted.path>=<value>` overrides any preset field for one run:
@@ -385,8 +396,10 @@ Two alignment choices, both preset fields:
 
 WiMANS frames are kept when *every* occupant performs a shared activity; `preset["data"]["num_users"]`
 is not what filters them — `load_wimans_activity` defaults to single-occupant frames (`"1"`), matching
-NTU-Fi HAR's single-person captures, and a wider filter would also test set-size generalisation
-through the same set-prediction head.
+NTU-Fi HAR's single-person captures. Both runners expose that as `--wimans_users` (default `"1"`, e.g.
+`--wimans_users 1,2,3`): a wider filter tests set-size generalisation through the same set-prediction
+head, and — because a single-occupant frame gives the Hungarian matching only one real target — it is
+also what lets the head's queries specialise instead of collapsing onto one slot.
 
 Reports go to `output/ntu_to_wimans/*.json|txt` and figures to `visualizations/ntu_to_wimans/`.
 
@@ -397,9 +410,14 @@ the other few-shot harnesses (`run_few_shot.py`, `run_few_shot_hwild_to_wimans.p
 
 - **Teacher** — `AMAR_WO_RVQ` trained on every NTU-Fi HAR capture of the `--activities` vocabulary, then
   frozen. This is exactly the model `run_ntu_to_wimans.py` reports.
-- **Student** — `AMAR_WO_RVQ` warm-started from the teacher and fine-tuned on `--few_shot_ratio` of the
-  WiMANS pool with `HungarianMatchingLoss + kd_weight * SetDistillationLoss` against the frozen
-  teacher. `--kd_weight 0` is the supervised-only ablation.
+- **Student** — `AMAR_WO_RVQ` warm-started from the teacher and fine-tuned on `--few_shot_ratio` of
+  the WiMANS pool with `HungarianMatchingLoss + kd_weight * SetDistillationLoss` against the frozen
+  teacher. `--kd_weight 0` is the supervised-only ablation. `SetDistillationLoss` assigns the student's
+  queries only to the teacher's **real** queries (`argmax != no-object`): matching them to the
+  teacher's no-object queries would push every other student query to no-object and re-impose a
+  collapsed teacher's single-slot layout, and the teacher's no-object mass would suppress the classes
+  it never saw. The student queries the assignment leaves unmatched are decided by the supervised loss
+  alone, which is what lets them spread over a frame's several occupants (`--wimans_users 1,2,3`).
 - **Test** — the WiMANS query frames, held out of both the support set and the student's validation
   slice. Teacher and majority-activity baseline are reported next to the student.
 
@@ -417,9 +435,9 @@ python scripts/run_few_shot_ntu_to_wimans.py --activities union --few_shot_ratio
 ```
 
 `scripts/ntu_wimans.sh` runs both of those on SLURM. The runner takes `--activities`, the few-shot
-knobs above and the same `--wimans_rooms`/`--standardize` as the pure-split runner; everything else
-(dataset roots, features, band, window length, occupant filter) comes from the preset and is
-overridable per run with `--hp`.
+knobs above and the same `--wimans_rooms`/`--wimans_users`/`--standardize` as the pure-split runner;
+everything else (dataset roots, features, band, window length) comes from the preset and is overridable
+per run with `--hp`.
 
 **The two protocols are scored on the same frames.** Both runners build the task through
 `src.data.activity_transfer.prepare_transfer_task`, which splits the WiMANS pool with one fixed seed
@@ -451,6 +469,23 @@ NTU-Fi HAR windows and a student on 3000-packet WiMANS windows share one x-axis.
 Note the slot index of a *target* carries no meaning — `build_activity_set_labels` permutes the target
 query order per sample — but the model's slots are shared across samples, and those are what the
 matching recovers.
+
+**On the single-occupant NTU-Fi HAR → WiMANS task the head uses one slot.** Every WiMANS frame holds
+one occupant, so the Hungarian matching has exactly one real target per frame: whichever query
+currently scores it highest wins it and the other `num_obj_queries - 1` queries are matched to
+no-object targets and trained to be dead. Both the teacher and the student collapse to a single
+query, which the report prints as `Slots ... 1/10 used`. This is structural, not a training accident —
+a set predictor has nothing to spread over when no frame contains more than one object — so per-activity
+query clustering is not a property this protocol can exhibit. Two levers address it, both now in the
+runners:
+
+- `--wimans_users 1,2,3` widens the occupant filter, so the matching has more than one real target per
+  frame and the queries have something to specialise on.
+- `SetDistillationLoss` now assigns the student's queries only to the teacher's **real** queries. Before
+  this it matched *all* of them to the teacher's — including the teacher's nine no-object queries, so
+  it re-imposed the teacher's collapse — and its soft target carries ~0 mass on the activities only
+  WiMANS labels, so it taught the student to ignore them. Unmatched student queries are now decided by
+  the supervised loss alone.
 
 ## Available Models
 

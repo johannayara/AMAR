@@ -401,6 +401,9 @@ def run_cross_domain(train_sets_by_env, test_sets_by_env, var_repeat=10, var_tas
     env_result_precision = {}
     env_result_recall = {}
     env_result_f1_score = {}
+    env_result_micro_f1 = {}
+    env_result_present_f1 = {}
+    env_result_present_recall = {}
     env_predict_y_last = {} 
 
     #
@@ -514,6 +517,9 @@ def run_cross_domain(train_sets_by_env, test_sets_by_env, var_repeat=10, var_tas
                     env_result_precision[env_name] = []
                     env_result_recall[env_name] = []
                     env_result_f1_score[env_name] = []
+                    env_result_micro_f1[env_name] = []
+                    env_result_present_f1[env_name] = []
+                    env_result_present_recall[env_name] = []
 
                 env_result_accuracy[env_name].append(env_last_layer['accuracy'])
                 env_result_total_error[env_name].append(env_last_layer['total_error'])
@@ -521,6 +527,9 @@ def run_cross_domain(train_sets_by_env, test_sets_by_env, var_repeat=10, var_tas
                 env_result_precision[env_name].append(env_last_layer['precision'])
                 env_result_recall[env_name].append(env_last_layer['recall'])
                 env_result_f1_score[env_name].append(env_last_layer['f1_score'])
+                env_result_micro_f1[env_name].append(env_last_layer['micro_f1'])
+                env_result_present_f1[env_name].append(env_last_layer['present_f1'])
+                env_result_present_recall[env_name].append(env_last_layer['present_recall'])
 
                 wandb.log({
                     f"test_results_per_env/{env_name}/accuracy": env_last_layer['accuracy'],
@@ -529,6 +538,8 @@ def run_cross_domain(train_sets_by_env, test_sets_by_env, var_repeat=10, var_tas
                     f"test_results_per_env/{env_name}/precision": env_last_layer['precision'],
                     f"test_results_per_env/{env_name}/recall": env_last_layer['recall'],
                     f"test_results_per_env/{env_name}/f1_score": env_last_layer['f1_score'],
+                    f"test_results_per_env/{env_name}/micro_f1": env_last_layer['micro_f1'],
+                    f"test_results_per_env/{env_name}/present_f1": env_last_layer['present_f1'],
                 }, step=var_r + 100000)
 
                 print(f"  [{env_name}] Total Error: {env_last_layer['total_error']:.6f} "
@@ -549,6 +560,9 @@ def run_cross_domain(train_sets_by_env, test_sets_by_env, var_repeat=10, var_tas
         prec_arr = np.array(env_result_precision[env_name])
         rec_arr = np.array(env_result_recall[env_name])
         f1_arr = np.array(env_result_f1_score[env_name])
+        micro_f1_arr = np.array(env_result_micro_f1[env_name])
+        present_f1_arr = np.array(env_result_present_f1[env_name])
+        present_recall_arr = np.array(env_result_present_recall[env_name])
 
         def _mean_std_se(arr):
             mean = float(np.mean(arr))
@@ -562,6 +576,9 @@ def run_cross_domain(train_sets_by_env, test_sets_by_env, var_repeat=10, var_tas
         prec_mean, prec_std, prec_se = _mean_std_se(prec_arr)
         rec_mean, rec_std, rec_se = _mean_std_se(rec_arr)
         f1_mean, f1_std, f1_se = _mean_std_se(f1_arr)
+        micro_f1_mean, micro_f1_std, micro_f1_se = _mean_std_se(micro_f1_arr)
+        present_f1_mean, present_f1_std, present_f1_se = _mean_std_se(present_f1_arr)
+        present_recall_mean, present_recall_std, present_recall_se = _mean_std_se(present_recall_arr)
 
         all_envs_results[env_name] = {
             'avg_accuracy': acc_mean, 'std_accuracy': acc_std, 'se_accuracy': acc_se,
@@ -570,6 +587,11 @@ def run_cross_domain(train_sets_by_env, test_sets_by_env, var_repeat=10, var_tas
             'avg_precision': prec_mean, 'std_precision': prec_std, 'se_precision': prec_se,
             'avg_recall': rec_mean, 'std_recall': rec_std, 'se_recall': rec_se,
             'avg_f1_score': f1_mean, 'std_f1_score': f1_std, 'se_f1_score': f1_se,
+            'avg_micro_f1': micro_f1_mean, 'std_micro_f1': micro_f1_std, 'se_micro_f1': micro_f1_se,
+            'avg_present_f1': present_f1_mean, 'std_present_f1': present_f1_std,
+            'se_present_f1': present_f1_se,
+            'avg_present_recall': present_recall_mean, 'std_present_recall': present_recall_std,
+            'se_present_recall': present_recall_se,
         } 
     for env_name, (_, y_env) in test_sets_by_env.items():
         if env_name not in env_predict_y_last:
@@ -581,13 +603,14 @@ def run_cross_domain(train_sets_by_env, test_sets_by_env, var_repeat=10, var_tas
             save_dir=os.path.join(save_path, env_name)
         )
         stats = all_envs_results[env_name]
+        ## micro-F1 / present-F1 are the class-absence-free readouts; 'accuracy' sits near (C-2)/C
+        ## on a single-occupant task whatever the model does (see calculate_scores)
         print(f"\n[{env_name}] avg over {var_repeat} repeats: "
-            f"Accuracy {stats['avg_accuracy']:.4f} ± {stats['se_accuracy']:.4f} | "
-            f"Total Error {stats['avg_total_error']:.4f} ± {stats['se_total_error']:.4f} | "
+            f"micro-F1 {stats['avg_micro_f1']:.4f} ± {stats['se_micro_f1']:.4f} | "
+            f"present-F1 {stats['avg_present_f1']:.4f} ± {stats['se_present_f1']:.4f} | "
             f"PPP {stats['avg_PPP']:.4f} ± {stats['se_PPP']:.4f} | "
-            f"Precision {stats['avg_precision']:.4f} ± {stats['se_precision']:.4f} | "
-            f"Recall {stats['avg_recall']:.4f} ± {stats['se_recall']:.4f} | "
-            f"F1 {stats['avg_f1_score']:.4f} ± {stats['se_f1_score']:.4f}")
+            f"Total Error {stats['avg_total_error']:.4f} ± {stats['se_total_error']:.4f} | "
+            f"(TN-inflated Accuracy {stats['avg_accuracy']:.4f}, F1 {stats['avg_f1_score']:.4f})")
     wandb.finish()
     return all_envs_results
 
@@ -1050,7 +1073,8 @@ def run_AMAR_WO_RVQ_few_shot(data_train_x,
         )
         kd_loss = SetDistillationLoss(
             temperature=var_kd_temperature,
-            aux_loss_weight=preset["nn"]["loss"]["aux_loss_weight"]
+            aux_loss_weight=preset["nn"]["loss"]["aux_loss_weight"],
+            no_object_index=preset["nn"]["num_classes"] - 1
         )
         student_time_0 = time.time()
         student_best_weight = train(model=student,
@@ -1259,7 +1283,8 @@ def run_few_shot_cross_domain(train_sets_by_env, test_sets_by_env, var_support_i
     ## ========================================= Train & Evaluate ====================================
     #
     var_metric_names = ("accuracy", "precision", "recall", "f1_score",
-                        "perfect_prediction_percentage", "total_error")
+                        "perfect_prediction_percentage", "total_error",
+                        "micro_f1", "present_f1", "present_recall")
     var_student_metrics = {var_name: {var_m: [] for var_m in var_metric_names}
                            for var_name in var_target_names}
     var_teacher_metrics = {var_name: {var_m: [] for var_m in var_metric_names}
@@ -1318,7 +1343,8 @@ def run_few_shot_cross_domain(train_sets_by_env, test_sets_by_env, var_support_i
             class_imbalance_weight=preset["nn"]["loss"]["class_imbalance_weight"],
             num_classes=preset["nn"]["num_classes"])
         kd_loss = SetDistillationLoss(temperature=var_kd_temperature,
-                                      aux_loss_weight=preset["nn"]["loss"]["aux_loss_weight"])
+                                      aux_loss_weight=preset["nn"]["loss"]["aux_loss_weight"],
+                                      no_object_index=preset["nn"]["num_classes"] - 1)
         student_best_weight = train(model=student, optimizer=student_optimizer, loss=student_loss,
                                     data_train_set=student_train_set,
                                     data_valid_set=student_valid_set,
@@ -1362,15 +1388,18 @@ def run_few_shot_cross_domain(train_sets_by_env, test_sets_by_env, var_support_i
             wandb.log({
                 f"query/{var_name}/student_accuracy": var_s_metrics['accuracy'],
                 f"query/{var_name}/student_f1_score": var_s_metrics['f1_score'],
+                f"query/{var_name}/student_micro_f1": var_s_metrics['micro_f1'],
+                f"query/{var_name}/student_present_f1": var_s_metrics['present_f1'],
                 f"query/{var_name}/student_perfect_prediction_percentage":
                     var_s_metrics['perfect_prediction_percentage'],
                 f"query/{var_name}/teacher_accuracy": var_t_metrics['accuracy'],
                 f"query/{var_name}/teacher_f1_score": var_t_metrics['f1_score'],
+                f"query/{var_name}/teacher_micro_f1": var_t_metrics['micro_f1'],
             }, step=var_r + 100000)
-            print(f"  [{var_name}] query {len(var_sel)} frames | student F1 {var_s_metrics['f1_score']:.4f} "
-                  f"(acc {var_s_metrics['accuracy']:.4f}, PPP "
-                  f"{var_s_metrics['perfect_prediction_percentage']:.4f}) | teacher F1 "
-                  f"{var_t_metrics['f1_score']:.4f} (acc {var_t_metrics['accuracy']:.4f})")
+            print(f"  [{var_name}] query {len(var_sel)} frames | student micro-F1 "
+                  f"{var_s_metrics['micro_f1']:.4f} (present-F1 {var_s_metrics['present_f1']:.4f}, "
+                  f"PPP {var_s_metrics['perfect_prediction_percentage']:.4f}) | teacher micro-F1 "
+                  f"{var_t_metrics['micro_f1']:.4f}")
             if var_class_names is not None and var_r == var_repeat - 1:
                 ## the live models are needed, so this is done on the last repeat's, beside the
                 ## confusion matrices the aggregation below draws from that same repeat
@@ -1406,11 +1435,15 @@ def run_few_shot_cross_domain(train_sets_by_env, test_sets_by_env, var_support_i
         visualize_model_performance(y_pred=var_pred_y, y_true=var_true_y, var_mode=var_mode,
                                     save_dir=os.path.join(save_path, var_name))
         var_stats = all_envs_results[var_name]
+        ## 'accuracy' is reported but must not be read as skill: with one activity per frame and C
+        ## classes it sits near (C-2)/C regardless of the model (see calculate_scores). micro_f1 /
+        ## present_f1 are the class-absence-free readouts.
         print(f"\n[{var_name}] avg over {var_repeat} repeats: "
-              f"Student F1 {var_stats['avg_student_f1_score']:.4f} ± "
-              f"{var_stats['se_student_f1_score']:.4f} | Student accuracy "
-              f"{var_stats['avg_student_accuracy']:.4f} ± {var_stats['se_student_accuracy']:.4f} | "
-              f"Teacher F1 {var_stats['avg_teacher_f1_score']:.4f} ± "
-              f"{var_stats['se_teacher_f1_score']:.4f} | Teacher accuracy "
-              f"{var_stats['avg_teacher_accuracy']:.4f} ± {var_stats['se_teacher_accuracy']:.4f}")
+              f"Student micro-F1 {var_stats['avg_student_micro_f1']:.4f} ± "
+              f"{var_stats['se_student_micro_f1']:.4f} | Student present-F1 "
+              f"{var_stats['avg_student_present_f1']:.4f} | "
+              f"Teacher micro-F1 {var_stats['avg_teacher_micro_f1']:.4f} ± "
+              f"{var_stats['se_teacher_micro_f1']:.4f} | "
+              f"(TN-inflated accuracy: student {var_stats['avg_student_accuracy']:.4f}, "
+              f"teacher {var_stats['avg_teacher_accuracy']:.4f})")
     return all_envs_results

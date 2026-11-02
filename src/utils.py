@@ -401,6 +401,15 @@ def calculate_scores(y_true, y_pred):
         y_pred: numpy array of predicted values
     Returns:
         Dictionary containing all performance metrics
+
+    Class-absence warning: 'accuracy' and 'f1_score' both average over every activity class, so a
+    class that is absent from the ground truth still enters the mean -- as a true negative in
+    accuracy_ (a correct "absent" prediction) and as a zero in f1_score_. On a task where each frame
+    holds one activity out of C (the single-occupant cross-dataset runs), accuracy is therefore
+    dominated by those true negatives: with one activity present and C-1 absent it sits at (C-2)/C
+    whatever the model does (0.857 on the 14-class union vocabulary), i.e. a constant and a random
+    guess land on the same number. Read 'micro_f1' / 'present_f1' / 'present_recall' instead -- they
+    are computed only over the present or predicted classes and are not inflated by absence.
     """
     # Calculate basic metrics
     absolute_diff = np.abs(y_true - y_pred)
@@ -425,7 +434,17 @@ def calculate_scores(y_true, y_pred):
     f1_score_ = np.where((precision_ + recall_) > 0,
                         2 * (precision_ * recall_) / (precision_ + recall_ + 1e-6), 0)
     accuracy_ = (tp_per_activity + tn_per_activity) / (tp_per_activity + fn_per_activity + tn_per_activity + fp_per_activity)
-    
+
+    ## Metrics that ignore class absence (see the docstring). A class is "present" when the ground
+    ## truth has at least one instance of it; present_f1 / present_recall average over those classes
+    ## only, and micro_f1 pools every class and sample into one 2 TP / (2 TP + FP + FN).
+    present = (tp_per_activity + fn_per_activity) > 0
+    micro_tp, micro_fp, micro_fn = tp.sum(), fp.sum(), fn.sum()
+    micro_denominator = 2 * micro_tp + micro_fp + micro_fn
+    micro_f1 = 2 * micro_tp / micro_denominator if micro_denominator > 0 else 0.0
+    present_f1 = float(f1_score_[present].mean()) if present.any() else 0.0
+    present_recall = float(recall_[present].mean()) if present.any() else 0.0
+
     # Calculate perfect predictions
     perfect_prediction_mask = np.all(absolute_diff == 0, axis=1)
     perfect_predictions = np.sum(perfect_prediction_mask)
@@ -449,7 +468,10 @@ def calculate_scores(y_true, y_pred):
         'counting_error_perPerson': counting_error_perPerson,
         'precision': precision_.mean(),
         'recall': recall_.mean(),
-        'f1_score': f1_score_.mean()
+        'f1_score': f1_score_.mean(),
+        'micro_f1': micro_f1,
+        'present_f1': present_f1,
+        'present_recall': present_recall
     }
 
 def my_train_test_split(X, y_location_n, y_activity_n, test_size=0.2, random_state=103):

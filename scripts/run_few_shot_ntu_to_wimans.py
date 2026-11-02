@@ -37,9 +37,11 @@
                     python scripts/run_few_shot_ntu_to_wimans.py --activities union --few_shot_ratio 0.1
                     python scripts/run_few_shot_ntu_to_wimans.py --activities union --kd_weight 0
 
-                Dataset paths, features, band, window length and occupant filter come from the preset
-                (see configs/preset.py); --hp overrides any of them for one run, e.g.
-                --hp ntu_har.path=/data/ntu_har.
+                Dataset paths, features, band and window length come from the preset (see
+                configs/preset.py); --hp overrides any of them for one run, e.g.
+                --hp ntu_har.path=/data/ntu_har. The WiMANS occupant filter is --wimans_users
+                (default "1"); widening it gives the set-prediction head several real targets per
+                frame, which is what lets its queries specialise (see --wimans_users).
 """
 #
 ##
@@ -65,7 +67,8 @@ from src.utils import save_run_outputs, build_run_stem, join_envs, run_timestamp
 #
 ##
 VAR_METRIC_NAMES = ("accuracy", "precision", "recall", "f1_score",
-                    "perfect_prediction_percentage", "total_error")
+                    "perfect_prediction_percentage", "total_error",
+                    "micro_f1", "present_f1", "present_recall")
 
 
 def parse_args():
@@ -87,6 +90,16 @@ def parse_args():
     var_args.add_argument("--wimans_rooms", default=None, type=str,
                           help="comma-separated WiMANS rooms forming the support/query pool "
                                "(default preset['data']['environment'])")
+    var_args.add_argument("--wimans_users", default="1", type=str,
+                          help="comma-separated occupant counts of the WiMANS support/query pool "
+                               "(default '1', matching NTU-Fi HAR's single-person captures). A "
+                               "single-occupant pool gives the set-prediction head exactly one real "
+                               "target per frame, so the Hungarian matching uses a single query and "
+                               "the head collapses to a single-query classifier; widening it, e.g. "
+                               "'1,2,3', gives the matching several real targets per frame and is "
+                               "what lets the queries specialise. The NTU-Fi HAR teacher is still "
+                               "single-person, so pair this with the set-aware distillation in "
+                               "SetDistillationLoss or the KD term re-imposes the collapse.")
     var_args.add_argument("--standardize", default="window", choices=("none", "window"),
                           help="'window' z-scores each CSI window, removing the per-device gain/AGC "
                                "scale that differs between NTU-Fi HAR and WiMANS; 'none' feeds raw "
@@ -175,7 +188,8 @@ def format_result(var_result, var_shared, var_majority_name):
                  f"(support {var_result['few_shot_ratio']:.2%}, kd_weight {var_result['kd_weight']}, "
                  f"kd_temperature {var_result['kd_temperature']})",
                  f"Shared activities ({var_result['vocabulary']}): {var_shared} | support frames: "
-                 f"{var_result['support_frames']} | query frames: {var_result['query_frames']}",
+                 f"{var_result['support_frames']} | query frames: {var_result['query_frames']} | "
+                 f"occupants: {var_result['wimans_users']}",
                  "=" * 80]
     for var_room, var_env_result in var_result["per_env"].items():
         var_lines.append(f"\n{var_room}:")
@@ -183,16 +197,30 @@ def format_result(var_result, var_shared, var_majority_name):
             var_lines.append(f"  {var_who.capitalize():8s}" + " | ".join(
                 f"{var_label} {var_env_result[f'avg_{var_who}_{var_name}']:.4f} ± "
                 f"{var_env_result[f'se_{var_who}_{var_name}']:.4f} (SE)"
-                for var_name, var_label in (("accuracy", "Accuracy"), ("f1_score", "F1"),
+                for var_name, var_label in (("micro_f1", "microF1"), ("present_f1", "presentF1"),
+                                            ("accuracy", "Acc(TN-inflated)"),
                                             ("perfect_prediction_percentage", "PPP"),
                                             ("total_error", "Total Error"))) + var_note)
         var_lines.append("  Majority" + " | ".join(
             f"{var_label} {var_env_result[f'majority_{var_name}']:.4f}"
-            for var_name, var_label in (("accuracy", "Accuracy"), ("f1_score", "F1"),
+            for var_name, var_label in (("micro_f1", "microF1"), ("present_f1", "presentF1"),
+                                        ("accuracy", "Acc(TN-inflated)"),
                                         ("perfect_prediction_percentage", "PPP"),
                                         ("total_error", "Total Error"))))
-    var_lines.append(f"\nMajority activity: {var_majority_name} (the most frequent NTU-Fi HAR "
-                     f"activity; always predicting it is the reference to beat)")
+        ## how many of the head's num_obj_queries slots the Hungarian matching actually assigns an
+        ## occupant to -- 1 means the set predictor has collapsed to a single-query classifier
+        var_clustering = var_env_result.get("clustering", {})
+        if var_clustering:
+            var_lines.append("  Slots    " + " | ".join(
+                f"{var_who} {len(var_clustering[var_who]['slots'])}/"
+                f"{var_result['num_obj_queries']} used" for var_who in ("teacher", "student")))
+    var_lines.append(
+        f"\nMajority activity: {var_majority_name} (the most frequent NTU-Fi HAR activity; always "
+        f"predicting it is the reference to beat)")
+    var_lines.append(
+        "Read microF1 / presentF1. Acc(TN-inflated) averages a per-class accuracy in which a class "
+        "absent from a single-occupant frame is a true negative, so it sits near (C-2)/C whatever the "
+        "model does -- on this vocabulary a constant and a random guess land on the same number.")
     return "\n".join(var_lines)
 
 
@@ -215,6 +243,7 @@ def run():
     var_task = prepare_transfer_task(
         var_wimans_rooms=([var_room.strip() for var_room in var_args.wimans_rooms.split(',')]
                           if var_args.wimans_rooms else None),
+        var_wimans_users=[var_user.strip() for var_user in var_args.wimans_users.split(',')],
         var_standardize=var_args.standardize,
         var_few_shot_ratio=var_args.few_shot_ratio,
         var_vocabulary=var_args.activities,
@@ -270,7 +299,7 @@ def run():
         "ntu_splits": preset["ntu_har"]["splits"],
         "features": preset["ntu_har"]["features"],
         "wimans_rooms": var_args.wimans_rooms or preset["data"]["environment"],
-        "wimans_users": "1",
+        "wimans_users": var_args.wimans_users,
         "band": preset["data"]["wifi_band"],
         "length": preset["data"]["length"],
         "standardize": var_args.standardize,

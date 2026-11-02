@@ -159,40 +159,65 @@ class SetDistillationLoss(nn.Module):
     final-layer class probabilities (the same cost used by HungarianMatchingLoss), and the
     matched pairs supervise every decoder layer with a temperature-scaled soft cross-entropy.
 
+    Only the teacher's *real* queries take part in the assignment. A teacher whose head has
+    collapsed onto a single query (what a single-occupant training set produces) emits one query
+    that names an activity and num_queries - 1 that name no-object; matching the student's queries
+    to those no-object queries with a full num_queries x num_queries assignment would supervise
+    every other student query to no-object and re-impose the teacher's collapse, and the teacher's
+    no-object mass would also suppress the classes it never saw. Restricting the assignment to the
+    columns whose teacher argmax is not no-object leaves the student's unmatched queries free to be
+    decided by the supervised Hungarian loss, which is what lets them spread over a frame's several
+    occupants.
+
     Args:
-        outputs (student): [num_layers, B, num_queries, num_classes] (or [B, num_queries, num_classes])
-        outputs (teacher): same shape as the student outputs
+        temperature: soft-target temperature
+        aux_loss_weight: weight of the auxiliary decoder-layer terms
+        cost_class_weight: weight of the classification cost in the assignment
+        no_object_index: column of the no-object class; None means the last class (the repo's
+            convention for build_activity_set_labels / reduce_dataset)
     """
 
-    def __init__(self, temperature=1.0, aux_loss_weight=1.0, cost_class_weight=1.0):
+    def __init__(self, temperature=1.0, aux_loss_weight=1.0, cost_class_weight=1.0,
+                 no_object_index=None):
         super().__init__()
         self.temperature = temperature
         self.aux_loss_weight = aux_loss_weight
         self.cost_class = cost_class_weight
+        self.no_object_index = no_object_index
 
     @torch.no_grad()
     def Hungarian_matching(self, student_final, teacher_final):
         """
-        Match student queries to teacher queries.
+        Match student queries to the teacher's real (non-no-object) queries.
 
         Args:
             student_final: [B, num_queries, num_classes] student final-layer logits
             teacher_final: [B, num_queries, num_classes] teacher final-layer logits
         Returns:
             List of (row_ind, col_ind) per batch item, where row_ind indexes student queries and
-            col_ind the teacher queries they are matched to.
+            col_ind the teacher queries they are matched to. A batch item the teacher predicts no
+            object for yields an empty pair, i.e. no distillation for that sample.
         """
         bs, num_queries = student_final.shape[:2]
+        no_object = (self.no_object_index if self.no_object_index is not None
+                     else student_final.shape[-1] - 1)
         student_prob = student_final.softmax(-1)
         teacher_ids = teacher_final.argmax(-1)  # [B, num_queries] teacher pseudo-labels
 
         indices = []
         for b in range(bs):
-            cost_matrix = -student_prob[b][:, teacher_ids[b]]  # [student_q, teacher_q]
+            real = torch.nonzero(teacher_ids[b] != no_object, as_tuple=False).flatten()
+            if len(real) == 0:
+                empty = torch.empty(0, dtype=torch.int64, device=student_final.device)
+                indices.append((empty, empty))
+                continue
+            cost_matrix = -student_prob[b][:, teacher_ids[b][real]]  # [student_q, num_real]
             cost_matrix = self.cost_class * cost_matrix.cpu().numpy()
             row_ind, col_ind = linear_sum_assignment(cost_matrix)
             row_ind = torch.as_tensor(row_ind, dtype=torch.int64, device=student_final.device)
-            col_ind = torch.as_tensor(col_ind, dtype=torch.int64, device=student_final.device)
+            ## col_ind indexes the filtered columns; map it back to teacher query indices
+            col_ind = torch.as_tensor(real.cpu().numpy()[col_ind], dtype=torch.int64,
+                                      device=student_final.device)
             indices.append((row_ind, col_ind))
 
         return indices
@@ -203,9 +228,16 @@ class SetDistillationLoss(nn.Module):
         teacher_layer = teacher_layer.detach()
         losses = []
         for batch_idx, (student_idx, teacher_idx) in enumerate(indices):
+            if len(student_idx) == 0:
+                continue
             student_log_prob = F.log_softmax(student_layer[batch_idx][student_idx] / temperature, dim=-1)
             teacher_prob = F.softmax(teacher_layer[batch_idx][teacher_idx] / temperature, dim=-1)
             losses.append(-(teacher_prob * student_log_prob).sum(-1).mean())
+        if not losses:
+            ## no sample in the batch had a real teacher query: contribute a differentiable zero so
+            ## the distillation term stays part of the graph (backward on a detached zero would fail
+            ## when the supervised term is the only other contribution)
+            return student_layer.sum() * 0.0
         return torch.stack(losses).mean() * (temperature ** 2)
 
     def forward(self, student_outputs, teacher_outputs):
