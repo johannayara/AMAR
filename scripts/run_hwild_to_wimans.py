@@ -19,7 +19,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from configs.preset import preset
 from src.data.hwild import room_names as hwild_room_names, load_hwild_room, HWILD_ROOMS
-from src.data.unified_rooms import WIMANS_ROOMS, load_wimans_room_targets, normalize_xy_meters
+from src.data.unified_rooms import (load_wimans_room_targets, normalize_xy_meters,
+                                    wimans_room_names)
 from src.models.room_localization import run_localization_cross_domain, format_localization_result
 from src.utils import save_run_outputs, build_run_stem, join_envs, run_timestamp, reserve_viz_dir
 
@@ -90,7 +91,7 @@ def run():
     var_train_rooms = ([var_room.strip() for var_room in var_args.train_rooms.split(',')]
                        if var_args.train_rooms else hwild_room_names())
     var_test_rooms = ([var_room.strip() for var_room in var_args.test_rooms.split(',')]
-                      if var_args.test_rooms else list(WIMANS_ROOMS))
+                      if var_args.test_rooms else wimans_room_names())
     # check no overlap between train and test rooms
     if set(var_train_rooms) & set(var_test_rooms):
         raise ValueError(f"train rooms {var_train_rooms} and test rooms {var_test_rooms} overlap")
@@ -118,7 +119,7 @@ def run():
             train_sets_by_room[var_room] = (var_x, var_y)
             print(f"[train] {var_room:12s} X {var_x.shape} XY {var_y.shape} "
                 f"({var_meta['num_files']} captures)")
-        elif var_room in WIMANS_ROOMS:
+        elif var_room in wimans_room_names():
             var_x, var_y = load_wimans_room_targets(var_room, var_max_samples=var_args.max_samples,
                                                     var_length=preset["hwild"]["window"])
             if len(var_x) == 0:
@@ -134,7 +135,7 @@ def run():
             test_sets_by_room[var_room] = (var_x, var_y)
             print(f"[test]  {var_room:12s} X {var_x.shape} XY {var_y.shape} "
                 f"({var_meta['num_files']} captures)")
-        elif var_room in WIMANS_ROOMS:
+        elif var_room in wimans_room_names():
             var_x, var_y = load_wimans_room_targets(var_room, var_max_samples=var_args.max_samples,
                                                     var_length=preset["hwild"]["window"])
             if len(var_x) == 0:

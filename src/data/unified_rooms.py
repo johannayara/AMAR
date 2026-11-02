@@ -29,7 +29,8 @@ import numpy as np
 from scipy.signal import resample_poly
 
 from configs.preset import preset
-from src.data.load_data import load_data_y
+from src.data.load_data import (load_data_y, harmonize_wimans_antennas, wimans_room_names,
+                                wimans_room_source)
 from src.data.hwild import (HWILD_ROOMS, room_names as hwild_room_names, load_hwild_room,
                             room_span as hwild_room_span)
 
@@ -47,9 +48,11 @@ MAX_USERS = 6         # WiMANS labels up to 6 users; every room's label set is p
 def unified_room_names():
     """
     [description]
-    : every room of both datasets, WiMANS first.
+    : every room of both datasets, WiMANS first. The WiMANS side is wimans_room_names(), so it holds
+      the real rooms and, when preset["data"]["synth_wimans"]["enabled"], a "<room><suffix>" key per
+      simulated room.
     """
-    return WIMANS_ROOMS + hwild_room_names()
+    return wimans_room_names() + hwild_room_names()
 
 
 def dataset_of(var_room):
@@ -57,7 +60,7 @@ def dataset_of(var_room):
     [description]
     : which dataset a room belongs to ("wimans" or "hwild").
     """
-    return "wimans" if var_room in WIMANS_ROOMS else "hwild"
+    return "wimans" if var_room in wimans_room_names() else "hwild"
 
 
 def room_bounds(var_room):
@@ -65,7 +68,7 @@ def room_bounds(var_room):
     [description]
     : (x_min, x_max, y_min, y_max) of a room's frame in meters.
     """
-    if var_room in WIMANS_ROOMS:
+    if var_room in wimans_room_names():
         return WIMANS_BOUNDS
     var_room_meta = HWILD_ROOMS[var_room]
     return (var_room_meta["x_range"][0], var_room_meta["x_range"][1],
@@ -115,17 +118,23 @@ def load_wimans_room(var_room, var_max_samples=None, var_length=None, var_band=N
     : load one WiMANS room as multi-user (CSI, position-set) samples. A sample's label set holds the
       occupied discrete locations, one per user, in the room's [0, 1]^2 frame; an empty-room sample
       (count 0) is kept with an all-zero mask, so "no person" is a valid target.
+    : var_room: a key of wimans_room_names(). The bare environment names read the real WiMANS source
+      (preset["path"], preset["data"]["wifi_band"]); a "<name><suffix>" key reads the simulated source
+      (preset["data"]["synth_wimans"]) with the same base room, so its layout and physical frame are
+      the real room's.
     : var_length: window length in timesteps (defaults to preset["hwild"]["window"])
     : var_max_samples: int or None, cap the number of samples by a fixed-seed random subset
+    : var_band: annotation band filter; None (default) uses the room's own source band
     : return: (X (num_samples, length, 90) float32, POS (num_samples, MAX_USERS, 2) normalized,
       MASK (num_samples, MAX_USERS) 0/1)
     """
     #
     var_length = var_length if var_length is not None else preset["hwild"]["window"]
-    var_band = var_band if var_band is not None else preset["data"]["wifi_band"]
     var_users = var_users if var_users is not None else preset["data"]["num_users"]
-    var_pd = load_data_y(preset["path"]["data_y"], [var_room], var_band, var_users)
-    var_layout = preset["layouts"][var_room]
+    var_base, var_data_x, var_data_y, var_source_band = wimans_room_source(var_room)
+    var_band = list(var_band) if var_band is not None else var_source_band
+    var_pd = load_data_y(var_data_y, [var_base], var_band, var_users)
+    var_layout = preset["layouts"][var_base]
     var_cols = [f"user_{var_idx}_location" for var_idx in range(1, 7)]
     #
     var_labels, var_sets = [], []
@@ -155,8 +164,11 @@ def load_wimans_room(var_room, var_max_samples=None, var_length=None, var_band=N
     #
     var_x = np.empty((var_num, var_length, WIMANS_FEATURES), dtype=np.float32)
     for var_idx, var_label in enumerate(var_labels):
-        var_amp = np.load(os.path.join(preset["path"]["data_x"], var_label + ".npy")).astype(np.float32)
-        ## (time, 3, 3, 30): average the 3 TX antennas -> (time, 3, 30) -> (time, 90)
+        var_amp = np.load(os.path.join(var_data_x, var_label + ".npy")).astype(np.float32)
+        ## real WiMANS is (time, 3 TX, 3 RX, 30); a single-link capture such as the simulated
+        ## few-shot dataset is (time, 1, 1, 30) and is broadcast to the 3 x 3 grid first
+        var_amp = harmonize_wimans_antennas(var_amp)
+        ## average the 3 TX antennas -> (time, 3, 30) -> (time, 90)
         var_amp = var_amp.mean(axis=2).reshape(var_amp.shape[0], -1)
         var_x[var_idx] = _resample_time(var_amp, var_length)
     #
@@ -211,7 +223,7 @@ def load_unified_room(var_room, var_max_samples=None, var_length=None, **kwargs)
     : kwargs: forwarded to the H-WILD loader (e.g. var_root, var_users, var_interference, var_max_files)
     """
     #
-    if var_room in WIMANS_ROOMS:
+    if var_room in wimans_room_names():
         return load_wimans_room(var_room, var_max_samples=var_max_samples, var_length=var_length)
     return _hwild_room_sets(var_room, var_length=var_length, var_max_samples=var_max_samples, **kwargs)
 

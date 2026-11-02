@@ -97,6 +97,101 @@ def load_data_x(var_path_data_x,
     #
     return preprocess_csi(data_x, var_lengths, var_preprocess)
 
+
+def harmonize_wimans_antennas(var_amp, var_num_tx=3, var_num_rx=3):
+    """
+    [description]
+    : put a WiMANS amplitude capture on the 3 x 3 antenna grid the repo's WiMANS paths assume.
+      Real WiMANS is stored as (time, 3 TX, 3 RX, subcarriers) and is returned unchanged. A capture
+      with a single antenna pair -- e.g. the simulated few-shot dataset
+      (dataset/synth_wimans/fewshot-groups-wimans), which is (time, 1, 1, 30) -- is broadcast over
+      the TX and RX axes, so a single-link source can be dropped into any WiMANS path with no change
+      to the model geometry or the feature count. The copies carry no extra information: this makes
+      the tensor the right *shape*, it does not add channel diversity the source does not have.
+    : var_amp: (time, TX, RX, subcarriers) float32
+    : return: (time, var_num_tx, var_num_rx, subcarriers) float32
+    """
+    #
+    ##
+    var_amp = np.asarray(var_amp, dtype=np.float32)
+    if var_amp.ndim != 4:
+        raise ValueError(f"WiMANS amplitude must be (time, TX, RX, subcarriers); got shape "
+                         f"{var_amp.shape}")
+    var_time, var_tx, var_rx = var_amp.shape[:3]
+    if (var_tx, var_rx) == (var_num_tx, var_num_rx):
+        return var_amp
+    if var_tx == 1 and var_rx == 1:
+        return np.ascontiguousarray(np.broadcast_to(
+            var_amp, (var_time, var_num_tx, var_num_rx, var_amp.shape[3])))
+    raise ValueError(
+        f"WiMANS amplitude has {var_tx} TX x {var_rx} RX antennas; expected "
+        f"{var_num_tx} x {var_num_rx} (real WiMANS) or 1 x 1 (a single-link capture such as the "
+        f"simulated dataset). Resample the antenna axes upstream if the layout is something else.")
+
+
+def wimans_sources():
+    """
+    [description]
+    : every WiMANS-format source a run may load from, as (suffix, data_x, data_y, bands). The real
+      WiMANS source is always first with an empty suffix and the preset's own paths/band; the
+      simulated source (preset["data"]["synth_wimans"]) is appended when it is enabled, with its own
+      paths and band. The two coexist, which is what lets a run be scored on the real rooms alone or
+      on the real rooms plus the simulated ones.
+    """
+    #
+    ##
+    var_sources = [("", preset["path"]["data_x"], preset["path"]["data_y"],
+                    list(preset["data"]["wifi_band"]))]
+    var_synth = preset["data"].get("synth_wimans") or {}
+    if var_synth.get("enabled"):
+        var_sources.append((var_synth.get("suffix", "_synth"), var_synth["data_x"],
+                            var_synth["data_y"],
+                            list(var_synth.get("wifi_band") or preset["data"]["wifi_band"])))
+    return var_sources
+
+
+def wimans_room_names(var_environments=None):
+    """
+    [description]
+    : every WiMANS room key a run may load: each environment name (real WiMANS), plus "<name><suffix>"
+      for the simulated source when it is enabled. Requesting only the bare names scores on real
+      WiMANS alone; requesting both scores on the two sources together, and each keeps its own key so
+      the metrics can be read per source.
+    """
+    #
+    ##
+    var_environments = (list(var_environments) if var_environments is not None
+                        else list(preset["data"]["environment"]))
+    var_rooms = list(var_environments)
+    for var_suffix, _, _, _ in wimans_sources():
+        if var_suffix:
+            var_rooms.extend(var_name + var_suffix for var_name in var_environments)
+    return var_rooms
+
+
+def wimans_room_source(var_room, var_environments=None):
+    """
+    [description]
+    : resolve a WiMANS room key to (base_room, data_x, data_y, bands). "classroom" resolves to the
+      real WiMANS source and base room "classroom"; "classroom_synth" to the simulated source and the
+      same base room, which is what keeps the room's layout and its physical frame identical between
+      the two sources.
+    """
+    #
+    ##
+    var_environments = (list(var_environments) if var_environments is not None
+                        else list(preset["data"]["environment"]))
+    var_sources = wimans_sources()
+    for var_suffix, var_data_x, var_data_y, var_bands in var_sources:
+        if not var_suffix and var_room in var_environments:
+            return var_room, var_data_x, var_data_y, var_bands
+        if var_suffix and var_room.endswith(var_suffix):
+            var_base = var_room[:-len(var_suffix)]
+            if var_base in var_environments:
+                return var_base, var_data_x, var_data_y, var_bands
+    raise ValueError(f"unknown WiMANS room {var_room!r}; expected one of "
+                     f"{wimans_room_names(var_environments)}")
+
 #
 ##
 def encode_data_y(data_pd_y, 

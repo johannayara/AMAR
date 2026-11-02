@@ -30,6 +30,20 @@ preset = {
         "wifi_band": ["5"],                           # select WiFi band(s) (e.g., ["2.4"], ["5"], ["2.4", "5"])
         "environment": ["empty_room", "meeting_room", "classroom"],               # select environment(s) (e.g., ["classroom"], ["meeting_room"], ["empty_room"])
         "length": 3000,                                 # default length of CSI
+        ## Optional second WiMANS-format source. When enabled its rooms are appended to the WiMANS
+        ## room list as "<room><suffix>" (e.g. classroom_synth), loaded from these paths and band, so
+        ## a cross-dataset run can be scored on the real WiMANS rooms alone (enabled false, the
+        ## default) or on the real rooms plus the simulated ones. The two sources coexist: the real
+        ## rooms keep preset["path"], and only the simulated keys use this block. The simulated set
+        ## is a single antenna pair; src.data.load_data.harmonize_wimans_antennas puts it on the 3x3
+        ## grid, so it loads with the same feature count as real WiMANS.
+        "synth_wimans": {
+            "enabled": False,
+            "data_x": "dataset/synth_wimans/fewshot-groups-wimans/wifi_csi/amp",
+            "data_y": "dataset/synth_wimans/fewshot-groups-wimans/annotation.csv",
+            "wifi_band": ["2.4"],
+            "suffix": "_synth",
+        },
         ## Pad-masked CSI preprocessing (src/data/csi_preprocess.py). All off by default so the raw
         ## pipeline is unchanged. The AMAR_CSI_PREPROCESS env var (e.g. "static,temporal,zscore")
         ## overrides this block for shell-driven ablations.

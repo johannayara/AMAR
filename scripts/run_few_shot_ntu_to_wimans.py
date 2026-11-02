@@ -62,6 +62,7 @@ from configs.preset import preset
 from src.data.activity_transfer import (ACTIVITY_VOCABULARIES, majority_activity,
                                         majority_query_metrics, prepare_transfer_task)
 from src.models import run_few_shot_cross_domain
+from src.data.load_data import wimans_room_names
 from src.utils import save_run_outputs, build_run_stem, join_envs, run_timestamp, reserve_viz_dir
 
 #
@@ -298,7 +299,7 @@ def run():
         "ntu_root": preset["ntu_har"]["path"],
         "ntu_splits": preset["ntu_har"]["splits"],
         "features": preset["ntu_har"]["features"],
-        "wimans_rooms": var_args.wimans_rooms or preset["data"]["environment"],
+        "wimans_rooms": var_args.wimans_rooms or wimans_room_names(),
         "wimans_users": var_args.wimans_users,
         "band": preset["data"]["wifi_band"],
         "length": preset["data"]["length"],

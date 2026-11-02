@@ -30,7 +30,8 @@ import os
 import numpy as np
 
 from configs.preset import preset
-from src.data.load_data import load_data_y
+from src.data.load_data import (load_data_y, harmonize_wimans_antennas, wimans_room_names,
+                                wimans_room_source)
 from src.data.ntu_har import (NTU_HAR_FEATURES, load_ntu_har, ntu_har_class_names)
 from src.utils import calculate_scores
 
@@ -41,6 +42,13 @@ ACTIVITY_VOCABULARIES = ("shared", "walk_nothing", "union")
 ## WiMANS labels an occupant standing still as "nothing"; NTU-Fi HAR has no such capture, so the
 ## activity only ever appears on the target side.
 WIMANS_IDLE_ACTIVITY = "nothing"
+## Label aliases for activity names a WiMANS-format annotation uses that the preset vocabulary does
+## not name directly. The simulated few-shot dataset
+## (dataset/synth_wimans/fewshot-groups-wimans) labels a sitting occupant "sit"; WiMANS's own
+## vocabulary splits that into "sit_down"/"stand_up" and the simulator's action behind it is "sitting"
+## (never standing), so it maps to sit_down. Without the alias load_wimans_activity's vocabulary check
+## drops every frame holding a "sit" occupant -- 1478 of the simulated set's 2715 frames.
+WIMANS_ACTIVITY_ALIASES = {"sit": "sit_down"}
 
 
 def wimans_activities():
@@ -164,12 +172,15 @@ def harmonize_wimans_features(var_amp, var_features, var_length):
     : var_features: 270 keeps WiMANS's native flattening (3 x 3 x 30), the representation the repo's
       WiMANS runs of AMAR_WO_RVQ use; 90 averages the 3 TX antennas (axis 2 of (time, 3, 3, 30) ->
       (time, 3, 30)), the exact convention src/data/unified_rooms.py uses to match H-WILD.
+    : A single-link capture (time, 1, 1, 30) is first broadcast to the 3 x 3 grid by
+      harmonize_wimans_antennas, so the simulated few-shot dataset loads through the same path.
     : The time axis keeps the repo's convention: shorter captures are zero-padded at the front, longer
       ones are an error (exactly as load_data_x does).
     : return: (var_length, var_features) float32, plus the number of real packets
     """
     #
     ##
+    var_amp = harmonize_wimans_antennas(var_amp)
     if var_features == 270:
         var_x = var_amp.reshape(var_amp.shape[0], -1)
     elif var_features == 90:
@@ -195,17 +206,20 @@ def load_wimans_activity(var_activities, var_rooms=None, var_num_users=None, var
       vocabulary (and empty frames, which have no occupant at all) are dropped, so the label space is
       identical to the NTU-Fi HAR side.
     : var_activities: shared activity names, in the order that defines the class indices
-    : var_rooms: rooms to include (default preset["data"]["environment"])
+    : var_rooms: rooms to include (default every key of wimans_room_names(): the real WiMANS
+      environments, plus "<name><suffix>" for the simulated source when it is enabled)
     : var_num_users: occupant-count filter (default ["1"], matching NTU-Fi HAR's single-person
       captures; widen it, e.g. "1,2,3", to also test set-size generalisation)
     : var_length: window length in packets (default preset["data"]["length"])
     : var_max_samples: cap per room with a fixed-seed random subset
+    : var_band: annotation band filter for every room; None (default) uses each room's own source
+      band, so real 5 GHz rooms and simulated 2.4 GHz rooms can be loaded in the same run
     : return: dict {room: (X (N, length, features) float32, class_indices (list of index lists))}
     """
     #
     ##
-    var_rooms = list(var_rooms) if var_rooms is not None else list(preset["data"]["environment"])
-    var_band = var_band if var_band is not None else preset["data"]["wifi_band"]
+    var_rooms = (list(var_rooms) if var_rooms is not None
+                 else wimans_room_names())
     var_num_users = list(var_num_users) if var_num_users is not None else ["1"]
     var_length = var_length or preset["data"]["length"]
     var_features = var_features or preset.get("ntu_har", {}).get("features", NTU_HAR_FEATURES)
@@ -214,11 +228,16 @@ def load_wimans_activity(var_activities, var_rooms=None, var_num_users=None, var
     #
     var_out = {}
     for var_room in var_rooms:
-        var_pd = load_data_y(preset["path"]["data_y"], [var_room], var_band, var_num_users)
+        ## each room key resolves to its own source: the real rooms read preset["path"], the
+        ## simulated keys read preset["data"]["synth_wimans"], and both use the same base room name
+        var_base, var_data_x, var_data_y, var_source_band = wimans_room_source(var_room)
+        var_room_band = list(var_band) if var_band is not None else var_source_band
+        var_pd = load_data_y(var_data_y, [var_base], var_room_band, var_num_users)
         var_labels, var_class_indices = [], []
         for _, var_row in var_pd.iterrows():
             ## every occupant's activity, ignoring the blank cells of absent users
-            var_acts = [var_row[var_col] for var_col in var_cols
+            var_acts = [WIMANS_ACTIVITY_ALIASES.get(var_row[var_col], var_row[var_col])
+                        for var_col in var_cols
                         if isinstance(var_row[var_col], str) and var_row[var_col].strip()]
             ## a frame is only usable when *all* of its occupants do a shared activity: keeping it
             ## while dropping an out-of-vocabulary occupant would silently mislabel the frame
@@ -229,7 +248,7 @@ def load_wimans_activity(var_activities, var_rooms=None, var_num_users=None, var
         if not var_labels:
             raise ValueError(
                 f"no WiMANS frame in {var_room!r} has every occupant within the shared activities "
-                f"{var_activities} (band {var_band}, occupants {var_num_users})")
+                f"{var_activities} (band {var_room_band}, occupants {var_num_users})")
         if var_max_samples is not None and len(var_labels) > var_max_samples:
             ## WiMANS is ordered single-user first, so a "first N" cut would drop whole groups;
             ## draw a fixed-seed random subset instead.
@@ -241,7 +260,7 @@ def load_wimans_activity(var_activities, var_rooms=None, var_num_users=None, var
         var_x = np.empty((len(var_labels), var_length, var_features), dtype=np.float32)
         var_lengths = np.zeros(len(var_labels), dtype=np.int64)
         for var_i, var_label in enumerate(var_labels):
-            var_amp = np.load(os.path.join(preset["path"]["data_x"], var_label + ".npy")).astype(np.float32)
+            var_amp = np.load(os.path.join(var_data_x, var_label + ".npy")).astype(np.float32)
             var_x[var_i], var_lengths[var_i] = harmonize_wimans_features(var_amp, var_features,
                                                                         var_length)
         if var_standardize == "window":
@@ -255,7 +274,8 @@ def load_wimans_activity(var_activities, var_rooms=None, var_num_users=None, var
     return var_out
 
 
-def split_target_pool(var_sizes, var_few_shot_ratio, var_valid_ratio=0.1, var_seed=39):
+def split_target_pool(var_sizes, var_few_shot_ratio, var_valid_ratio=0.1, var_seed=39,
+                      var_support_sizes=None):
     """
     [description]
     : split the concatenated target pool into support / student-validation / query: one fixed-seed
@@ -267,16 +287,27 @@ def split_target_pool(var_sizes, var_few_shot_ratio, var_valid_ratio=0.1, var_se
     : The pure-split and the few-shot runner both call this with the same arguments, so both are
       scored on exactly the same query frames and their numbers are directly comparable.
     : var_sizes: per-environment pool sizes, in concatenation order
+    : var_support_sizes: per-environment sizes eligible to supply the support and validation frames
+      (default var_sizes, i.e. the whole pool). A pool that concatenates real WiMANS with a second
+      source passes the real sizes here, so the student is fine-tuned and checkpoint-selected on the
+      real rooms only while the query set still holds every frame of both sources -- which is what
+      "the simulated rooms are in the test set, not the training set" means.
     : return: (support_idx, valid_idx, query_idx) global index arrays
     """
     #
     ##
     var_num = int(np.sum(var_sizes))
-    var_num_few = max(1, int(round(var_few_shot_ratio * var_num)))
+    var_sizes = list(var_sizes)
+    var_support_sizes = list(var_support_sizes) if var_support_sizes is not None else list(var_sizes)
+    ## the rows a support/validation frame may be drawn from, ascending
+    var_eligible = np.concatenate([np.arange(var_start, var_start + var_size)
+                                   for (var_start, _), var_size in zip(_env_slices(var_sizes),
+                                                                       var_support_sizes)])
+    var_num_few = max(1, int(round(var_few_shot_ratio * len(var_eligible))))
     if var_num_few >= var_num - 1:
         raise ValueError(f"var_few_shot_ratio={var_few_shot_ratio} leaves no query data "
                          f"({var_num_few}/{var_num}). Lower the ratio or provide more frames.")
-    var_perm = np.random.RandomState(var_seed).permutation(var_num)
+    var_perm = np.random.RandomState(var_seed).permutation(var_eligible)
     var_support_idx = np.sort(var_perm[:var_num_few])
     ## The remainder keeps the permutation order while the validation slice is cut off it: sorting it
     ## first would make "the first valid_ratio of the remainder" mean "the remainder's lowest pool
@@ -286,8 +317,13 @@ def split_target_pool(var_sizes, var_few_shot_ratio, var_valid_ratio=0.1, var_se
     ## leave the per-room query counts unequal (378/532/534 instead of ~481 each on the union pool).
     var_rest_idx = var_perm[var_num_few:]
     var_num_valid = max(1, int(round(var_valid_ratio * len(var_rest_idx))))
-    return (var_support_idx, np.sort(var_rest_idx[:var_num_valid]),
-            np.sort(var_rest_idx[var_num_valid:]))
+    var_valid_idx = np.sort(var_rest_idx[:var_num_valid])
+    ## the query set is every pool row that is neither support nor validation, so it holds the whole
+    ## of every source, the ones the student was fine-tuned on excepted
+    var_taken = np.zeros(var_num, dtype=bool)
+    var_taken[var_support_idx] = True
+    var_taken[var_valid_idx] = True
+    return var_support_idx, var_valid_idx, np.where(~var_taken)[0]
 
 
 def _env_slices(var_sizes):
@@ -407,8 +443,17 @@ def prepare_transfer_task(var_ntu_root=None, var_ntu_splits=None,
                                                                var_num_queries, var_num_classes))
         var_sizes.append(len(var_x))
     var_room_names = list(var_wimans)
+    ## The support and validation frames come from the real WiMANS rooms only. A second source (the
+    ## simulated set, enabled through preset["data"]["synth_wimans"]) contributes query frames but
+    ## must not be fine-tuned on or select the checkpoint, which is what "in the test set" means.
+    var_real_envs = set(preset["data"]["environment"])
+    var_support_sizes = [var_size for var_room, var_size in zip(var_room_names, var_sizes)
+                         if var_room in var_real_envs]
+    if len(var_support_sizes) == len(var_sizes):
+        var_support_sizes = None
     var_support_idx, var_valid_idx, var_query_idx = split_target_pool(var_sizes, var_few_shot_ratio,
-                                                                     var_seed=var_seed)
+                                                                     var_seed=var_seed,
+                                                                     var_support_sizes=var_support_sizes)
     #
     ## the query frames per room, so the pure-split runner can be scored on the same frames the
     ## few-shot runner holds out; the per-query activity labels are cheap and always built

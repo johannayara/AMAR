@@ -447,6 +447,27 @@ same `--activities`: the pool, and therefore the query frames, depend on the voc
 `output/few_shot_ntu_to_wimans/*.json|txt` and figures to
 `visualizations/few_shot_ntu_to_wimans/`.
 
+### 9. Simulated WiMANS data
+
+`dataset/synth_wimans/fewshot-groups-wimans/` (generated with `human-csi-sim`) is a simulated
+WiMANS-format set — one annotation CSV in WiMANS's columns plus `wifi_csi/amp/<label>.npy` per sample.
+Two of its properties differ from real WiMANS and are handled at the data layer, so the set can be
+loaded through the same loaders:
+
+- **Antenna geometry.** Its CSI is one antenna pair, `(time, 1, 1, 30)`, where real WiMANS is
+  `(time, 3, 3, 30)`. `src.data.load_data.harmonize_wimans_antennas` broadcasts a single link over the
+  3 x 3 grid, so it loads with the same feature count (270 for the activity pipeline, 90 for the
+  localization one) and no model change. Real WiMANS is returned unchanged. The copies add no channel
+  diversity the source does not have.
+- **Activity names.** The simulator labels a sitting occupant `sit`, which the preset vocabulary does
+  not name (`sit_down`/`stand_up`). `src.data.activity_transfer.WIMANS_ACTIVITY_ALIASES` maps it to
+  `sit_down` (the simulator's action behind it is `sitting`, never standing); without the alias a
+  `--activities union` run drops every frame holding a `sit` occupant (1478 of its 2715).
+
+Its annotation rows are 2.4 GHz while `preset["data"]["wifi_band"]` defaults to `["5"]`, and its
+`environment` values are the same three room names real WiMANS uses, so a run that mixes the two sets
+has to select the band and key the rooms per source.
+
 ### What the head does with the query frames
 
 `src/models/set_clustering.py` draws the set-prediction head's own grouping. The head emits

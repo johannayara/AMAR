@@ -44,7 +44,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from configs.preset import preset
 from src.data.hwild import room_names as hwild_room_names, load_hwild_room, HWILD_ROOMS
-from src.data.unified_rooms import WIMANS_ROOMS, load_wimans_room_targets, normalize_xy_meters
+from src.data.unified_rooms import (load_wimans_room_targets, normalize_xy_meters,
+                                    wimans_room_names)
 from src.models.room_localization import run_few_shot_localization, format_few_shot_result
 from src.utils import save_run_outputs, build_run_stem, join_envs, run_timestamp, reserve_viz_dir
 
@@ -133,7 +134,7 @@ def load_room_set(var_room, var_args, var_load_kwargs, var_tag):
         print(f"[{var_tag}]{var_room:12s} X {var_x.shape} XY {var_y.shape} "
               f"({var_meta['num_files']} captures)")
         return var_x, var_y
-    if var_room in WIMANS_ROOMS:
+    if var_room in wimans_room_names():
         var_x, var_y = load_wimans_room_targets(var_room, var_max_samples=var_args.max_samples,
                                                 var_length=preset["hwild"]["window"])
         if len(var_x) == 0:
@@ -141,7 +142,8 @@ def load_room_set(var_room, var_args, var_load_kwargs, var_tag):
         print(f"[{var_tag}]{var_room:12s} X {var_x.shape} XY {var_y.shape} "
               f"({len(np.unique(var_y.round(3), axis=0))} distinct positions)")
         return var_x, var_y
-    raise ValueError(f"unknown room {var_room!r}; not in {hwild_room_names() + list(WIMANS_ROOMS)}")
+    raise ValueError(f"unknown room {var_room!r}; not in "
+                     f"{hwild_room_names() + wimans_room_names()}")
 
 
 def run():
@@ -160,9 +162,18 @@ def run():
     var_train_rooms = ([var_room.strip() for var_room in var_args.train_rooms.split(',')]
                        if var_args.train_rooms else hwild_room_names())
     var_test_rooms = ([var_room.strip() for var_room in var_args.test_rooms.split(',')]
-                      if var_args.test_rooms else list(WIMANS_ROOMS))
+                      if var_args.test_rooms else wimans_room_names())
     var_support_rooms = ([var_room.strip() for var_room in var_args.support_rooms.split(',')]
                          if var_args.support_rooms else None)
+    ## When the query pool holds a second source (the simulated rooms), the few-shot support set must
+    ## not: the student is fine-tuned and checkpoint-selected on the real WiMANS rooms only, so the
+    ## simulated rooms are scored but never trained on. With no simulated keys this is left as None,
+    ## i.e. support = query rooms, which is the unchanged behaviour.
+    if var_support_rooms is None:
+        var_real_query_rooms = [var_room for var_room in var_test_rooms
+                                if var_room in preset["data"]["environment"]]
+        if len(var_real_query_rooms) != len(var_test_rooms):
+            var_support_rooms = var_real_query_rooms
     ## the teacher's data and the student's support/query pool must be disjoint, or the "held-out"
     ## query frames would be frames the teacher was trained on
     if set(var_train_rooms) & set(var_test_rooms):
