@@ -100,8 +100,61 @@ def parse_args():
     var_args.add_argument("--standardize", default="window", choices=("none", "window"),
                           help="'window' z-scores each CSI window (removes the per-capture gain/AGC "
                                "scale that differs between the two datasets); 'none' feeds raw amplitude")
+    var_args.add_argument("--hp", action="append", default=None, type=str, metavar="KEY=VALUE",
+                          help="Override a preset field, dotted path, e.g. "
+                               "--hp data.synth_wimans.enabled=true. Repeatable. Values are parsed as "
+                               "bool/int/float, else kept as str.")
     #
     return var_args.parse_args()
+
+
+def parse_hp_value(var_value):
+    """
+    [description]
+    : parse the right-hand side of a --hp override into a bool / int / float / str.
+    """
+    var_value = var_value.strip()
+    ## accept a quoted value, e.g. --hp path.save_dir='/tmp/x'
+    if len(var_value) >= 2 and var_value[0] == var_value[-1] and var_value[0] in ("'", '"'):
+        return var_value[1:-1]
+    var_lower = var_value.lower()
+    if var_lower in ("true", "false"):
+        return var_lower == "true"
+    if var_lower in ("none", "null"):
+        return None
+    try:
+        return int(var_value)
+    except ValueError:
+        pass
+    try:
+        return float(var_value)
+    except ValueError:
+        pass
+    return var_value
+
+
+def apply_hp_overrides(var_overrides):
+    """
+    [description]
+    : apply --hp overrides onto the module-level preset dict, in place, before any room is resolved or
+      model is built.
+    : return: dict, the applied {dotted_key: value} for the result record
+    """
+    var_applied = {}
+    for var_item in var_overrides or []:
+        var_key, var_sep, var_value = var_item.partition("=")
+        if not var_sep:
+            raise ValueError(f"--hp expects KEY=VALUE, got {var_item!r}")
+        var_target = preset
+        var_parts = var_key.strip().split(".")
+        for var_part in var_parts[:-1]:
+            if var_part not in var_target:
+                raise KeyError(f"--hp path {var_key!r}: preset has no {var_part!r}")
+            var_target = var_target[var_part]
+        var_parsed = parse_hp_value(var_value)
+        var_target[var_parts[-1]] = var_parsed
+        var_applied[var_key.strip()] = var_parsed
+    return var_applied
 
 
 def standardize_windows(var_x):
@@ -159,6 +212,7 @@ def run():
     torch.manual_seed(SEED)
     #
     var_args = parse_args()
+    var_hp_applied = apply_hp_overrides(var_args.hp)
     var_train_rooms = ([var_room.strip() for var_room in var_args.train_rooms.split(',')]
                        if var_args.train_rooms else hwild_room_names())
     var_test_rooms = ([var_room.strip() for var_room in var_args.test_rooms.split(',')]
@@ -265,6 +319,7 @@ def run():
         "users": var_users,
         "interference": var_interference,
         "standardize": var_args.standardize,
+        "hp_overrides": var_hp_applied,
         "tx_frame_rect_m": var_rect,
         "ap_geometry": {
             var_room: ({"ap_location": HWILD_ROOMS[var_room]["ap_location"],
