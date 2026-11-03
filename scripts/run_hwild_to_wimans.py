@@ -1,7 +1,21 @@
 """
 [file]          run_hwild_to_wimans.py
-[description]   Train the single-target (x, y) localizer (RoomLocalizer) on the H-WILD dataset and
-                evaluate it on the WiMANS locations, reporting the error in meters.
+[description]   Train a room-agnostic model on the H-WILD dataset and evaluate it on the WiMANS
+                locations, to ask whether a model trained on a completely different setup transfers
+                to rooms with a different geometry.
+
+                --model localizer (default): the single-target (x, y) regressor (RoomLocalizer) on
+                  single-occupant frames, in one shared transmitter-anchored metric frame, reporting
+                  the position error in meters. Cannot report occupancy -- it always emits a position.
+                --model density: the multi-user density head (src/models/room_density.py), which
+                  predicts an occupancy map and reports occupancy/detection and set-localization
+                  metrics. Rooms are kept in their own [0, 1]^2 frame (src/data/unified_rooms.py, the
+                  convention run_lor_all.py uses) and every frame is kept -- multi-occupant and
+                  empty-room WiMANS frames included -- so the report answers the occupancy question.
+
+                Note: H-WILD has no empty frames (the person always holds the device), so a teacher
+                trained on H-WILD alone has no empty class; the occupancy metrics on the WiMANS
+                empty frames are the measurement of exactly that limitation.
 """
 #
 ##
@@ -20,8 +34,10 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from configs.preset import preset
 from src.data.hwild import room_names as hwild_room_names, load_hwild_room, HWILD_ROOMS
 from src.data.unified_rooms import (load_wimans_room_targets, normalize_xy_meters,
-                                    wimans_room_names)
+                                    wimans_room_names, load_unified_room, dataset_of,
+                                    room_span, room_bounds)
 from src.models.room_localization import run_localization_cross_domain, format_localization_result
+from src.models.room_density import run_room_density_cross_domain, format_room_density_result
 from src.utils import save_run_outputs, build_run_stem, join_envs, run_timestamp, reserve_viz_dir
 
 #
@@ -36,6 +52,12 @@ def parse_args():
     #
     ##
     var_args = argparse.ArgumentParser()
+    var_args.add_argument("--model", default="localizer", choices=("localizer", "density"),
+                          help="'localizer' (default): the single-target RoomLocalizer, single-"
+                               "occupant frames, shared transmitter-anchored frame, position error in "
+                               "meters. 'density': the multi-user density head, per-room [0,1]^2 "
+                               "frames, every frame (empty and multi-occupant included), occupancy/"
+                               "detection + set-localization metrics.")
     var_args.add_argument("--train_rooms", default=None, type=str,
                           help="comma-separated H-WILD training rooms (default: all four)")
     var_args.add_argument("--test_rooms", default=None, type=str,
@@ -128,6 +150,93 @@ def standardize_windows(var_x):
     return ((var_x - var_mu) / var_sd).astype(np.float32)
 
 
+def run_density(var_args, var_train_rooms, var_test_rooms, var_hp_applied, var_users,
+                var_interference):
+    """
+    [description]
+    : H-WILD -> WiMANS transfer with the multi-user density head: occupancy/detection and set
+      localization. Unlike the localizer path, rooms keep their own [0, 1]^2 frame (the convention
+      src/data/unified_rooms.py and run_lor_all.py use) and every frame is kept -- multi-occupant and
+      empty-room WiMANS frames included -- which is what the occupancy question needs. An H-WILD-only
+      training set has no empty frames, so the empty class cannot be learned from it; the WiMANS
+      empty-frame metrics expose exactly that.
+    """
+    #
+    ##
+    var_load_kwargs = {"var_root": var_args.data_root, "var_users": var_users,
+                       "var_interference": var_interference, "var_max_files": var_args.max_files}
+    train_sets_by_room, test_sets_by_room = {}, {}
+    for var_tag, var_rooms, var_sets in (("[train]", var_train_rooms, train_sets_by_room),
+                                         ("[test] ", var_test_rooms, test_sets_by_room)):
+        for var_room in var_rooms:
+            var_x, var_pos, var_mask = load_unified_room(
+                var_room, var_max_samples=var_args.max_samples,
+                var_length=preset["hwild"]["window"], **var_load_kwargs)
+            var_sets[var_room] = (var_x, var_pos, var_mask)
+            var_counts = var_mask.sum(axis=1)
+            print(f"{var_tag} {dataset_of(var_room):6s} {var_room:12s} X {var_x.shape} "
+                  f"users/sample min {int(var_counts.min())} max {int(var_counts.max())} "
+                  f"mean {var_counts.mean():.2f}")
+    if var_args.standardize == "window":
+        for var_sets in (train_sets_by_room, test_sets_by_room):
+            for var_room, (var_x, var_pos, var_mask) in var_sets.items():
+                var_sets[var_room] = (standardize_windows(var_x), var_pos, var_mask)
+        print("CSI: per-window z-score (gain/AGC removed)")
+    else:
+        print("CSI: raw amplitude")
+    #
+    ## per-room frames and spans (run_lor_all.py's convention): each room is its own [0, 1]^2, so the
+    ## model must place occupants without being told the room's absolute position or extent.
+    var_all_rooms = list(train_sets_by_room) + list(test_sets_by_room)
+    var_spans = {var_room: room_span(var_room) for var_room in var_all_rooms}
+    var_bounds = {var_room: room_bounds(var_room) for var_room in var_all_rooms}
+    #
+    var_save_path = reserve_viz_dir(
+        path=f"./visualizations/hwild_to_wimans_density/{'_'.join(var_train_rooms)}")
+    os.makedirs(var_save_path, exist_ok=True)
+    var_results = run_room_density_cross_domain(train_sets_by_room, test_sets_by_room,
+                                                var_repeat=var_args.repeat, save_path=var_save_path,
+                                                var_spans=var_spans, var_bounds=var_bounds)
+    #
+    var_result = {
+        "protocol": "train H-WILD -> test WiMANS, multi-user density head, per-room [0,1]^2 frames",
+        "model": "density",
+        "train_rooms": var_train_rooms,
+        "test_rooms": var_test_rooms,
+        "repeat": var_args.repeat,
+        "epochs": preset["nn"]["epoch"],
+        "window": preset["hwild"]["window"],
+        "stride": preset["hwild"]["stride"],
+        "max_files": var_args.max_files,
+        "max_samples": var_args.max_samples,
+        "users": var_users,
+        "interference": var_interference,
+        "standardize": var_args.standardize,
+        "hp_overrides": var_hp_applied,
+        "spans": {var_room: list(var_spans[var_room]) for var_room in var_all_rooms},
+        "ap_geometry": {
+            var_room: ({"ap_location": HWILD_ROOMS[var_room]["ap_location"],
+                        "ap_toward": HWILD_ROOMS[var_room]["ap_toward"]}
+                       if var_room in hwild_room_names()
+                       else {"ap_location": (0.0, 0.0), "ap_toward": (0.0, 0.0)})
+            for var_room in var_train_rooms
+        },
+        "per_env": var_results,
+    }
+    #
+    var_formatted = format_room_density_result(var_train_rooms, var_test_rooms, var_results)
+    var_stem = build_run_stem("hwild_to_wimans", "density",
+                              f"train-{join_envs(var_train_rooms)}", f"test-{join_envs(var_test_rooms)}",
+                              f"r{var_args.repeat}", f"e{preset['nn']['epoch']}",
+                              var_args.standardize, run_timestamp())
+    var_json_path, var_txt_path = save_run_outputs(
+        preset["path"].get("save_dir", "output"), "hwild_to_wimans", var_stem, var_result, var_formatted)
+    #
+    print(var_formatted)
+    print(f"\nResults saved to: {var_json_path}")
+    print(f"Report saved to:  {var_txt_path}")
+
+
 def run():
     """
     [description]
@@ -155,12 +264,20 @@ def run():
     if var_args.stride is not None:
         preset["hwild"]["stride"] = var_args.stride
     if var_args.epochs is not None:
-        preset["hwild"]["epoch"] = var_args.epochs
+        if var_args.model == "density":
+            preset["nn"]["epoch"] = var_args.epochs
+        else:
+            preset["hwild"]["epoch"] = var_args.epochs
     if var_args.data_root is not None:
         preset["hwild"]["path"] = var_args.data_root
     var_users = [var_user.strip() for var_user in var_args.users.split(',')] if var_args.users else None
     var_interference = ([var_i.strip() for var_i in var_args.interference.split(',')]
                         if var_args.interference else None)
+    #
+    if var_args.model == "density":
+        run_density(var_args, var_train_rooms, var_test_rooms, var_hp_applied, var_users,
+                    var_interference)
+        return
     #
     ## --------------------------- load both datasets in the TX frame -------------------------------
     ## H-WILD positions come back as meters from the capture's AP, +y along the AP boresight.

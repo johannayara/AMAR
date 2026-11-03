@@ -82,25 +82,53 @@ class RoomLocalizer(nn.Module):
         return self.head(self.backbone(x))
 
 
-def localization_metrics(var_pred_xy, var_true_xy, var_span):
+def _grid_cell_index(var_xy, var_grid):
     """
     [description]
-    : Euclidean localization error between predicted and true normalized positions, in meters.
+    : index of the var_grid x var_grid cell each normalized (x, y) falls in, using the same cell
+      convention as visualize_room_grid_performance (row from y, column from x, clipped to the frame),
+      so the occupancy metric and the per-location figures read the same grid.
+    : var_xy: (N, 2) normalized positions in a [0, 1]^2 frame
+    : return: (N,) int cell index in [0, var_grid ** 2)
+    """
+    #
+    var_xy = np.asarray(var_xy, dtype=np.float64).reshape(-1, 2)
+    var_row = np.clip((var_xy[:, 1] * var_grid).astype(int), 0, var_grid - 1)
+    var_col = np.clip((var_xy[:, 0] * var_grid).astype(int), 0, var_grid - 1)
+    return var_row * var_grid + var_col
+
+
+def localization_metrics(var_pred_xy, var_true_xy, var_span, var_grid=None):
+    """
+    [description]
+    : Euclidean localization error between predicted and true normalized positions, in meters, plus a
+      coarse occupancy accuracy. The room's [0, 1]^2 frame is split into var_grid x var_grid cells
+      (the same cells the per-location figures use) and occupancy_accuracy is the fraction of frames
+      whose predicted position lands in the same cell as the ground truth. On this single-target task
+      every frame has exactly one occupied cell, so the per-location occupancy F1 coincides with the
+      accuracy and is not reported separately.
     : var_pred_xy / var_true_xy: (N, 2) normalized positions
     : var_span: (x_span, y_span) in meters, or an (N, 2) per-sample array when the set mixes rooms
-    : return: dict of mean / RMSE / median error in meters, and the mean normalized error
+    : var_grid: grid resolution; defaults to preset["viz"]["grid"]
+    : return: dict of mean / RMSE / median error in meters, the mean normalized error and the
+      grid-cell occupancy accuracy
     """
     #
     var_delta = (np.asarray(var_pred_xy, dtype=np.float64) - np.asarray(var_true_xy, dtype=np.float64))
     var_span = np.asarray(var_span, dtype=np.float64)
     var_delta_m = var_delta * var_span
     var_dist = np.sqrt((var_delta_m ** 2).sum(axis=1))
+    if var_grid is None:
+        var_grid = preset["viz"]["grid"]
+    var_occ_acc = float(np.mean(_grid_cell_index(var_pred_xy, var_grid)
+                                == _grid_cell_index(var_true_xy, var_grid)))
     #
     return {
         "mean_error_m": float(var_dist.mean()),
         "rmse_m": float(np.sqrt((var_dist ** 2).mean())),
         "median_error_m": float(np.median(var_dist)),
         "mean_error_norm": float(np.sqrt((var_delta ** 2).sum(axis=1)).mean()),
+        "occupancy_accuracy": var_occ_acc,
     }
 
 
@@ -435,18 +463,22 @@ def run_localization_cross_domain(train_sets_by_room, test_sets_by_room, var_rep
                     var_pred_list.append(model(var_x.to(device)).cpu())
             var_pred_xy = torch.cat(var_pred_list, dim=0).numpy()
             var_metrics = localization_metrics(var_pred_xy, var_y_room, var_spans[var_room])
-            var_metrics["const_mean_error_m"] = localization_metrics(
-                np.tile(var_train_mean_xy, (len(var_y_room), 1)), var_y_room,
-                var_spans[var_room])["mean_error_m"]
+            var_const_metrics = localization_metrics(
+                np.tile(var_train_mean_xy, (len(var_y_room), 1)), var_y_room, var_spans[var_room])
+            var_metrics["const_mean_error_m"] = var_const_metrics["mean_error_m"]
+            var_metrics["const_occupancy_accuracy"] = var_const_metrics["occupancy_accuracy"]
             var_env_rep_metrics.setdefault(var_room, []).append(var_metrics)
             var_env_last_xy[var_room] = (var_y_room, var_pred_xy)
             #
             wandb.log({f"test_results_per_env/{var_room}/mean_error_m": var_metrics["mean_error_m"],
                        f"test_results_per_env/{var_room}/rmse_m": var_metrics["rmse_m"],
-                       f"test_results_per_env/{var_room}/median_error_m": var_metrics["median_error_m"]},
+                       f"test_results_per_env/{var_room}/median_error_m": var_metrics["median_error_m"],
+                       f"test_results_per_env/{var_room}/occupancy_accuracy":
+                           var_metrics["occupancy_accuracy"]},
                       step=var_r + 100000)
             print(f"  [{var_room}] MDE {var_metrics['mean_error_m']:.4f} m - "
                   f"RMSE {var_metrics['rmse_m']:.4f} m - Median {var_metrics['median_error_m']:.4f} m - "
+                  f"OccAcc {var_metrics['occupancy_accuracy']:.4f} - "
                   f"const {var_metrics['const_mean_error_m']:.4f} m")
         #
         if var_r != var_repeat - 1:
@@ -461,7 +493,8 @@ def run_localization_cross_domain(train_sets_by_room, test_sets_by_room, var_rep
     wandb.finish()
     #
     ## ---------------------------------------- aggregate ---------------------------------------------
-    var_metric_names = ("mean_error_m", "rmse_m", "median_error_m", "mean_error_norm")
+    var_metric_names = ("mean_error_m", "rmse_m", "median_error_m", "mean_error_norm",
+                        "occupancy_accuracy")
     results = {}
     for var_room, var_rep_list in var_env_rep_metrics.items():
         var_env_result = {}
@@ -473,6 +506,8 @@ def run_localization_cross_domain(train_sets_by_room, test_sets_by_room, var_rep
             var_env_result[f"se_{var_name}"] = var_std / np.sqrt(len(var_arr)) if len(var_arr) > 1 else 0.0
         var_env_result["avg_const_mean_error_m"] = float(
             np.mean([var_rep["const_mean_error_m"] for var_rep in var_rep_list]))
+        var_env_result["avg_const_occupancy_accuracy"] = float(
+            np.mean([var_rep["const_occupancy_accuracy"] for var_rep in var_rep_list]))
         results[var_room] = var_env_result
         var_true_xy, var_pred_xy = var_env_last_xy[var_room]
         visualize_localization_predictions(var_true_xy, var_pred_xy, var_room,
@@ -485,6 +520,8 @@ def run_localization_cross_domain(train_sets_by_room, test_sets_by_room, var_rep
         print(f"\n[{var_room}] avg over {var_repeat} repeats: "
               f"MDE {var_env_result['avg_mean_error_m']:.4f} ± {var_env_result['se_mean_error_m']:.4f} m | "
               f"RMSE {var_env_result['avg_rmse_m']:.4f} ± {var_env_result['se_rmse_m']:.4f} m | "
+              f"OccAcc {var_env_result['avg_occupancy_accuracy']:.4f} ± "
+              f"{var_env_result['se_occupancy_accuracy']:.4f} | "
               f"constant-baseline MDE {var_env_result['avg_const_mean_error_m']:.4f} m")
     #
     return results
@@ -779,6 +816,7 @@ def run_few_shot_localization(hwild_sets_by_room, wimans_sets_by_room, var_few_s
             var_student_metrics["const_mean_error_m"] = var_const_metrics["mean_error_m"]
             var_student_metrics["const_rmse_m"] = var_const_metrics["rmse_m"]
             var_student_metrics["const_median_error_m"] = var_const_metrics["median_error_m"]
+            var_student_metrics["const_occupancy_accuracy"] = var_const_metrics["occupancy_accuracy"]
             var_student_query_metrics.setdefault(var_room, []).append(var_student_metrics)
             var_teacher_query_metrics.setdefault(var_room, []).append(
                 localization_metrics(var_teacher_xy, var_q_y, var_span))
@@ -786,10 +824,13 @@ def run_few_shot_localization(hwild_sets_by_room, wimans_sets_by_room, var_few_s
             wandb.log({f"query/{var_room}/student_mean_error_m": var_student_metrics["mean_error_m"],
                        f"query/{var_room}/teacher_mean_error_m":
                            var_teacher_query_metrics[var_room][-1]["mean_error_m"],
-                       f"query/{var_room}/const_mean_error_m": var_student_metrics["const_mean_error_m"]},
+                       f"query/{var_room}/const_mean_error_m": var_student_metrics["const_mean_error_m"],
+                       f"query/{var_room}/occupancy_accuracy":
+                           var_student_metrics["occupancy_accuracy"]},
                       step=var_r + 100000)
             print(f"  [{var_room}] query {len(var_sel)} frames | student {var_student_metrics['mean_error_m']:.4f} m "
                   f"| teacher {var_teacher_query_metrics[var_room][-1]['mean_error_m']:.4f} m "
+                  f"| OccAcc {var_student_metrics['occupancy_accuracy']:.4f} "
                   f"| const {var_student_metrics['const_mean_error_m']:.4f} m")
         wandb.finish()
         if var_r != var_repeat - 1:
@@ -805,7 +846,7 @@ def run_few_shot_localization(hwild_sets_by_room, wimans_sets_by_room, var_few_s
         var_student_list = var_student_query_metrics[var_room]
         var_teacher_list = var_teacher_query_metrics[var_room]
         var_env_result = {}
-        for var_name in ("mean_error_m", "rmse_m", "median_error_m"):
+        for var_name in ("mean_error_m", "rmse_m", "median_error_m", "occupancy_accuracy"):
             var_student_arr = np.array([var_rep[var_name] for var_rep in var_student_list])
             var_teacher_arr = np.array([var_rep[var_name] for var_rep in var_teacher_list])
             var_env_result[f"avg_student_{var_name}"] = float(var_student_arr.mean())
@@ -816,7 +857,7 @@ def run_few_shot_localization(hwild_sets_by_room, wimans_sets_by_room, var_few_s
             var_env_result[f"se_teacher_{var_name}"] = (
                 float(var_teacher_arr.std(ddof=1) / np.sqrt(len(var_teacher_arr)))
                 if len(var_teacher_arr) > 1 else 0.0)
-        for var_name in ("mean_error_m", "rmse_m", "median_error_m"):
+        for var_name in ("mean_error_m", "rmse_m", "median_error_m", "occupancy_accuracy"):
             var_env_result[f"avg_const_{var_name}"] = float(
                 np.mean([var_rep[f"const_{var_name}"] for var_rep in var_student_list]))
         results[var_room] = var_env_result
@@ -832,7 +873,9 @@ def run_few_shot_localization(hwild_sets_by_room, wimans_sets_by_room, var_few_s
                                         var_grid=preset["viz"]["grid"])
         print(f"\n[{var_room}] student {var_env_result['avg_student_mean_error_m']:.4f} ± "
               f"{var_env_result['se_student_mean_error_m']:.4f} m | teacher "
-              f"{var_env_result['avg_teacher_mean_error_m']:.4f} m | constant baseline "
+              f"{var_env_result['avg_teacher_mean_error_m']:.4f} m | occAcc "
+              f"{var_env_result['avg_student_occupancy_accuracy']:.4f} ± "
+              f"{var_env_result['se_student_occupancy_accuracy']:.4f} | constant baseline "
               f"{var_env_result['avg_const_mean_error_m']:.4f} m")
     #
     ## one figure with every query room: rows are sampled query frames, columns are (room, gt|pred)
@@ -869,6 +912,11 @@ def format_few_shot_result(var_few_shot_ratio, var_kd_weight, results):
             for var_name, var_label in var_metric_labels)
         var_lines.append(f"  Constant  {var_const}  (mean support position; beat this to show the "
                          f"few-shot step learned anything)")
+        var_lines.append(f"  Occupancy Student {var_env_result['avg_student_occupancy_accuracy']:.4f} ± "
+                         f"{var_env_result['se_student_occupancy_accuracy']:.4f} (SE) | Teacher "
+                         f"{var_env_result['avg_teacher_occupancy_accuracy']:.4f} | Constant "
+                         f"{var_env_result['avg_const_occupancy_accuracy']:.4f}  (grid-cell occupancy "
+                         f"accuracy: fraction of frames whose predicted position is in the true cell)")
     return "\n".join(var_lines)
 
 
@@ -924,4 +972,8 @@ def format_localization_result(var_train_rooms, var_test_rooms, results):
                          f"± {var_env_result['se_median_error_m']:.4f} m (SE)")
         var_lines.append(f"  Constant-baseline:   {var_env_result['avg_const_mean_error_m']:.4f} m "
                          f"(mean training position; beat this to show a transferable mapping)")
+        var_lines.append(f"  Occupancy Accuracy:  {var_env_result['avg_occupancy_accuracy']:.4f} "
+                         f"± {var_env_result['se_occupancy_accuracy']:.4f} (SE) | constant "
+                         f"{var_env_result['avg_const_occupancy_accuracy']:.4f}  (grid-cell occupancy "
+                         f"accuracy: fraction of frames whose predicted position is in the true cell)")
     return "\n".join(var_lines)

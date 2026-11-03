@@ -202,7 +202,10 @@ under `output/hwild/`. Each test room also gets the standard performance figures
 Every report also prints a **constant-position baseline** (the mean training-room position). It is the
 reference a room-agnostic model must beat to show it learned a transferable CSI-to-position mapping
 rather than predicting a room's centre: on the raw single-AP CSI amplitude this task is hard, and the
-current model does not beat that baseline on most held-out rooms. The harness is the starting point
+current model does not beat that baseline on most held-out rooms. Next to it every report prints a
+**grid-cell occupancy accuracy** (the fraction of frames whose predicted position is in the same
+`preset["viz"]["grid"]` x grid cell as the ground truth), a coarse localization readout that is
+complementary to the meter-scale error. The harness is the starting point
 for closing that gap (e.g. multi-AP fusion, AP-geometry conditioning, AoA features).
 
 ### 4. Pooled leave-one-room-out across WiMANS + H-WILD
@@ -247,8 +250,10 @@ scatter, and the standard per-location figures on the fixed `preset["viz"]["grid
 
 ### 5. H-WILD → WiMANS transfer in a shared transmitter-anchored frame
 
-`scripts/run_hwild_to_wimans.py` trains the single-target `RoomLocalizer` on H-WILD and evaluates it
-on the WiMANS locations, reporting the error in meters. The two datasets have no shared room origin,
+`scripts/run_hwild_to_wimans.py` trains a room-agnostic model on H-WILD and evaluates it on the WiMANS
+locations. `--model localizer` (default) is the single-target `RoomLocalizer`, reporting the error in
+meters; `--model density` is the multi-user density head, which also reports occupancy/detection (see
+below). The two datasets have no shared room origin,
 so both are placed in one **transmitter-anchored frame**: origin at the transmitter, `+y` along the
 boresight ("away from the transmitter"), `+x` to the right, units of meters.
 
@@ -271,8 +276,22 @@ python scripts/run_hwild_to_wimans.py --repeat 2 --epochs 40 --max_files 3 --sta
 python scripts/run_hwild_to_wimans.py --standardize none     # raw-amplitude ablation
 ```
 
+**`--model density`** swaps the single-target regressor for the multi-user density head
+(`src/models/room_density.py`), which predicts an occupancy map and reports occupancy/detection
+(count MAE, exact-count accuracy, detection P/R/F1) next to the set-localization error — so the
+transfer can be read on occupancy, not only on position. Unlike the localizer path it keeps rooms in
+their own `[0, 1]^2` frame (the `src/data/unified_rooms.py` convention `run_lor_all.py` uses) and
+keeps every frame, multi-occupant and empty-room WiMANS frames included. H-WILD has no empty frames
+(the person always holds the device), so a teacher trained on H-WILD alone has no empty class and the
+WiMANS empty-frame metrics measure exactly that.
+
+```bash
+python scripts/run_hwild_to_wimans.py --model density --repeat 2 --epochs 40 --max_samples 300
+```
+
 Reports go to `output/hwild_to_wimans/*.json|txt` and figures to
-`visualizations/hwild_to_wimans/<train_rooms>/<test_room>/`. Every report carries the
+`visualizations/hwild_to_wimans/<train_rooms>/<test_room>/` (or
+`visualizations/hwild_to_wimans_density/<train_rooms>/` for the density head). Every report carries the
 constant-position baseline; a run that does not beat it has not learned a transferable mapping. The
 current model fits H-WILD validation (≈1.5 m) but does not transfer to WiMANS (test MDE ≈9 m vs a
 ≈8.4 m constant baseline) — the H-WILD channel is a device link (the person holds the transmitter),
@@ -310,7 +329,12 @@ weight and the few-shot gain is coming from the WiMANS support set alone.
 Reports go to `output/few_shot_hwild_to_wimans/*.json|txt`; curves to
 `visualizations/few_shot_hwild_to_wimans/<train_rooms>/`. Each room's report lists MDE (mean distance
 error), RMSE and median error in meters — with the standard error over repeats for the student and the
-teacher, and as single values for the constant baseline.
+teacher, and as single values for the constant baseline. It also reports a **grid-cell occupancy
+accuracy**: the fraction of query frames whose predicted position lands in the same
+`preset["viz"]["grid"]` x grid cell of the shared frame as the ground truth (the same cells the
+per-location figures use), for the student, the teacher and the constant baseline. On this
+single-target task every frame has exactly one occupied cell, so the per-location occupancy F1
+coincides with the accuracy and is not reported separately.
 
 ### 7. NTU-Fi HAR → WiMANS activity transfer (pure split)
 
