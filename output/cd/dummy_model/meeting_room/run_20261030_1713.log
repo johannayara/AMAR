@@ -1,0 +1,49 @@
+Using device: cuda
+Training rooms: ['empty_room', 'meeting_room'] (3386 train / 376 valid) | Test rooms: ['classroom']
+Mean training output: [0.5215, 0.512, 0.4976, 0.4976, 0.4976]
+Repeat 0
+  [classroom] Total Error 9.4035 - PPP 4.78% - Acc 0.2179 - F1 0.1682
+Repeat 1
+  [classroom] Total Error 11.7741 - PPP 0.05% - Acc 0.1744 - F1 0.1707
+Repeat 2
+  [classroom] Total Error 14.0138 - PPP 0.00% - Acc 0.1620 - F1 0.1888
+Repeat 3
+  [classroom] Total Error 9.2153 - PPP 0.00% - Acc 0.2273 - F1 0.1660
+Repeat 4
+  [classroom] Total Error 10.0835 - PPP 0.05% - Acc 0.2069 - F1 0.1828
+Repeat 5
+  [classroom] Total Error 11.8022 - PPP 0.00% - Acc 0.1809 - F1 0.1799
+Repeat 6
+  [classroom] Total Error 13.7299 - PPP 0.00% - Acc 0.1539 - F1 0.1787
+Repeat 7
+  [classroom] Total Error 13.3503 - PPP 0.00% - Acc 0.1601 - F1 0.1723
+
+Visualizations saved at visualizations/cross_domain/empty_room_meeting_room/29/classroom
+
+Detailed Performance Analysis:
+Mean Error: 2.6808 ± 0.5768
+
+Class-wise Mean Absolute Error:
+Class a: 1.6204
+Class b: 2.2313
+Class c: 2.9383
+Class d: 3.6146
+Class e: 2.9995
+
+Perfect Predictions: 0.00%
+================================================================================
+EXPERIMENT RESULTS - Model: dummy_model, Task: location
+================================================================================
+PER_ENV_RESULTS:
+
+classroom:
+  Avg Accuracy: 0.1854 ± 0.0100 (SE)
+  Avg Precision: 0.1090 ± 0.0014 (SE)
+  Avg Recall: 0.4973 ± 0.0340 (SE)
+  Avg F1 Score: 0.1759 ± 0.0028 (SE)
+  Avg Perfect Prediction %: 0.6114 ± 0.5962 (SE)
+  Avg Total Error: 11.6716 ± 0.6849 (SE)
+
+Results saved to: output/cross_domain/dummy_model_location_train-empty_room+meeting_room_test-classroom_r8_e70_20261030_183251.json
+Report saved to:  output/cross_domain/dummy_model_location_train-empty_room+meeting_room_test-classroom_r8_e70_20261030_183251.txt
+Total time: 4762.820615768433 seconds

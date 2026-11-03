@@ -1,0 +1,21 @@
+================================================================================
+NTU-Fi HAR -> WiMANS FEW-SHOT ACTIVITY DISTILLATION (support 10.00%, kd_weight 0.1, kd_temperature 1.0)
+Shared activities (union): ['box', 'circle', 'clean', 'fall', 'jump', 'lie_down', 'nothing', 'pick_up', 'rotation', 'run', 'sit_down', 'stand_up', 'walk', 'wave'] | support frames: 178 | query frames: 1444
+================================================================================
+
+empty_room:
+  Student Accuracy 0.8782 ± 0.0029 (SE) | F1 0.0859 ± 0.0165 (SE) | PPP 14.7688 ± 2.0333 (SE) | Total Error 1.7046 ± 0.0407 (SE)
+  Teacher Accuracy 0.8591 ± 0.0008 (SE) | F1 0.0058 ± 0.0010 (SE) | PPP 0.7591 ± 0.2488 (SE) | Total Error 1.9731 ± 0.0114 (SE)  (NTU-Fi HAR teacher, no WiMANS fine-tuning)
+  MajorityAccuracy 0.8571 | F1 0.0000 | PPP 0.0000 | Total Error 2.0000
+
+meeting_room:
+  Student Accuracy 0.8899 ± 0.0059 (SE) | F1 0.1403 ± 0.0290 (SE) | PPP 22.9255 ± 4.1078 (SE) | Total Error 1.5415 ± 0.0822 (SE)
+  Teacher Accuracy 0.8589 ± 0.0007 (SE) | F1 0.0053 ± 0.0014 (SE) | PPP 0.7032 ± 0.2813 (SE) | Total Error 1.9754 ± 0.0091 (SE)  (NTU-Fi HAR teacher, no WiMANS fine-tuning)
+  MajorityAccuracy 0.8571 | F1 0.0000 | PPP 0.0000 | Total Error 2.0000
+
+classroom:
+  Student Accuracy 0.8876 ± 0.0047 (SE) | F1 0.1281 ± 0.0247 (SE) | PPP 21.2868 ± 3.2947 (SE) | Total Error 1.5743 ± 0.0659 (SE)
+  Teacher Accuracy 0.8590 ± 0.0008 (SE) | F1 0.0057 ± 0.0011 (SE) | PPP 0.7529 ± 0.2468 (SE) | Total Error 1.9740 ± 0.0107 (SE)  (NTU-Fi HAR teacher, no WiMANS fine-tuning)
+  MajorityAccuracy 0.8571 | F1 0.0000 | PPP 0.0000 | Total Error 2.0000
+
+Majority activity: box (the most frequent NTU-Fi HAR activity; always predicting it is the reference to beat)
