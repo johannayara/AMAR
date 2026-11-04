@@ -427,7 +427,11 @@ is not what filters them — `load_wimans_activity` defaults to single-occupant 
 NTU-Fi HAR's single-person captures. Both runners expose that as `--wimans_users` (default `"1"`, e.g.
 `--wimans_users 1,2,3`): a wider filter tests set-size generalisation through the same set-prediction
 head, and — because a single-occupant frame gives the Hungarian matching only one real target — it is
-also what lets the head's queries specialise instead of collapsing onto one slot.
+also what lets the head's queries specialise instead of collapsing onto one slot. It also scales the
+pool linearly: a WiMANS frame is `(3000, 270)` float32 (~3 MiB), so the union pool at `1,2,3` over the
+six rooms is ~20 GiB. The few-shot runner therefore streams the pool room by room
+(`prepare_transfer_task(..., var_stream_pool=True)`), reading only the frames each indexing step
+touches; the pure-split runner materializes just its query split.
 
 Reports go to `output/ntu_to_wimans/*.json|txt` and figures to `visualizations/ntu_to_wimans/`.
 

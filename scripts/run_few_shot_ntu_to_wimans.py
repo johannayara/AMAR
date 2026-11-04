@@ -249,9 +249,11 @@ def run():
         var_few_shot_ratio=var_args.few_shot_ratio,
         var_vocabulary=var_args.activities,
         ## this runner slices the pool with support_idx/valid_idx/query_idx and never touches the
-        ## per-room query tensors, whose copy of 80% of the pool is what pushes the union vocabulary
-        ## past a 16 GB job
-        var_with_query=False)
+        ## per-room query tensors, whose copy of 80% of the pool would push the run past the job's
+        ## memory. It also streams the pool itself (var_stream_pool): the union vocabulary at
+        ## --wimans_users 1,2,3 is ~20 GiB of frames, which does not fit a 32 GB job once the
+        ## support/validation copies and the source data sit beside it.
+        var_with_query=False, var_stream_pool=True)
     var_shared = var_task["var_shared"]
     preset["nn"]["num_classes"] = var_task["var_num_classes"]
     preset["task"] = "activity"

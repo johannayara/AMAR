@@ -1218,7 +1218,10 @@ def run_few_shot_cross_domain(train_sets_by_env, test_sets_by_env, var_support_i
                    reports -- is scored on the same frames.
     : train_sets_by_env: dict, source environment -> (X, y); the teacher's data
     : test_sets_by_env: dict, target environment -> (X, y); the support/valid/query pool, concatenated
-      in dict order
+      in dict order. X is either an (N, length, features) array or a WimansFrameSource (a lazy
+      array-like that reads only the frames it is indexed with, see src.data.activity_transfer), so a
+      pool too large to hold resident can still be walked here: the support/validation gather and the
+      query evaluation both index it and drop the frames right after.
     : var_support_idx / var_valid_idx / var_query_idx: global index arrays into that concatenation, as
       built by src.data.activity_transfer.split_target_pool
     : var_kd_weight: weight of the distillation term (0 = supervised few-shot only)
@@ -1258,17 +1261,40 @@ def run_few_shot_cross_domain(train_sets_by_env, test_sets_by_env, var_support_i
                                       torch.from_numpy(var_teacher_y[var_t_valid]))
     #
     ## --------------------- target pool: support / student validation / query ----------------------
-    var_pool_x = np.concatenate([np.asarray(test_sets_by_env[var_name][0], dtype=np.float32)
-                                 for var_name in var_target_names])
-    var_pool_y = np.concatenate([np.asarray(test_sets_by_env[var_name][1], dtype=np.float32)
-                                 for var_name in var_target_names])
-    var_pool_x = var_pool_x.reshape(len(var_pool_x), var_pool_x.shape[1], -1)
-    student_train_set = TensorDataset(torch.from_numpy(var_pool_x[var_support_idx]),
-                                      torch.from_numpy(var_pool_y[var_support_idx]))
-    student_valid_set = TensorDataset(torch.from_numpy(var_pool_x[var_valid_idx]),
-                                      torch.from_numpy(var_pool_y[var_valid_idx]))
+    ## Materialising the concatenated pool doubles the run's peak memory: on the union vocabulary at
+    ## --wimans_users 1,2,3 the per-env dict and its copy are ~16 GB each, which does not fit a 32 GB
+    ## job. The pool rows are therefore read per env instead -- the support / validation frames are
+    ## gathered from the env they belong to, and the query frames come straight out of the env's own
+    ## array in the loop below -- so only the per-env dict is ever resident.
+    var_pool_sizes = [len(test_sets_by_env[var_name][0]) for var_name in var_target_names]
+    var_pool_starts = np.cumsum([0] + var_pool_sizes[:-1])
+
+    def _gather_pool_rows(var_idx):
+        """
+        [description]
+        : the rows of the per-env pool at the global indices var_idx, without building the whole
+          concatenation (which would double the memory of a union run).
+        : return: (x, y) of those rows, in ascending index order
+        """
+        var_x_parts, var_y_parts = [], []
+        for var_name, var_start, var_size in zip(var_target_names, var_pool_starts, var_pool_sizes):
+            var_mask = (var_idx >= var_start) & (var_idx < var_start + var_size)
+            if var_mask.any():
+                var_local = var_idx[var_mask] - var_start
+                var_x_parts.append(np.asarray(test_sets_by_env[var_name][0][var_local],
+                                              dtype=np.float32))
+                var_y_parts.append(np.asarray(test_sets_by_env[var_name][1][var_local],
+                                              dtype=np.float32))
+        return np.concatenate(var_x_parts), np.concatenate(var_y_parts)
+
+    var_support_x, var_support_y = _gather_pool_rows(var_support_idx)
+    var_valid_x, var_valid_y = _gather_pool_rows(var_valid_idx)
+    student_train_set = TensorDataset(torch.from_numpy(var_support_x),
+                                      torch.from_numpy(var_support_y))
+    student_valid_set = TensorDataset(torch.from_numpy(var_valid_x),
+                                      torch.from_numpy(var_valid_y))
     print(f"Source {var_teacher_x.shape[0]} frames ({len(var_t_train)} train / {len(var_t_valid)} valid)")
-    print(f"Target pool {len(var_pool_x)} frames -> support {len(var_support_idx)} "
+    print(f"Target pool {int(np.sum(var_pool_sizes))} frames -> support {len(var_support_idx)} "
           f"({var_few_shot_ratio:.2%}) | student validation {len(var_valid_idx)} | "
           f"query {len(var_query_idx)}")
     print(f"kd_weight {var_kd_weight} | kd_temperature {var_kd_temperature} | "
@@ -1365,26 +1391,23 @@ def run_few_shot_cross_domain(train_sets_by_env, test_sets_by_env, var_support_i
         for var_name in var_target_names:
             var_size = len(test_sets_by_env[var_name][0])
             var_mask = (var_query_idx >= var_offset) & (var_query_idx < var_offset + var_size)
-            ## var_pool_x / var_pool_y concatenate every target env, so they are indexed with the
-            ## global query indices; the env's own arrays (test_sets_by_env, which
-            ## visualize_query_clustering reads) take the same indices shifted to the env's start.
-            ## Indexing the pool with the shifted indices scores every env after the first on the
-            ## first env's frames instead of its own.
-            var_sel = var_query_idx[var_mask]
-            var_sel_local = var_sel - var_offset
+            ## the query frames are read out of this env's own array (no concatenated pool), so the
+            ## indices are shifted to the env's start; visualize_query_clustering takes the same ones
+            var_sel_local = var_query_idx[var_mask] - var_offset
             var_offset += var_size
-            if len(var_sel) == 0:
+            if len(var_sel_local) == 0:
                 continue
             var_student_preds, var_teacher_preds = [], []
             with torch.no_grad():
-                for var_b in range(0, len(var_sel), preset["nn"]["batch_size"]):
+                for var_b in range(0, len(var_sel_local), preset["nn"]["batch_size"]):
                     var_xb = torch.from_numpy(
-                        var_pool_x[var_sel[var_b:var_b + preset["nn"]["batch_size"]]]).to(device)
+                        test_sets_by_env[var_name][0][
+                            var_sel_local[var_b:var_b + preset["nn"]["batch_size"]]]).to(device)
                     var_student_preds.append(student(var_xb).cpu())
                     var_teacher_preds.append(teacher(var_xb).cpu())
             var_student_y = torch.cat(var_student_preds, dim=1).numpy()
             var_teacher_y = torch.cat(var_teacher_preds, dim=1).numpy()
-            var_q_y = var_pool_y[var_sel]
+            var_q_y = test_sets_by_env[var_name][1][var_sel_local]
             var_predict_y_last[var_name] = (var_q_y, var_student_y)
             var_s_metrics = performance_metrics(var_q_y, var_student_y, var_mode=var_mode)
             var_t_metrics = performance_metrics(var_q_y, var_teacher_y, var_mode=var_mode)
@@ -1402,7 +1425,7 @@ def run_few_shot_cross_domain(train_sets_by_env, test_sets_by_env, var_support_i
                 f"query/{var_name}/teacher_f1_score": var_t_metrics['f1_score'],
                 f"query/{var_name}/teacher_micro_f1": var_t_metrics['micro_f1'],
             }, step=var_r + 100000)
-            print(f"  [{var_name}] query {len(var_sel)} frames | student micro-F1 "
+            print(f"  [{var_name}] query {len(var_sel_local)} frames | student micro-F1 "
                   f"{var_s_metrics['micro_f1']:.4f} (present-F1 {var_s_metrics['present_f1']:.4f}, "
                   f"PPP {var_s_metrics['perfect_prediction_percentage']:.4f}) | teacher micro-F1 "
                   f"{var_t_metrics['micro_f1']:.4f}")

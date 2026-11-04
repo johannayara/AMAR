@@ -196,6 +196,127 @@ def harmonize_wimans_features(var_amp, var_features, var_length):
     return var_out, var_num
 
 
+def select_wimans_frames(var_activities, var_room, var_num_users, var_band, var_max_samples=None):
+    """
+    [description]
+    : select one room's WiMANS frames whose every occupant performs one of the shared activities, with
+      the activity index of each occupant. Frames with an occupant doing an activity outside the shared
+      vocabulary (and empty frames, which have no occupant at all) are dropped, so the label space is
+      identical to the NTU-Fi HAR side.
+    : Annotation only -- no CSI is read -- so a run can resolve the whole pool's frame selection and
+      still hold none of its frames (see WimansFrameSource).
+    : var_activities: shared activity names, in the order that defines the class indices
+    : var_room: the room key to select from (see wimans_room_names)
+    : var_num_users: occupant-count filter (default ["1"], matching NTU-Fi HAR's single-person
+      captures; widen it, e.g. "1,2,3", to also test set-size generalisation)
+    : var_max_samples: cap with a fixed-seed random subset
+    : var_band: annotation band filter; None (default) uses the room's own source band, so real 5 GHz
+      rooms and simulated 2.4 GHz rooms can be selected in the same run
+    : return: (var_labels, var_class_indices, var_data_x) -- the selected captures, their per-frame
+      activity index lists, and the CSI directory they live in
+    """
+    #
+    ##
+    var_num_users = list(var_num_users) if var_num_users is not None else ["1"]
+    var_index = {var_name: var_i for var_i, var_name in enumerate(var_activities)}
+    var_cols = [f"user_{var_i}_activity" for var_i in range(1, 7)]
+    ## each room key resolves to its own source: the real rooms read preset["path"], the simulated
+    ## keys read preset["data"]["synth_wimans"], and both use the same base room name
+    var_base, var_data_x, var_data_y, var_source_band = wimans_room_source(var_room)
+    var_room_band = list(var_band) if var_band is not None else var_source_band
+    var_pd = load_data_y(var_data_y, [var_base], var_room_band, var_num_users)
+    var_labels, var_class_indices = [], []
+    for _, var_row in var_pd.iterrows():
+        ## every occupant's activity, ignoring the blank cells of absent users
+        var_acts = [WIMANS_ACTIVITY_ALIASES.get(var_row[var_col], var_row[var_col])
+                    for var_col in var_cols
+                    if isinstance(var_row[var_col], str) and var_row[var_col].strip()]
+        ## a frame is only usable when *all* of its occupants do a shared activity: keeping it while
+        ## dropping an out-of-vocabulary occupant would silently mislabel the frame
+        if not var_acts or any(var_act not in var_index for var_act in var_acts):
+            continue
+        var_labels.append(var_row["label"])
+        var_class_indices.append([var_index[var_act] for var_act in var_acts])
+    if not var_labels:
+        raise ValueError(
+            f"no WiMANS frame in {var_room!r} has every occupant within the shared activities "
+            f"{var_activities} (band {var_room_band}, occupants {var_num_users})")
+    if var_max_samples is not None and len(var_labels) > var_max_samples:
+        ## WiMANS is ordered single-user first, so a "first N" cut would drop whole groups; draw a
+        ## fixed-seed random subset instead.
+        var_keep = np.sort(np.random.RandomState(39).choice(len(var_labels), var_max_samples,
+                                                            replace=False))
+        var_labels = [var_labels[var_i] for var_i in var_keep]
+        var_class_indices = [var_class_indices[var_i] for var_i in var_keep]
+    return var_labels, var_class_indices, var_data_x
+
+
+def load_wimans_frames(var_labels, var_data_x, var_length, var_features, var_standardize):
+    """
+    [description]
+    : read and standardize the named WiMANS captures: (len(var_labels), var_length, var_features)
+      float32. The only place WiMANS CSI is read, so the eager pool and the lazy WimansFrameSource get
+      the same padding (load_data_x's leading zero padding) and the same window z-score.
+    """
+    #
+    ##
+    var_x = np.empty((len(var_labels), var_length, var_features), dtype=np.float32)
+    var_lengths = np.zeros(len(var_labels), dtype=np.int64)
+    for var_i, var_label in enumerate(var_labels):
+        var_amp = np.load(os.path.join(var_data_x, var_label + ".npy")).astype(np.float32)
+        var_x[var_i], var_lengths[var_i] = harmonize_wimans_features(var_amp, var_features,
+                                                                    var_length)
+    if var_standardize == "window":
+        ## in place: the pool is freshly allocated here and is the largest array in the run
+        var_x = standardize_windows(var_x, var_lengths, var_in_place=True)
+    elif var_standardize != "none":
+        raise ValueError(f"var_standardize must be 'window' or 'none', got {var_standardize!r}")
+    return var_x
+
+
+class WimansFrameSource:
+    """
+    [description]
+    : lazy array-like view of one WiMANS room's selected frames. Indexing it reads only the requested
+      captures, so a run that walks the pool (support/validation gather, query evaluation, clustering)
+      never holds more than the frames it is using at that moment. The pool is (frames, 3000, 270)
+      float32 -- ~3 MiB per frame -- so the union pool at --wimans_users 1,2,3 is ~20 GiB, which is
+      what pushes the 32 GB job over once the support/validation copies and the source data sit beside
+      it. Supports len(), .shape, .dtype and int / slice / integer-array indexing, so it drops into
+      the places that expect the (N, length, features) array.
+    : var_labels: this room's selected captures, in pool order (see select_wimans_frames)
+    : var_data_x: the room's CSI directory
+    : var_length / var_features / var_standardize: padding / feature / standardization settings
+    """
+    #
+    ##
+    def __init__(self, var_labels, var_data_x, var_length, var_features, var_standardize):
+        self.labels = list(var_labels)
+        self.data_x = var_data_x
+        self.length = var_length
+        self.features = var_features
+        self.standardize = var_standardize
+
+    def __len__(self):
+        return len(self.labels)
+
+    @property
+    def shape(self):
+        return (len(self.labels), self.length, self.features)
+
+    @property
+    def dtype(self):
+        return np.dtype(np.float32)
+
+    def __getitem__(self, var_index):
+        var_ids = np.arange(len(self.labels))[var_index]
+        var_scalar = np.ndim(var_ids) == 0
+        var_ids = np.atleast_1d(var_ids).astype(np.int64)
+        var_x = load_wimans_frames([self.labels[int(var_i)] for var_i in var_ids], self.data_x,
+                                   self.length, self.features, self.standardize)
+        return var_x[0] if var_scalar else var_x
+
+
 def load_wimans_activity(var_activities, var_rooms=None, var_num_users=None, var_band=None,
                          var_length=None, var_features=None, var_max_samples=None,
                          var_standardize="window"):
@@ -205,6 +326,8 @@ def load_wimans_activity(var_activities, var_rooms=None, var_num_users=None, var
       activity index of each occupant. Frames with an occupant doing an activity outside the shared
       vocabulary (and empty frames, which have no occupant at all) are dropped, so the label space is
       identical to the NTU-Fi HAR side.
+    : The eager counterpart of WimansFrameSource: every room's frames are materialized up front. Use
+      the lazy source (prepare_transfer_task's var_stream_pool) when the pool is too large to hold.
     : var_activities: shared activity names, in the order that defines the class indices
     : var_rooms: rooms to include (default every key of wimans_room_names(): the real WiMANS
       environments, plus "<name><suffix>" for the simulated source when it is enabled)
@@ -220,54 +343,13 @@ def load_wimans_activity(var_activities, var_rooms=None, var_num_users=None, var
     ##
     var_rooms = (list(var_rooms) if var_rooms is not None
                  else wimans_room_names())
-    var_num_users = list(var_num_users) if var_num_users is not None else ["1"]
     var_length = var_length or preset["data"]["length"]
     var_features = var_features or preset.get("ntu_har", {}).get("features", NTU_HAR_FEATURES)
-    var_index = {var_name: var_i for var_i, var_name in enumerate(var_activities)}
-    var_cols = [f"user_{var_i}_activity" for var_i in range(1, 7)]
-    #
     var_out = {}
     for var_room in var_rooms:
-        ## each room key resolves to its own source: the real rooms read preset["path"], the
-        ## simulated keys read preset["data"]["synth_wimans"], and both use the same base room name
-        var_base, var_data_x, var_data_y, var_source_band = wimans_room_source(var_room)
-        var_room_band = list(var_band) if var_band is not None else var_source_band
-        var_pd = load_data_y(var_data_y, [var_base], var_room_band, var_num_users)
-        var_labels, var_class_indices = [], []
-        for _, var_row in var_pd.iterrows():
-            ## every occupant's activity, ignoring the blank cells of absent users
-            var_acts = [WIMANS_ACTIVITY_ALIASES.get(var_row[var_col], var_row[var_col])
-                        for var_col in var_cols
-                        if isinstance(var_row[var_col], str) and var_row[var_col].strip()]
-            ## a frame is only usable when *all* of its occupants do a shared activity: keeping it
-            ## while dropping an out-of-vocabulary occupant would silently mislabel the frame
-            if not var_acts or any(var_act not in var_index for var_act in var_acts):
-                continue
-            var_labels.append(var_row["label"])
-            var_class_indices.append([var_index[var_act] for var_act in var_acts])
-        if not var_labels:
-            raise ValueError(
-                f"no WiMANS frame in {var_room!r} has every occupant within the shared activities "
-                f"{var_activities} (band {var_room_band}, occupants {var_num_users})")
-        if var_max_samples is not None and len(var_labels) > var_max_samples:
-            ## WiMANS is ordered single-user first, so a "first N" cut would drop whole groups;
-            ## draw a fixed-seed random subset instead.
-            var_keep = np.sort(np.random.RandomState(39).choice(len(var_labels), var_max_samples,
-                                                                replace=False))
-            var_labels = [var_labels[var_i] for var_i in var_keep]
-            var_class_indices = [var_class_indices[var_i] for var_i in var_keep]
-        #
-        var_x = np.empty((len(var_labels), var_length, var_features), dtype=np.float32)
-        var_lengths = np.zeros(len(var_labels), dtype=np.int64)
-        for var_i, var_label in enumerate(var_labels):
-            var_amp = np.load(os.path.join(var_data_x, var_label + ".npy")).astype(np.float32)
-            var_x[var_i], var_lengths[var_i] = harmonize_wimans_features(var_amp, var_features,
-                                                                        var_length)
-        if var_standardize == "window":
-            ## in place: the pool is freshly allocated here and is the largest array in the run
-            var_x = standardize_windows(var_x, var_lengths, var_in_place=True)
-        elif var_standardize != "none":
-            raise ValueError(f"var_standardize must be 'window' or 'none', got {var_standardize!r}")
+        var_labels, var_class_indices, var_data_x = select_wimans_frames(
+            var_activities, var_room, var_num_users, var_band, var_max_samples)
+        var_x = load_wimans_frames(var_labels, var_data_x, var_length, var_features, var_standardize)
         var_out[var_room] = (var_x, var_class_indices)
         print(f"[WiMANS] {var_room:12s} {var_x.shape} "
               f"({len(var_class_indices)} frames, activities {sorted(var_activities)})")
@@ -381,7 +463,7 @@ def prepare_transfer_task(var_ntu_root=None, var_ntu_splits=None,
                           var_band=None, var_length=None, var_standardize="window",
                           var_max_ntu_files=None, var_max_wimans_samples=None,
                           var_few_shot_ratio=0.05, var_seed=39, var_vocabulary=None,
-                          var_with_pool=True, var_with_query=True):
+                          var_with_pool=True, var_with_query=True, var_stream_pool=False):
     """
     [description]
     : load both sides of the NTU-Fi HAR -> WiMANS shared-activity task and split the WiMANS pool into
@@ -395,6 +477,15 @@ def prepare_transfer_task(var_ntu_root=None, var_ntu_splits=None,
       runner indexes the pool with support_idx/valid_idx/query_idx; the pure-split runner is scored on
       the query frames. Only the returned dict is affected: the split indices and the per-query
       activity labels are always built.
+    : var_stream_pool: hand back the pool as a lazy per-room source (WimansFrameSource) instead of
+      materializing every room's frames. The selection (labels + activity indices) is still resolved
+      for the whole pool, but a room's CSI is read only when the pool is indexed, so a run that walks
+      it (support/validation gather, query evaluation, clustering) never holds more than the frames it
+      is using. Required once the pool outgrows the job: the union pool at --wimans_users 1,2,3 is
+      ~20 GiB of frames, which does not fit a 32 GB job beside the support/validation copies and the
+      source data. The frame selection, split indices and every metric are identical to the eager
+      pool, so streamed and eager runs stay comparable. Needs var_with_pool; var_with_query
+      materializes the query frames off the source, defeating the point.
     : return: dict with
         var_shared                 shared activity names, the class ordering
         var_vocabulary             the vocabulary the class ordering came from
@@ -402,7 +493,8 @@ def prepare_transfer_task(var_ntu_root=None, var_ntu_splits=None,
         var_ntu_classes            NTU-Fi HAR classes kept
         train_sets_by_env          {"ntu_har": (X, y)}
         ntu_class_indices          per-NTU-sample shared activity indices
-        pool_by_env                {room: (X, y)} the whole WiMANS pool, {} unless var_with_pool
+        pool_by_env                {room: (X, y)} the whole WiMANS pool, {} unless var_with_pool;
+                                   X is a WimansFrameSource when var_stream_pool, else an array
         support_idx/valid_idx/query_idx   global pool indices
         query_by_env               {room: (X, y)} the held-out query frames, {} unless var_with_query
         query_class_indices_by_env per-query shared activity indices
@@ -431,18 +523,36 @@ def prepare_transfer_task(var_ntu_root=None, var_ntu_splits=None,
     print(f"[NTU-Fi HAR] {var_ntu_x.shape} | classes {var_ntu_classes}")
     #
     ## ----------------------------------------- WiMANS --------------------------------------------
-    var_wimans = load_wimans_activity(var_shared, var_rooms=var_wimans_rooms,
-                                      var_num_users=var_wimans_users, var_band=var_band,
-                                      var_length=var_length, var_features=var_features,
-                                      var_max_samples=var_max_wimans_samples,
-                                      var_standardize=var_standardize)
-    var_pool_by_env, var_sizes = {}, []
-    for var_room, (var_x, _) in var_wimans.items():
-        var_pool_by_env[var_room] = (var_x,
-                                     build_activity_set_labels(var_wimans[var_room][1],
-                                                               var_num_queries, var_num_classes))
-        var_sizes.append(len(var_x))
-    var_room_names = list(var_wimans)
+    ## var_stream_pool resolves only the frame selection (annotation) per room and defers the CSI to
+    ## WimansFrameSource; otherwise every room is materialized up front.
+    var_pool_by_env, var_class_indices_by_env = {}, {}
+    if var_stream_pool:
+        var_length = var_length or preset["data"]["length"]
+        var_room_names = (list(var_wimans_rooms) if var_wimans_rooms is not None
+                          else wimans_room_names())
+        for var_room in var_room_names:
+            var_labels, var_class_indices, var_data_x = select_wimans_frames(
+                var_shared, var_room, var_wimans_users, var_band, var_max_wimans_samples)
+            var_pool_by_env[var_room] = (
+                WimansFrameSource(var_labels, var_data_x, var_length, var_features, var_standardize),
+                build_activity_set_labels(var_class_indices, var_num_queries, var_num_classes))
+            var_class_indices_by_env[var_room] = var_class_indices
+            print(f"[WiMANS] {var_room:12s} {tuple(var_pool_by_env[var_room][0].shape)} "
+                  f"({len(var_class_indices)} frames, activities {sorted(var_shared)})")
+    else:
+        var_wimans = load_wimans_activity(var_shared, var_rooms=var_wimans_rooms,
+                                          var_num_users=var_wimans_users, var_band=var_band,
+                                          var_length=var_length, var_features=var_features,
+                                          var_max_samples=var_max_wimans_samples,
+                                          var_standardize=var_standardize)
+        var_room_names = list(var_wimans)
+        for var_room in var_room_names:
+            var_class_indices_by_env[var_room] = var_wimans[var_room][1]
+            var_pool_by_env[var_room] = (
+                var_wimans[var_room][0],
+                build_activity_set_labels(var_wimans[var_room][1], var_num_queries, var_num_classes))
+    ## the set labels are one row per pool frame, so their length is the room's frame count
+    var_sizes = [len(var_pool_by_env[var_room][1]) for var_room in var_room_names]
     ## The support and validation frames come from the real WiMANS rooms only. A second source (the
     ## simulated set, enabled through preset["data"]["synth_wimans"]) contributes query frames but
     ## must not be fine-tuned on or select the checkpoint, which is what "in the test set" means.
@@ -458,13 +568,13 @@ def prepare_transfer_task(var_ntu_root=None, var_ntu_splits=None,
     ## the query frames per room, so the pure-split runner can be scored on the same frames the
     ## few-shot runner holds out; the per-query activity labels are cheap and always built
     var_query_by_env, var_query_class_indices_by_env = {}, {}
-    for var_room, (var_start, var_size) in zip(var_pool_by_env, _env_slices(var_sizes)):
+    for var_room, (var_start, var_size) in zip(var_room_names, _env_slices(var_sizes)):
         var_mask = (var_query_idx >= var_start) & (var_query_idx < var_start + var_size)
         var_sel = var_query_idx[var_mask] - var_start
         if var_with_query:
             var_x, var_y = var_pool_by_env[var_room]
             var_query_by_env[var_room] = (var_x[var_sel], var_y[var_sel])
-        var_query_class_indices_by_env[var_room] = [var_wimans[var_room][1][int(var_i)]
+        var_query_class_indices_by_env[var_room] = [var_class_indices_by_env[var_room][int(var_i)]
                                                     for var_i in var_sel]
     if not var_with_pool:
         ## the pool's only other use is run_cross_domain's concatenation, which the pure-split runner
