@@ -64,6 +64,13 @@ preset = {
         "momentum": 0.0,                                 # SGD momentum (ignored by adam)
         "epoch": 100,                                 # number of epochs 
         "batch_size":32,                              # batch size
+        ## Checkpoint-selection metric used by src/train.py:train. "ppp" (default) keeps the historical
+        ## perfect_prediction_percentage selection, so runs made before this option stay reproducible.
+        ## "micro_f1" selects on validation micro-F1 instead, which is not inflated by the classes
+        ## absent from a single-occupant frame (see calculate_scores); the NTU-Fi HAR -> WiMANS runs
+        ## opt in with --hp nn.select_metric=micro_f1. Other trainers (train_rvq / train_joint) are
+        ## not affected.
+        "select_metric": "ppp",                       # "ppp" or "micro_f1"
         "threshold": 0.5,                               # threshold to binarize sigmoid outputs
         "scheduler": {
             "type": "cosine_warmup",  # type of scheduler

@@ -1365,7 +1365,13 @@ def run_few_shot_cross_domain(train_sets_by_env, test_sets_by_env, var_support_i
         for var_name in var_target_names:
             var_size = len(test_sets_by_env[var_name][0])
             var_mask = (var_query_idx >= var_offset) & (var_query_idx < var_offset + var_size)
-            var_sel = var_query_idx[var_mask] - var_offset
+            ## var_pool_x / var_pool_y concatenate every target env, so they are indexed with the
+            ## global query indices; the env's own arrays (test_sets_by_env, which
+            ## visualize_query_clustering reads) take the same indices shifted to the env's start.
+            ## Indexing the pool with the shifted indices scores every env after the first on the
+            ## first env's frames instead of its own.
+            var_sel = var_query_idx[var_mask]
+            var_sel_local = var_sel - var_offset
             var_offset += var_size
             if len(var_sel) == 0:
                 continue
@@ -1406,7 +1412,7 @@ def run_few_shot_cross_domain(train_sets_by_env, test_sets_by_env, var_support_i
                 for var_who, var_model_here in (("teacher", teacher), ("student", student)):
                     var_clustering[var_name][var_who] = visualize_query_clustering(
                         var_model_here, test_sets_by_env[var_name][0], var_q_y, var_class_names,
-                        save_path=os.path.join(save_path, var_name), var_index=var_sel,
+                        save_path=os.path.join(save_path, var_name), var_index=var_sel_local,
                         var_model_name=f"{var_who}_r{var_r}")
         wandb.finish()
         del teacher_optimizer, teacher_loss, student_optimizer, student_loss, kd_loss

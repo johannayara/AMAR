@@ -56,16 +56,31 @@ def train(model: Module,
     : teacher: frozen model used as distillation target (evaluated under torch.no_grad)
     : kd_loss: distillation criterion taking (student_outputs, teacher_outputs)
     : kd_weight: weight of the distillation term
+    : model selection: the checkpoint returned is the epoch with the highest validation score under
+      preset["nn"]["select_metric"] -- "ppp" (perfect_prediction_percentage, the historical default) or
+      "micro_f1" (not inflated by class absence; see calculate_scores)
     """
     use_distillation = teacher is not None and kd_loss is not None and kd_weight > 0
+    ## Checkpoint-selection metric. "ppp" is the historical behaviour; "micro_f1" is the
+    ## class-absence-free choice (calculate_scores' accuracy / PPP sit near (C-2)/C on a
+    ## single-occupant task whatever the model does, so a checkpoint picked on them need not be the
+    ## best activity classifier). micro_f1 pools 2TP/(2TP+FP+FN) over every class and sample and
+    ## reduces to plain per-frame accuracy on the single-occupant protocol.
+    var_select_metric = preset["nn"].get("select_metric", "ppp")
+    if var_select_metric not in ("ppp", "micro_f1"):
+        raise ValueError(f"preset['nn']['select_metric'] must be 'ppp' or 'micro_f1', "
+                         f"got {var_select_metric!r}")
     var_epoch_saved = 0
     g = torch.Generator()
     data_train_loader = DataLoader(data_train_set, var_batch_size, shuffle=True, pin_memory=True, generator=g)
     data_valid_loader = DataLoader(data_valid_set, len(data_valid_set))
 
-    # Initialize early stopping variables 
+    # Initialize early stopping variables
     var_best_f1_score = 0
-    var_best_PPP = 0
+    ## Start below any attainable score so the first evaluated epoch always saves a checkpoint. "ppp"
+    ## starts at 0 to keep the historical behaviour bit-for-bit (a PPP of 0 never saved); micro-F1 can
+    ## legitimately be 0, so it starts at -1.
+    var_best_select_score = -1.0 if var_select_metric == "micro_f1" else 0.0
     var_best_weight = deepcopy(model.state_dict())
     counter = 0  # Counter for patience
 
@@ -181,6 +196,8 @@ def train(model: Module,
                     f"{layer_idx}/precision": layer_metrics['precision'],
                     f"{layer_idx}/recall": layer_metrics['recall'],
                     f"{layer_idx}/f1_score": layer_metrics['f1_score'],
+                    f"{layer_idx}/micro_f1_valid": layer_metrics['micro_f1'],
+                    f"{layer_idx}/present_f1_valid": layer_metrics['present_f1'],
                     "learning_rate": optimizer.param_groups[0]['lr'],
                     **kd_logs
                 }, 
@@ -194,6 +211,7 @@ def train(model: Module,
                     print(f"  Perfect Prediction % Train: {layer_train_metrics['perfect_prediction_percentage']:.6f} | Perfect Prediction % valid: {layer_metrics['perfect_prediction_percentage']:.6f}")
                     print(f"  Accuracy Train: {layer_train_metrics['accuracy']:.6f} | Accuracy valid: {layer_metrics['accuracy']:.6f}")
                     print(f"  Precision: {layer_metrics['precision']:.6f} | Recall: {layer_metrics['recall']:.6f} | F1 Score: {layer_metrics['f1_score']:.6f}")
+                    print(f"  micro-F1 valid: {layer_metrics['micro_f1']:.6f} | present-F1 valid: {layer_metrics['present_f1']:.6f} | selection: {var_select_metric}")
                     print("-" * 30)
         else:
             # Original logging for non-multi_head modes
@@ -211,6 +229,8 @@ def train(model: Module,
                 "precision": dict_error_valid['precision'],
                 "recall": dict_error_valid['recall'],
                 "f1_score": dict_error_valid['f1_score'],
+                "micro_f1_valid": dict_error_valid['micro_f1'],
+                "present_f1_valid": dict_error_valid['present_f1'],
                 **kd_logs
             }, 
             step=var_epoch)
@@ -222,15 +242,19 @@ def train(model: Module,
                 print(f"  Perfect Prediction % Train: {dict_error_train['perfect_prediction_percentage']:.6f} | Perfect Prediction % valid: {dict_error_valid['perfect_prediction_percentage']:.6f}")
                 print(f"  Accuracy Train: {dict_error_train['accuracy']:.6f} | Accuracy valid: {dict_error_valid['accuracy']:.6f}")
                 print(f"  Precision: {dict_error_valid['precision']:.6f} | Recall: {dict_error_valid['recall']:.6f} | F1 Score: {dict_error_valid['f1_score']:.6f}")
+                print(f"  micro-F1 valid: {dict_error_valid['micro_f1']:.6f} | present-F1 valid: {dict_error_valid['present_f1']:.6f} | selection: {var_select_metric}")
                 print("-" * 30)
 
-        if (var_epoch > 0 and dict_error_valid['perfect_prediction_percentage'] > var_best_PPP):
-            var_best_PPP = dict_error_valid['perfect_prediction_percentage']
+        var_select_score = (dict_error_valid['micro_f1'] if var_select_metric == "micro_f1"
+                            else dict_error_valid['perfect_prediction_percentage'])
+        if (var_epoch > 0 and var_select_score > var_best_select_score):
+            var_best_select_score = var_select_score
 
             var_best_f1_score = dict_error_valid['f1_score']
             var_best_weight = deepcopy(model.state_dict())
             var_epoch_saved = var_epoch
 
-    print(f"Epoch that the model was saved {var_epoch_saved}")
+    print(f"Epoch that the model was saved {var_epoch_saved} - "
+          f"best {var_select_metric} {var_best_select_score:.4f}")
     return var_best_weight
 

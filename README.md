@@ -396,7 +396,11 @@ single-activity guess scores `0.868` against the few-shot student's `0.879`. The
 all classes deflates `f1_score` (absent classes contribute `0`). The report therefore also prints
 `micro_f1` (pooled `2TP/(2TP+FP+FN)`), `present_f1` and `present_recall` (macro over the classes the
 ground truth actually contains), which are not distorted by absence, and the few-shot report prints
-how many of `num_obj_queries` slots the Hungarian matching used.
+how many of `num_obj_queries` slots the Hungarian matching used. `train` (`src/train.py`) selects the
+checkpoint it returns on validation `preset["nn"]["select_metric"]`: `"ppp"` (perfect-prediction
+percentage, the historical default, so pre-existing runs stay reproducible) or `"micro_f1"`. The NTU
+runs opt into the latter with `--hp nn.select_metric=micro_f1`, so the reported weights are the best
+micro-F1 epoch rather than the best TN-inflated-accuracy or PPP epoch.
 
 Beyond `--activities` and `--wimans_rooms`/`--standardize`, both runners read the data setup from the
 preset — dataset roots, features, band, window length and occupant filter have no dedicated flags.
