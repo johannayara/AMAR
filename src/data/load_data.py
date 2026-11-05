@@ -129,6 +129,45 @@ def harmonize_wimans_antennas(var_amp, var_num_tx=3, var_num_rx=3):
         f"simulated dataset). Resample the antenna axes upstream if the layout is something else.")
 
 
+def load_wimans_room_x(var_data_x, var_label_list, var_length=None, var_preprocess=None):
+    """
+    [description]
+    : load one WiMANS room's CSI amplitude with the single-link capture harmonized to the 3 x 3 grid.
+      Real WiMANS is (time, 3 TX, 3 RX, 30) and is returned unchanged; the simulated few-shot source is
+      (time, 1, 1, 30) and is broadcast by harmonize_wimans_antennas as each frame is read, so a room
+      from either source yields the same trailing shape and the same 270 flattened features. Otherwise
+      identical to load_data_x (leading zero padding to preset["data"]["length"], then preprocess_csi),
+      which is what lets a run mix the real and the simulated rooms without a geometry mismatch.
+    : var_data_x: directory of the room's CSI amplitude files (see wimans_room_source)
+    : var_label_list: the room's selected labels
+    : var_length: window length in packets (default preset["data"]["length"])
+    : var_preprocess: optional preprocess override, as load_data_x
+    : return: float32 array as load_data_x returns -- (N, length, ...), the trailing axes flattened when
+      any preprocess op is enabled
+    """
+    #
+    ##
+    var_length = var_length if var_length is not None else preset["data"]["length"]
+    var_x = None
+    var_lengths = np.zeros(len(var_label_list), dtype=np.int64)
+    for var_idx, var_label in enumerate(var_label_list):
+        var_path = os.path.join(var_data_x, var_label + ".npy")
+        var_amp = harmonize_wimans_antennas(np.load(var_path))
+        if var_x is None:
+            var_x = np.zeros((len(var_label_list), var_length) + var_amp.shape[1:], dtype=np.float32)
+        var_lengths[var_idx] = var_amp.shape[0]
+        var_pad_length = var_length - var_amp.shape[0]
+        if var_pad_length < 0:
+            raise ValueError(
+                f"{var_path} has {var_amp.shape[0]} timesteps, longer than "
+                f"preset['data']['length']={var_length}"
+            )
+        var_x[var_idx, var_pad_length:] = var_amp
+    if var_x is None:
+        var_x = np.zeros((0, var_length), dtype=np.float32)
+    return preprocess_csi(var_x, var_lengths, var_preprocess)
+
+
 def wimans_sources():
     """
     [description]

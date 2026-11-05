@@ -498,7 +498,15 @@ loaded through the same loaders:
 
 Its annotation rows are 2.4 GHz while `preset["data"]["wifi_band"]` defaults to `["5"]`, and its
 `environment` values are the same three room names real WiMANS uses, so a run that mixes the two sets
-has to select the band and key the rooms per source.
+has to select the band and key the rooms per source. `wimans_room_names()` lists the real rooms plus
+`<room><suffix>` for the simulated ones and `wimans_room_source()` resolves a key to its source, base
+room and band; the WiMANS harnesses go through them, so `--hp data.synth_wimans.enabled=true` adds the
+simulated rooms to the pool. In the cross-domain runner (`scripts/run_cross_domain.py`) they become test
+rooms unless they are named in `--train_envs`; their CSI is read through
+`src.data.load_data.load_wimans_room_x` (the same 270-feature harmonization as the real rooms), they
+reuse their base room's layout, and each room is held as a `LazyRoomArray` so a run over many rooms
+never keeps them all resident — a training room is read once when its dataset is built, a test room once
+per repeat inside the evaluation loop.
 
 ### What the head does with the query frames
 
@@ -508,12 +516,15 @@ algorithm, so every occupant lands on one slot and the samples that land on the 
 the head treats as one thing. On the last repeat the few-shot runner draws that for the teacher and the
 student, per environment, into
 `visualizations/few_shot_ntu_to_wimans/<run>/<environment>/clustering_teacher_r<k>.png` and
-`clustering_student_r<k>.png`, and puts the per-slot summary (`samples`, `top_activity`, `purity`,
-`predicted_class`) under `per_env.<environment>.clustering` in the run's JSON.
+`clustering_student_r<k>.png`, and puts the per-slot and per-cluster summaries (`samples`,
+`top_activity`, `purity`; slots also carry `predicted_class`) under `per_env.<environment>.clustering`
+in the run's JSON.
 
-Each figure has: the query embeddings of the matched slots in a t-SNE coloured by slot; the same points
-labelled with each slot's dominant activity; the slot × true-activity contingency; and one panel per
-used slot with its cross-attention profile over the window, one line per attention head
+Each figure has: the query embeddings of the matched slots in a t-SNE coloured by true activity; the
+same points coloured by a KMeans clustering of those matched-slot embeddings, each cluster labelled
+with its dominant activity and purity; the KMeans cluster × true-activity and the head's slot ×
+true-activity contingencies; and one panel per KMeans cluster with the cross-attention profile of the
+slot each of its samples was matched to, one line per attention head
 (`TransformerDecoderLayer` already keeps the per-head weights; `TransformerDecoder.forward` gained
 `return_embedding` so the figure can also show the embeddings `class_embed` reads off). Attention is
 plotted against *relative* packet position, so the profiles of a teacher whose backbone sees 500-packet

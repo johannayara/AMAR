@@ -318,10 +318,7 @@ class NumpyEncoder(json.JSONEncoder):
 def build_run_stem(*var_parts):
     """
     [description]
-    : join non-empty tag parts into one filesystem-safe stem, e.g.
-      ("density_map", "location", "train-empty_room+meeting_room", "r5", "e50", "20261005_171111")
-      -> "density_map_location_train-empty_room+meeting_room_r5_e50_20261005_171111".
-      Every run writes its own stem, so results never have to be renamed by hand.
+    : join non-empty tag parts into one filesystem-safe stem
     """
     var_parts = [str(var_part) for var_part in var_parts if var_part not in (None, "")]
     var_stem = re.sub(r"[^A-Za-z0-9._+=-]+", "-", "_".join(var_parts))
@@ -334,8 +331,6 @@ def save_run_outputs(var_save_dir, var_protocol, var_stem, var_result, var_forma
     : write a run's outputs to auto-named files under <save_dir>/<protocol>/:
         <stem>.json  full result dict (self-describing config + metrics)
         <stem>.txt   human-readable formatted report
-      The stem already carries the model/task/envs/repeats/epochs/timestamp, so concurrent or
-      repeated runs never collide and never need renaming.
     : return: (json_path, txt_path)
     """
     var_dir = os.path.join(var_save_dir, var_protocol)
@@ -371,11 +366,7 @@ def join_envs(var_envs):
 def format_decision(var_metrics):
     """
     [description]
-    : one-line summary of the decision the reported count metrics were produced under: the occupancy
-      threshold, the empty gate, the layout-free peak threshold and the per-person mass. All four are
-      derived (calibrated on the run's validation split, or pinned by preset), so a count metric is not
-      reproducible without them -- and position_error_m in particular can be gamed by a peak set that
-      differs from the counted one, which position_false_positive_rate is the only sign of.
+    : one-line summary of the decision 
     : var_metrics: a result dict, per-environment or single-model, with any of avg_threshold /
       avg_empty_threshold / avg_peak_threshold / avg_per_person_mass
     : return: str, "" when none of those keys are present
@@ -402,14 +393,6 @@ def calculate_scores(y_true, y_pred):
     Returns:
         Dictionary containing all performance metrics
 
-    Class-absence warning: 'accuracy' and 'f1_score' both average over every activity class, so a
-    class that is absent from the ground truth still enters the mean -- as a true negative in
-    accuracy_ (a correct "absent" prediction) and as a zero in f1_score_. On a task where each frame
-    holds one activity out of C (the single-occupant cross-dataset runs), accuracy is therefore
-    dominated by those true negatives: with one activity present and C-1 absent it sits at (C-2)/C
-    whatever the model does (0.857 on the 14-class union vocabulary), i.e. a constant and a random
-    guess land on the same number. Read 'micro_f1' / 'present_f1' / 'present_recall' instead -- they
-    are computed only over the present or predicted classes and are not inflated by absence.
     """
     # Calculate basic metrics
     absolute_diff = np.abs(y_true - y_pred)
@@ -893,11 +876,7 @@ def visualize_room_grid_performance(var_true_sets, var_pred_sets, var_save_dir, 
     [description]
     : grid-cell occupancy view of multi-user localization, for rooms without discrete locations. The
       room's shared [0, 1]^2 frame is split into var_grid x var_grid cells, each cell is treated as a
-      "location", and the standard per-location figures (count_distributions, confusion matrices,
-      error_distribution, class_errors, prediction_scatter) are produced from cell occupancy: a cell
-      is occupied when a true / predicted position falls in it. This is the general analogue of
-      visualize_model_performance's per-location view for continuous rooms, so the same six figures
-      exist for every room of either dataset.
+      "location".
     : var_true_sets / var_pred_sets: lists (one per sample) of (k, 2) normalized position arrays
     : return: the dict returned by visualize_model_performance
     """
@@ -915,6 +894,7 @@ def visualize_room_grid_performance(var_true_sets, var_pred_sets, var_save_dir, 
             var_out[var_idx, var_row * var_grid + var_col] = 1.0
     var_class_names = [f"c{var_row}{var_col}"
                        for var_row in range(var_grid) for var_col in range(var_grid)]
+    #the standard per-location figures are produced from cell occupancy
     return visualize_model_performance(var_pred, var_true, save_dir=var_save_dir, var_mode="occupancy",
                                        class_names=var_class_names, var_threshold=var_threshold)
 
@@ -1097,14 +1077,6 @@ def reserve_viz_dir(path):
     """
     [description]
     : claim a fresh figure/checkpoint directory for one run and return it as a Path.
-    : The backbone is part of the path, mirroring the per-backbone log dir scripts/test.sh writes to,
-    : so runs that differ only in nn.backbone land in separate trees and their artifacts are
-    : attributable at a glance.
-    : The numeric leaf is claimed with mkdir() rather than an is_dir() check followed by a create.
-    : The old check-then-create raced between concurrent runs (the two SLURM array tasks of
-    : scripts/test.sh start in the same second): both saw the same leaf free, both picked it, and both
-    : wrote their checkpoint and figures into visualizations/density_map/classroom/4. mkdir() is
-    : atomic at the OS level, so exactly one run can win a leaf and the loser moves to the next.
     : return: Path of the created directory
     """
     var_root = Path(f'./visualizations/{path}')

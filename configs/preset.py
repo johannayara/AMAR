@@ -82,7 +82,13 @@ preset = {
             "cost_class_weight": 1.0,  # weight for classification cost
             "aux_loss_weight": 0.25,  # weight for auxiliary losses
             "label_smoothing": 0.2,  # label smoothing factor
-            "class_imbalance_weight": 0.25
+            "class_imbalance_weight": 0.25,
+            ## Activity separation objective (QuerySeparationLoss): supervised contrastive on the
+            ## Hungarian-matched query embeddings, so the representation separates activities instead
+            ## of leaving it to class_embed. 0.0 = off. Toggle per run with
+            ## --hp nn.loss.separation_weight=0.5 (or the run script's --separation_weight).
+            "separation_weight": 0.0,
+            "separation_temperature": 0.1
         },
         "cross_attention_temp": 1,
         "weight_decay": 2e-4,

@@ -17,7 +17,9 @@ from .density_map_dem import (run_density_map_dem, run_density_map_dem_cross_dom
 from .AMAR import run_AMAR
 from .room_localization import (run_localization_cross_domain, load_room_model, predict_room_xy)
 from .room_density import run_room_density_cross_domain
-from .set_clustering import forward_with_evidence, match_samples_to_slots, visualize_query_clustering
+from .set_clustering import (forward_with_evidence, match_samples_to_slots,
+                             visualize_query_clustering, matched_slot_points,
+                             per_sample_padding_fraction, visualize_query_tsne_metadata)
 from .dummy_model import run_DUMMY, run_dummy_cross_domain
 
 #
@@ -49,6 +51,9 @@ __all__ = ["run_bce_ablstm",
            "predict_room_xy",
            "run_room_density_cross_domain",
            "visualize_query_clustering",
+           "matched_slot_points",
+           "per_sample_padding_fraction",
+           "visualize_query_tsne_metadata",
            "match_samples_to_slots",
            "forward_with_evidence",
            "run_DUMMY",

@@ -15,10 +15,10 @@
 
                 Two groupings are drawn, because they can disagree and the disagreement is the
                 interesting part: the head's own slots (does it spread the activities over several
-                slots, or collapse them onto one?) and the clusters of the query embeddings
-                (does the representation separate what the slots do not?). Both are labelled with the
-                activity they hold, so a cluster reads as "walk, 96% pure, n=58" rather than as an
-                anonymous colour.
+                slots, or collapse them onto one?) and a KMeans clustering of the query embeddings of
+                the slots the matching chose (does the representation separate what the slots do
+                not?). Both are labelled with the activity they hold, so a cluster reads as "walk,
+                96% pure, n=58" rather than as an anonymous colour.
 
                 The slot index of a *target* carries no meaning -- build_activity_set_labels permutes
                 the target query order per sample -- but the model's own slots are shared across
@@ -120,6 +120,26 @@ def forward_with_evidence(var_model, var_x, var_index=None, var_batch_size=32, v
     return np.concatenate(var_logits), np.concatenate(var_embed), np.concatenate(var_attn)
 
 
+def matched_slot_points(var_model, var_x, var_y, var_index=None, var_batch_size=32, var_device=None):
+    """
+    [description]
+    : the Hungarian-matched slot embedding of every sample and the activity it holds -- the same points
+      visualize_query_clustering's t-SNE panels draw, but returned without a figure, so a run can
+      collect them across environments and colour one t-SNE by room / split / occupancy as well.
+    : return: (points (n, d), activity (n,), slot (n,), matched (n,)) for the matched samples only
+    """
+    #
+    ##
+    var_ids = np.arange(len(var_x)) if var_index is None else np.asarray(var_index)
+    var_logits, var_embed, _ = forward_with_evidence(
+        var_model, var_x, var_index=var_ids, var_batch_size=var_batch_size, var_device=var_device)
+    var_slot, var_activity = match_samples_to_slots(var_logits, var_y)
+    var_matched = np.where(var_slot >= 0)[0]
+    var_points = (var_embed[var_matched, var_slot[var_matched]] if len(var_matched) else
+                  np.zeros((0, var_embed.shape[-1]), dtype=np.float32))
+    return var_points, var_activity[var_matched], var_slot[var_matched], var_matched
+
+
 def resample_attention(var_attn, var_num_bins=NUM_ATTENTION_BINS):
     """
     [description]
@@ -134,30 +154,43 @@ def resample_attention(var_attn, var_num_bins=NUM_ATTENTION_BINS):
     return var_out / (var_out.sum(axis=-1, keepdims=True) + 1e-12)
 
 
+def per_sample_padding_fraction(var_x, var_ids):
+    """
+    [description]
+    : how much of each window is leading zero padding.
+    : return: (len(var_ids),) float array in [0, 1)
+    """
+    #
+    ##
+    var_ids = np.asarray(var_ids)
+    if len(var_ids) == 0:
+        return np.zeros(0, dtype=np.float32)
+    var_windows = np.asarray(var_x[var_ids])
+    var_nonzero = np.any(var_windows != 0, axis=2)
+    var_first = np.argmax(var_nonzero, axis=1).astype(np.float32)
+    return np.where(var_nonzero.any(axis=1), var_first / var_nonzero.shape[1], 0.0).astype(np.float32)
+
+
 def leading_padding_fraction(var_x, var_ids, var_max_probe=NUM_PADDING_PROBES):
     """
     [description]
-    : how much of a window is leading zero padding, averaged over a few of the frames. WiMANS captures
-      are shorter than the window and are padded at the front (load_data_x's convention), so the head
-      attending to the first part of a window may be attending to nothing at all.
+    : how much of a window is leading zero padding, averaged over a few of the frames (see
+      per_sample_padding_fraction).
     : return: float in [0, 1)
     """
     #
     ##
-    var_fracs = []
-    for var_id in np.asarray(var_ids)[:var_max_probe]:
-        var_nonzero = np.any(np.asarray(var_x[var_id]) != 0, axis=1)
-        if var_nonzero.any():
-            var_fracs.append(float(np.argmax(var_nonzero)) / float(var_nonzero.shape[0]))
-    return float(np.mean(var_fracs)) if var_fracs else 0.0
+    var_fracs = per_sample_padding_fraction(var_x, np.asarray(var_ids)[:var_max_probe])
+    return float(var_fracs.mean()) if len(var_fracs) else 0.0
 
 
 def cluster_embeddings(var_points, var_num_clusters, var_seed=39):
     """
     [description]
-    : KMeans over the query embeddings, i.e. the grouping the representation itself forms, independent
-      of the slots the head assigns. Labelling these clusters with their dominant activity is what says
-      whether the representation separates the activities.
+    : KMeans over the query embeddings of the slots the Hungarian matching chose for each sample: the
+      grouping the representation itself forms, independent of the slot index the head assigns.
+      Labelling these clusters with their dominant activity is what says whether the representation
+      separates the activities.
     : return: (var_labels (n,), var_num_clusters actually used)
     """
     #
@@ -174,13 +207,12 @@ def visualize_query_clustering(var_model, var_x, var_y, var_class_names, save_pa
                                var_device=None, var_seed=39, var_num_clusters=None):
     """
     [description]
-    : draw which samples the set-prediction head groups together and why. Writes
-      <save_path>/clustering_<var_model_name>.png and returns the summary.
+    : draw which samples the set-prediction head groups together and why. 
       Panels: the query embeddings of the matched slots (t-SNE) coloured by true activity; the same
-      points coloured by embedding cluster with every cluster annotated with the activity it holds and
-      its purity; the cluster x activity and slot x activity contingencies; and one attention panel per
-      cluster showing each cross-attention head's profile over the window, with the leading zero
-      padding shaded.
+      points coloured by a KMeans clustering of those matched-slot embeddings, each cluster annotated
+      with the activity it holds and its purity; the cluster x activity and slot x activity
+      contingencies; and one attention panel per cluster showing each cross-attention head's profile
+      over the window, with the leading zero padding shaded.
     : var_model: a trained AMAR_WO_RVQ (evaluated here, left in eval mode)
     : var_x: (N, time, features) the pool the model consumes
     : var_index: rows of var_x to explain (default all); the runner passes its held-out query frames
@@ -271,7 +303,8 @@ def visualize_query_clustering(var_model, var_x, var_y, var_class_names, save_pa
                                      float(var_tsne[var_mask, 1].mean())),
                                     fontsize=8, weight="bold", ha="center", va="center",
                                     bbox=dict(boxstyle="round,pad=0.25", fc="white", ec="0.6", alpha=0.8))
-        var_ax_cluster.set_title("same points by embedding cluster (KMeans), labelled with what it holds")
+        var_ax_cluster.set_title("same points, KMeans over the Hungarian-matched slot embeddings "
+                                 "(labelled with what it holds)")
     else:
         for var_ax in (var_ax_activity, var_ax_cluster):
             var_ax.text(0.5, 0.5, f"too few matched samples ({len(var_matched)})", ha="center",
@@ -295,7 +328,7 @@ def visualize_query_clustering(var_model, var_x, var_y, var_class_names, save_pa
             if var_cl_table[var_r, var_c]:
                 var_ax_cl_map.text(var_c, var_r, int(var_cl_table[var_r, var_c]), ha="center",
                                    va="center", fontsize=6)
-    var_ax_cl_map.set_title("embedding clusters vs true activity (counts)")
+    var_ax_cl_map.set_title("KMeans clusters (of matched-slot embeddings) vs true activity (counts)")
     #
     ## ---- panel 4: which activity the head's slots hold -------------------------------------------
     var_ax_map = fig.add_subplot(var_cells[3])
@@ -340,7 +373,8 @@ def visualize_query_clustering(var_model, var_x, var_y, var_class_names, save_pa
         if var_i == 0:
             var_ax.legend(fontsize=7)
     fig.suptitle(f"{var_model_name}: head grouping and its evidence — {len(var_used)} slot(s) used, "
-                 f"{var_k} embedding cluster(s), {len(var_matched)} matched samples", fontsize=13)
+                 f"{var_k} KMeans cluster(s) of matched-slot embeddings, "
+                 f"{len(var_matched)} matched samples", fontsize=13)
     fig.tight_layout(rect=[0, 0, 1, 0.97])
     os.makedirs(save_path, exist_ok=True)
     fig.savefig(os.path.join(save_path, f"clustering_{var_model_name}.png"), dpi=140)
@@ -351,4 +385,126 @@ def visualize_query_clustering(var_model, var_x, var_y, var_class_names, save_pa
     var_summary["matched_samples"] = int(len(var_matched))
     var_summary["unmatched_samples"] = int(len(var_slot) - len(var_matched))
     var_summary["leading_padding_fraction"] = var_padding
+    return var_summary
+
+
+def _knn_purity(var_points, var_labels, var_k=10):
+    """
+    [description]
+    : mean fraction of each point's var_k nearest neighbours (Euclidean, in the embedding space the
+      points actually live in, not the t-SNE) that share its label. This is a quantitative separation
+      readout: a value near the chance level sum_c p_c^2 means the field is not represented, a value
+      well above it means the embedding groups by that field. Both are returned so a value can be
+      judged without knowing the label frequencies.
+    : return: (purity, chance)
+    """
+    #
+    ##
+    var_x = np.asarray(var_points, dtype=np.float64)
+    var_labels = np.asarray(var_labels)
+    var_n = len(var_x)
+    if var_n < 2:
+        return float("nan"), float("nan")
+    var_k = int(max(1, min(var_k, var_n - 1)))
+    var_d2 = ((var_x[:, None, :] - var_x[None, :, :]) ** 2).sum(-1)
+    np.fill_diagonal(var_d2, np.inf)
+    var_nn = np.argpartition(var_d2, var_k - 1, axis=1)[:, :var_k]
+    var_purity = float(np.mean(var_labels[var_nn] == var_labels[:, None]))
+    _, var_counts = np.unique(var_labels, return_counts=True)
+    var_p = var_counts / var_counts.sum()
+    return var_purity, float((var_p ** 2).sum())
+
+
+def visualize_query_tsne_metadata(var_points, var_activity, var_class_names, var_meta, save_path,
+                                  var_model_name, var_seed=39, var_max_points=MAX_TSNE_POINTS):
+    """
+    [description]
+    : one t-SNE of the Hungarian-matched query embeddings, drawn once per metadata field, so a run can
+      see *what* the embedding is organised by: the true activity, the room, the real/synth split, the
+      occupant count, the leading-padding fraction. A matched-slot embedding that separates rooms or
+      domains but not activities is the cross-domain failure mode the single-room t-SNE cannot show.
+      Writes <save_path>/embedding_metadata_<var_model_name>.png and returns the separation numbers.
+    : var_points: (n, d) matched-slot embeddings (see matched_slot_points)
+    : var_activity: (n,) activity index of each point
+    : var_class_names: activity names in class order
+    : var_meta: {name: (n,) array} extra fields to colour by; a field named "padding" is drawn as a
+      continuous colour scale, every other field as categories
+    : return: dict {field: {"knn_purity", "chance", "n_categories"}}
+    """
+    #
+    ##
+    var_points = np.asarray(var_points, dtype=np.float32)
+    var_activity = np.asarray(var_activity)
+    var_summary = {"matched_samples": int(len(var_points))}
+    if len(var_points) < 10:
+        var_summary["skipped"] = "fewer than 10 matched samples"
+        return var_summary
+    for var_name, var_values in var_meta.items():
+        if len(np.asarray(var_values)) != len(var_points):
+            raise ValueError(f"metadata field {var_name!r} has {len(np.asarray(var_values))} rows, "
+                             f"expected {len(var_points)}")
+    var_rng = np.random.RandomState(var_seed)
+    var_show = (np.arange(len(var_points)) if len(var_points) <= var_max_points else
+                np.sort(var_rng.choice(len(var_points), var_max_points, replace=False)))
+    var_perplexity = max(5.0, min(30.0, (len(var_show) - 1) / 3.0))
+    var_tsne = TSNE(n_components=2, perplexity=var_perplexity, random_state=var_seed, init="pca",
+                    learning_rate="auto", n_jobs=-1).fit_transform(var_points[var_show])
+    ## activity first, then every metadata field the caller passed
+    var_fields = [("activity", var_activity)]
+    var_fields += [(var_name, np.asarray(var_values)) for var_name, var_values in var_meta.items()]
+    var_ncols = 3
+    var_nrows = int(np.ceil((len(var_fields) + 1) / var_ncols))
+    fig = plt.figure(figsize=(5.6 * var_ncols, 4.4 * var_nrows))
+    var_grid = fig.add_gridspec(var_nrows, var_ncols)
+    var_cells = [var_grid[var_r, var_c] for var_r in range(var_nrows) for var_c in range(var_ncols)]
+    for var_i, (var_name, var_values) in enumerate(var_fields):
+        var_ax = fig.add_subplot(var_cells[var_i])
+        var_shown = var_values[var_show]
+        var_purity, var_chance = _knn_purity(var_points[var_show], var_shown)
+        var_summary[var_name] = {"knn_purity": var_purity, "chance": var_chance,
+                                 "n_categories": int(len(np.unique(var_values)))}
+        if var_name == "padding":
+            var_sc = var_ax.scatter(var_tsne[:, 0], var_tsne[:, 1], c=var_shown.astype(np.float64),
+                                    s=22, alpha=0.85, cmap="viridis")
+            fig.colorbar(var_sc, ax=var_ax, label="leading padding fraction")
+            var_title = "leading padding fraction"
+        else:
+            if var_name == "activity":
+                var_shown = np.asarray([var_class_names[int(var_c)] for var_c in var_shown])
+                var_title = "true activity"
+            else:
+                var_title = var_name
+            var_unique = list(dict.fromkeys(var_shown.tolist()))
+            var_cmap = plt.get_cmap("tab20", max(len(var_unique), 1))
+            for var_j, var_cat in enumerate(var_unique):
+                var_mask = var_shown == var_cat
+                var_ax.scatter(var_tsne[var_mask, 0], var_tsne[var_mask, 1], s=22, alpha=0.85,
+                               color=var_cmap(var_j % 20),
+                               label=f"{var_cat} (n={int(var_mask.sum())})")
+            var_ax.legend(fontsize=7, loc="best", ncol=2, markerscale=1.3)
+        var_ax.set_title(f"{var_model_name}: matched-slot embeddings by {var_title}\n"
+                         f"kNN purity {var_purity:.2f} vs chance {var_chance:.2f}", fontsize=9)
+        var_ax.set_xlabel("t-SNE 1")
+        var_ax.set_ylabel("t-SNE 2")
+    ## summary panel: the numbers, so the figure stands alone
+    var_ax_txt = fig.add_subplot(var_cells[len(var_fields)])
+    var_ax_txt.axis("off")
+    var_lines = [f"{var_model_name}: {len(var_points)} matched samples, "
+                 f"{len(np.unique(var_activity))} activities", "",
+                 f"{'field':<12}{'kNN purity':>12}{'chance':>10}{'levels':>9}"]
+    for var_name, var_info in var_summary.items():
+        if not isinstance(var_info, dict):
+            continue
+        var_lines.append(f"{var_name:<12}{var_info['knn_purity']:>12.2f}"
+                         f"{var_info['chance']:>10.2f}{var_info['n_categories']:>9d}")
+    var_lines += ["", "purity >> chance on room / split but not on activity is",
+                  "the cross-domain failure mode; activity purity >> chance",
+                  "is the representation carrying the task."]
+    var_ax_txt.text(0.02, 0.98, "\n".join(var_lines), fontsize=9, va="top", family="monospace")
+    fig.suptitle(f"{var_model_name}: what the matched-slot query embedding is organised by",
+                 fontsize=13)
+    fig.tight_layout(rect=[0, 0, 1, 0.96])
+    os.makedirs(save_path, exist_ok=True)
+    fig.savefig(os.path.join(save_path, f"embedding_metadata_{var_model_name}.png"), dpi=140)
+    plt.close(fig)
     return var_summary

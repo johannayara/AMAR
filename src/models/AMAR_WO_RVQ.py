@@ -12,9 +12,11 @@ import torch.nn as nn
 from torch.utils.data import TensorDataset
 from ptflops import get_model_complexity_info
 from src.models.modules.molecules import Backbone, Transformer_Encoder, TransformerDecoder
-from src.models.set_clustering import visualize_query_clustering
+from src.models.set_clustering import (visualize_query_clustering, matched_slot_points,
+                                       per_sample_padding_fraction, visualize_query_tsne_metadata)
 from src.models.that_variance import build_thatv, parse_backbone
-from src.models.losses.supervised_loss import HungarianMatchingLoss, SetDistillationLoss
+from src.models.losses.supervised_loss import (HungarianMatchingLoss, SetDistillationLoss,
+                                               QuerySeparationLoss)
 from src.train import train
 from configs.preset import preset
 from src.utils import *
@@ -54,7 +56,7 @@ class AMAR_WO_RVQ(nn.Module):
             num_classes= num_classes
         )
         self.decoder.memory_pos_encoding = self.encoder.pos_encoder
-    def forward(self, x):
+    def forward(self, x, return_embedding=False):
 
         if self.var_sequence_backbone:
             extracted_features = self.feature_extractor.forward_sequence(x)
@@ -62,6 +64,12 @@ class AMAR_WO_RVQ(nn.Module):
             extracted_features = self.feature_extractor(x)
 
         memory = self.encoder(extracted_features)
+
+        ## return_embedding also hands back the last decoder layer's query embeddings, which
+        ## QuerySeparationLoss (src/models/losses/supervised_loss.py) contrasts by activity. It is
+        ## off by default so every other caller (evaluation, inference, visualisation) is unaffected.
+        if return_embedding:
+            return self.decoder(memory, return_embedding=True)
 
         outputs_class = self.decoder(memory)
 
@@ -1204,7 +1212,8 @@ def run_few_shot_cross_domain(train_sets_by_env, test_sets_by_env, var_support_i
                               var_kd_temperature=1.0, var_teacher_epochs=None, var_student_epochs=None,
                               var_init_from_teacher=True, var_compile=True, var_repeat=3,
                               var_task="activity", var_env="ntu_har",
-                              save_path="./visualizations/temp", var_class_names=None):
+                              save_path="./visualizations/temp", var_class_names=None,
+                              var_separation_weight=None):
     """
     [description]
     : Cross-dataset few-shot activity distillation for AMAR_WO_RVQ (NTU-Fi HAR -> WiMANS).
@@ -1212,25 +1221,15 @@ def run_few_shot_cross_domain(train_sets_by_env, test_sets_by_env, var_support_i
         student -- AMAR_WO_RVQ warm-started from the teacher and fine-tuned on the support frames of
                    the target pool with HungarianMatchingLoss + var_kd_weight *
                    SetDistillationLoss against the frozen teacher.
-        test    -- the target pool's query frames, held out of both the support set and the student's
-                   validation slice, so the reported metrics are on frames neither model was tuned on.
-                   The teacher -- i.e. the source-only model, which is what the pure-split runner
-                   reports -- is scored on the same frames.
+        test    -- the target pool's query frames
     : train_sets_by_env: dict, source environment -> (X, y); the teacher's data
     : test_sets_by_env: dict, target environment -> (X, y); the support/valid/query pool, concatenated
-      in dict order. X is either an (N, length, features) array or a WimansFrameSource (a lazy
-      array-like that reads only the frames it is indexed with, see src.data.activity_transfer), so a
-      pool too large to hold resident can still be walked here: the support/validation gather and the
-      query evaluation both index it and drop the frames right after.
+      in dict order.
     : var_support_idx / var_valid_idx / var_query_idx: global index arrays into that concatenation, as
       built by src.data.activity_transfer.split_target_pool
     : var_kd_weight: weight of the distillation term (0 = supervised few-shot only)
     : var_init_from_teacher: warm-start the student from the teacher's weights
-    : var_class_names: activity names in the class ordering (without the no-object class). Given, the
-      last repeat also draws the set-prediction head's grouping of the query frames -- which model slot
-      each occupant was matched to, what each slot predicts and what its attention heads read
-      (src/models/set_clustering.py) -- for the teacher and the student into
-      <save_path>/<environment>/clustering_*.png, and the per-slot summary goes into the result dict.
+    : var_class_names: activity names in the class ordering (without the no-object class). 
     : return: dict {target environment: {'avg_student_<metric>', 'avg_teacher_<metric>', ...}}
     """
     #
@@ -1243,6 +1242,9 @@ def run_few_shot_cross_domain(train_sets_by_env, test_sets_by_env, var_support_i
         var_student_epochs = preset["nn"]["epoch"]
     var_mode = "multi_head"
     var_target_names = list(test_sets_by_env)
+    ## activity separation objective on the student: explicit arg wins, else the preset key (0 = off)
+    var_sep_weight = (float(preset["nn"]["loss"].get("separation_weight", 0.0))
+                      if var_separation_weight is None else float(var_separation_weight))
     #
     ## ------------------------- source data: one 90/10 split, as run_cross_domain ------------------
     var_teacher_x = np.concatenate([np.asarray(train_sets_by_env[var_name][0], dtype=np.float32)
@@ -1261,11 +1263,7 @@ def run_few_shot_cross_domain(train_sets_by_env, test_sets_by_env, var_support_i
                                       torch.from_numpy(var_teacher_y[var_t_valid]))
     #
     ## --------------------- target pool: support / student validation / query ----------------------
-    ## Materialising the concatenated pool doubles the run's peak memory: on the union vocabulary at
-    ## --wimans_users 1,2,3 the per-env dict and its copy are ~16 GB each, which does not fit a 32 GB
-    ## job. The pool rows are therefore read per env instead -- the support / validation frames are
-    ## gathered from the env they belong to, and the query frames come straight out of the env's own
-    ## array in the loop below -- so only the per-env dict is ever resident.
+
     var_pool_sizes = [len(test_sets_by_env[var_name][0]) for var_name in var_target_names]
     var_pool_starts = np.cumsum([0] + var_pool_sizes[:-1])
 
@@ -1298,7 +1296,7 @@ def run_few_shot_cross_domain(train_sets_by_env, test_sets_by_env, var_support_i
           f"({var_few_shot_ratio:.2%}) | student validation {len(var_valid_idx)} | "
           f"query {len(var_query_idx)}")
     print(f"kd_weight {var_kd_weight} | kd_temperature {var_kd_temperature} | "
-          f"init_from_teacher {var_init_from_teacher}")
+          f"separation_weight {var_sep_weight} | init_from_teacher {var_init_from_teacher}")
     #
     ## ---------------------------------------- complexity -----------------------------------------
     #
@@ -1319,6 +1317,11 @@ def run_few_shot_cross_domain(train_sets_by_env, test_sets_by_env, var_support_i
     var_predict_y_last = {}
     ## {environment: {"teacher"/"student": per-slot summary}}, filled on the last repeat only
     var_clustering = {var_name: {} for var_name in var_target_names}
+    ## {who: {field: [per-environment arrays]}}, the cross-room embedding-metadata figure's input,
+    ## also filled on the last repeat only
+    var_meta_collect = {var_who: {var_field: [] for var_field in
+                                  ("points", "activity", "room", "split", "occupants", "padding")}
+                        for var_who in ("teacher", "student")}
     #
     for var_r in range(var_repeat):
         wandb.init(project="FINAL_AMAR",
@@ -1356,9 +1359,7 @@ def run_few_shot_cross_domain(train_sets_by_env, test_sets_by_env, var_support_i
         if var_compile:
             student.feature_extractor = torch.compile(student.feature_extractor)
         if var_init_from_teacher:
-            ## compile before the warm start: a compiled feature extractor names its weights
-            ## "feature_extractor._orig_mod.*", so the teacher's state dict only matches a student
-            ## that is compiled too.
+            ## compile before the warm start
             student.load_state_dict(teacher.state_dict())
         student_optimizer = torch.optim.Adam(student.parameters(), lr=preset["nn"]["lr"],
                                              weight_decay=preset["nn"]["weight_decay"])
@@ -1371,13 +1372,17 @@ def run_few_shot_cross_domain(train_sets_by_env, test_sets_by_env, var_support_i
         kd_loss = SetDistillationLoss(temperature=var_kd_temperature,
                                       aux_loss_weight=preset["nn"]["loss"]["aux_loss_weight"],
                                       no_object_index=preset["nn"]["num_classes"] - 1)
+        var_sep_loss = (QuerySeparationLoss(
+            temperature=preset["nn"]["loss"].get("separation_temperature", 0.1),
+            no_object_index=preset["nn"]["num_classes"] - 1) if var_sep_weight > 0 else None)
         student_best_weight = train(model=student, optimizer=student_optimizer, loss=student_loss,
                                     data_train_set=student_train_set,
                                     data_valid_set=student_valid_set,
                                     var_threshold=preset["nn"]["threshold"],
                                     var_batch_size=preset["nn"]["batch_size"],
                                     var_epochs=var_student_epochs, device=device, var_mode=var_mode,
-                                    teacher=teacher, kd_loss=kd_loss, kd_weight=var_kd_weight)
+                                    teacher=teacher, kd_loss=kd_loss, kd_weight=var_kd_weight,
+                                    separation_loss=var_sep_loss, separation_weight=var_sep_weight)
         var_time_2 = time.time()
         if preset.get("save_model"):
             save_model_components(preset, student)
@@ -1432,11 +1437,45 @@ def run_few_shot_cross_domain(train_sets_by_env, test_sets_by_env, var_support_i
             if var_class_names is not None and var_r == var_repeat - 1:
                 ## the live models are needed, so this is done on the last repeat's, beside the
                 ## confusion matrices the aggregation below draws from that same repeat
+                var_x_env = test_sets_by_env[var_name][0]
+                var_pad = per_sample_padding_fraction(var_x_env, var_sel_local)
+                ## occupant count per frame: the target slots that are not the no-object class
+                var_occupants = (np.asarray(var_q_y).argmax(-1)
+                                 != np.asarray(var_q_y).shape[-1] - 1).sum(axis=1)
                 for var_who, var_model_here in (("teacher", teacher), ("student", student)):
                     var_clustering[var_name][var_who] = visualize_query_clustering(
-                        var_model_here, test_sets_by_env[var_name][0], var_q_y, var_class_names,
+                        var_model_here, var_x_env, var_q_y, var_class_names,
                         save_path=os.path.join(save_path, var_name), var_index=var_sel_local,
                         var_model_name=f"{var_who}_r{var_r}")
+                    ## the same matched-slot points, kept so the cross-room figure below can colour
+                    ## them by room / split / occupancy as well as activity
+                    var_points, var_act, _, var_matched = matched_slot_points(
+                        var_model_here, var_x_env, var_q_y, var_index=var_sel_local,
+                        var_batch_size=preset["nn"]["batch_size"], var_device=device)
+                    var_meta_collect[var_who]["points"].append(var_points)
+                    var_meta_collect[var_who]["activity"].append(var_act)
+                    var_meta_collect[var_who]["room"].append(np.full(len(var_points), var_name))
+                    var_meta_collect[var_who]["split"].append(np.full(
+                        len(var_points), "synth" if var_name.endswith("_synth") else "real"))
+                    var_meta_collect[var_who]["occupants"].append(var_occupants[var_matched])
+                    var_meta_collect[var_who]["padding"].append(var_pad[var_matched])
+        if var_class_names is not None and var_r == var_repeat - 1:
+            ## one figure per model over every target environment at once: the single-room t-SNE
+            ## cannot show whether the embedding separates rooms or domains rather than activities
+            for var_who in ("teacher", "student"):
+                var_store = var_meta_collect[var_who]
+                if not var_store["points"]:
+                    continue
+                var_meta = {var_field: np.concatenate(var_values)
+                            for var_field, var_values in var_store.items()
+                            if var_field not in ("points", "activity")}
+                var_meta_summary = visualize_query_tsne_metadata(
+                    np.concatenate(var_store["points"]), np.concatenate(var_store["activity"]),
+                    var_class_names, var_meta, save_path, f"{var_who}_r{var_r}")
+                print(f"  [{var_who}] embedding metadata separation: " + " | ".join(
+                    f"{var_field} kNN-purity {var_info['knn_purity']:.2f} vs chance "
+                    f"{var_info['chance']:.2f}" for var_field, var_info in var_meta_summary.items()
+                    if isinstance(var_info, dict)))
         wandb.finish()
         del teacher_optimizer, teacher_loss, student_optimizer, student_loss, kd_loss
         del teacher_best_weight, student_best_weight
@@ -1464,9 +1503,7 @@ def run_few_shot_cross_domain(train_sets_by_env, test_sets_by_env, var_support_i
         visualize_model_performance(y_pred=var_pred_y, y_true=var_true_y, var_mode=var_mode,
                                     save_dir=os.path.join(save_path, var_name))
         var_stats = all_envs_results[var_name]
-        ## 'accuracy' is reported but must not be read as skill: with one activity per frame and C
-        ## classes it sits near (C-2)/C regardless of the model (see calculate_scores). micro_f1 /
-        ## present_f1 are the class-absence-free readouts.
+  
         print(f"\n[{var_name}] avg over {var_repeat} repeats: "
               f"Student micro-F1 {var_stats['avg_student_micro_f1']:.4f} ± "
               f"{var_stats['se_student_micro_f1']:.4f} | Student present-F1 "

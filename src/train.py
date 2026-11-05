@@ -46,26 +46,40 @@ def train(model: Module,
           patience: int = 150,
           teacher: Module = None,
           kd_loss: Module = None,
-          kd_weight: float = 0.0): 
+          kd_weight: float = 0.0,
+          separation_loss: Module = None,
+          separation_weight: float = 0.0): 
     """
     [description]
     : train a model. When `teacher` and `kd_loss` are provided, the frozen teacher is run on
       every batch (train and validation) and its outputs are distilled into the model with
       `kd_weight * kd_loss(student_outputs, teacher_outputs)` added to the supervised loss.
     [parameter]
+    : model: the model; when `separation_loss` is active it is called as model(x, return_embedding=True)
+      and must return (class_outputs, query_embeddings)
     : teacher: frozen model used as distillation target (evaluated under torch.no_grad)
     : kd_loss: distillation criterion taking (student_outputs, teacher_outputs)
     : kd_weight: weight of the distillation term
+    : separation_loss: contrastive criterion taking (query_embeddings, targets, hungarian_indices),
+      e.g. QuerySeparationLoss; its anchors are the same Hungarian-matched pairs the supervised loss
+      uses, so it must be paired with a `loss` that exposes Hungarian_matching (HungarianMatchingLoss)
+    : separation_weight: weight of the separation term (0 = off)
     : model selection: the checkpoint returned is the epoch with the highest validation score under
       preset["nn"]["select_metric"] -- "ppp" (perfect_prediction_percentage, the historical default) or
       "micro_f1" (not inflated by class absence; see calculate_scores)
     """
     use_distillation = teacher is not None and kd_loss is not None and kd_weight > 0
-    ## Checkpoint-selection metric. "ppp" is the historical behaviour; "micro_f1" is the
-    ## class-absence-free choice (calculate_scores' accuracy / PPP sit near (C-2)/C on a
-    ## single-occupant task whatever the model does, so a checkpoint picked on them need not be the
-    ## best activity classifier). micro_f1 pools 2TP/(2TP+FP+FN) over every class and sample and
-    ## reduces to plain per-frame accuracy on the single-occupant protocol.
+    use_separation = separation_loss is not None and separation_weight > 0
+    if use_separation and not hasattr(loss, "Hungarian_matching"):
+        raise TypeError("separation_loss needs a supervised `loss` exposing Hungarian_matching "
+                        "(e.g. HungarianMatchingLoss) to reuse its matched pairs")
+
+    def separation_term(var_outputs, var_embeddings, var_targets):
+        """Contrast the Hungarian-matched query embeddings by activity (QuerySeparationLoss)."""
+        var_logits = var_outputs[-1] if var_outputs.dim() == 4 else var_outputs
+        return separation_loss(var_embeddings, var_targets,
+                               loss.Hungarian_matching(var_logits, var_targets))
+    #choose metric between ppp for usual runs and micro_f1 for few-shot runs where ppp is not a good metric
     var_select_metric = preset["nn"].get("select_metric", "ppp")
     if var_select_metric not in ("ppp", "micro_f1"):
         raise ValueError(f"preset['nn']['select_metric'] must be 'ppp' or 'micro_f1', "
@@ -75,11 +89,8 @@ def train(model: Module,
     data_train_loader = DataLoader(data_train_set, var_batch_size, shuffle=True, pin_memory=True, generator=g)
     data_valid_loader = DataLoader(data_valid_set, len(data_valid_set))
 
-    # Initialize early stopping variables
     var_best_f1_score = 0
-    ## Start below any attainable score so the first evaluated epoch always saves a checkpoint. "ppp"
-    ## starts at 0 to keep the historical behaviour bit-for-bit (a PPP of 0 never saved); micro-F1 can
-    ## legitimately be 0, so it starts at -1.
+
     var_best_select_score = -1.0 if var_select_metric == "micro_f1" else 0.0
     var_best_weight = deepcopy(model.state_dict())
     counter = 0  # Counter for patience
@@ -128,8 +139,17 @@ def train(model: Module,
             elif var_mode == "baseline":
                 data_batch_y = data_batch_y.reshape(data_batch_y.shape[0], -1)
 
-            predict_train_y = model(data_batch_x)
+            if use_separation:
+                predict_train_y, var_embed_train = model(data_batch_x, return_embedding=True)
+            else:
+                predict_train_y = model(data_batch_x)
+                var_embed_train = None
             var_loss_train = loss(predict_train_y, data_batch_y.float())
+            var_loss_sep_train = None
+            if use_separation:
+                var_loss_sep_train = separation_term(predict_train_y, var_embed_train,
+                                                     data_batch_y.float())
+                var_loss_train = var_loss_train + separation_weight * var_loss_sep_train
             var_loss_kd_train = None
             if use_distillation:
                 with torch.no_grad():
@@ -157,8 +177,17 @@ def train(model: Module,
             if var_mode == "baseline":
                 data_valid_y = data_valid_y.reshape(data_valid_y.shape[0], -1)
 
-            predict_valid_y = model(data_valid_x)
+            if use_separation:
+                predict_valid_y, var_embed_valid = model(data_valid_x, return_embedding=True)
+            else:
+                predict_valid_y = model(data_valid_x)
+                var_embed_valid = None
             var_loss_valid = loss(predict_valid_y, data_valid_y.float())
+            var_loss_sep_valid = None
+            if use_separation:
+                var_loss_sep_valid = separation_term(predict_valid_y, var_embed_valid,
+                                                     data_valid_y.float())
+                var_loss_valid = var_loss_valid + separation_weight * var_loss_sep_valid
             var_loss_kd_valid = None
             if use_distillation:
                 teacher_valid_y = teacher(data_valid_x)
@@ -170,12 +199,13 @@ def train(model: Module,
 
             dict_error_valid = performance_metrics(data_valid_y, predict_valid_y, var_mode, var_threshold)
 
-        kd_logs = {}
+        var_extra_logs = {}
         if use_distillation:
-            kd_logs = {
-                "train_loss_kd": var_loss_kd_train.item(),
-                "valid_loss_kd": var_loss_kd_valid.item(),
-            }
+            var_extra_logs["train_loss_kd"] = var_loss_kd_train.item()
+            var_extra_logs["valid_loss_kd"] = var_loss_kd_valid.item()
+        if use_separation:
+            var_extra_logs["train_loss_separation"] = var_loss_sep_train.item()
+            var_extra_logs["valid_loss_separation"] = var_loss_sep_valid.item()
 
         if preset["model"] == "AMAR":
             layers_idxs = ["layer_" +str(preset["nn"]["num_decoder_layers"] - 1)]
@@ -199,7 +229,7 @@ def train(model: Module,
                     f"{layer_idx}/micro_f1_valid": layer_metrics['micro_f1'],
                     f"{layer_idx}/present_f1_valid": layer_metrics['present_f1'],
                     "learning_rate": optimizer.param_groups[0]['lr'],
-                    **kd_logs
+                    **var_extra_logs
                 }, 
                 step=var_epoch)
 
@@ -231,7 +261,7 @@ def train(model: Module,
                 "f1_score": dict_error_valid['f1_score'],
                 "micro_f1_valid": dict_error_valid['micro_f1'],
                 "present_f1_valid": dict_error_valid['present_f1'],
-                **kd_logs
+                **var_extra_logs
             }, 
             step=var_epoch)
             if var_epoch % 10 == 0:

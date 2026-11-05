@@ -149,6 +149,62 @@ class HungarianMatchingLoss(nn.Module):
             return self._get_layer_loss(outputs, targets, indices)
 
 
+class QuerySeparationLoss(nn.Module):
+    """
+    Supervised contrastive loss on the Hungarian-matched query embeddings.
+
+    HungarianMatchingLoss decides *which* query predicts *which* activity but says nothing about the
+    geometry of the query embeddings: the classification head can read one query for every activity
+    and leave the representation entangled. This term pulls the matched-slot embeddings of
+    same-activity samples together and pushes different activities apart, so the representation itself
+    separates activities rather than leaving it to class_embed. 
+
+    The anchors are the same matched pairs the supervised loss uses, so no second matching convention
+    is introduced, and no-object targets are skipped (they are not an activity).
+
+    Args:
+        temperature: softmax temperature of the contrastive similarities (lower = sharper)
+        no_object_index: column of the no-object class; None means the last class
+    """
+
+    def __init__(self, temperature=0.1, no_object_index=None):
+        super().__init__()
+        self.temperature = temperature
+        self.no_object_index = no_object_index
+
+    def forward(self, embeddings, targets, indices):
+        """
+        Args:
+            embeddings: (B, num_queries, d) last-layer query embeddings
+            targets: (B, num_queries, num_classes) one-hot target sets, no-object class last
+            indices: the HungarianMatchingLoss indices: list of (row_ind, col_ind) per batch item,
+                where row_ind indexes queries and col_ind the target slots they are matched to
+        Returns:
+            scalar loss; a differentiable zero when fewer than two anchors carry an activity
+        """
+        var_no_object = (self.no_object_index if self.no_object_index is not None
+                         else targets.shape[-1] - 1)
+        var_anchors, var_labels = [], []
+        for var_b, (var_rows, var_cols) in enumerate(indices):
+            for var_row, var_col in zip(var_rows.tolist(), var_cols.tolist()):
+                var_class = int(targets[var_b, var_col].argmax())
+                if var_class == var_no_object:
+                    continue
+                var_anchors.append(embeddings[var_b, var_row])
+                var_labels.append(var_class)
+        if len(var_anchors) < 2:
+            return embeddings.sum() * 0.0
+        var_z = F.normalize(torch.stack(var_anchors), dim=-1)
+        var_labels = torch.as_tensor(var_labels, device=var_z.device)
+        var_sim = (var_z @ var_z.t()) / self.temperature
+        ## positive pairs are same-activity, different-sample; self-similarity is masked out
+        var_self = torch.eye(var_z.shape[0], dtype=torch.bool, device=var_z.device)
+        var_pos = (var_labels.unsqueeze(0) == var_labels.unsqueeze(1)) & ~var_self
+        var_log_prob = var_sim - torch.logsumexp(var_sim, dim=1, keepdim=True)
+        ## a class with a single anchor in the batch has no positive: it contributes 0, not a NaN
+        return -((var_pos * var_log_prob).sum(1) / var_pos.sum(1).clamp_min(1)).mean()
+
+
 class SetDistillationLoss(nn.Module):
     """
     Permutation-invariant distillation between a frozen teacher and a trainable student.

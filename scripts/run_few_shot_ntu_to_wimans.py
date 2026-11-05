@@ -112,6 +112,11 @@ def parse_args():
                           help="weight of the distillation term (0 = supervised few-shot only)")
     var_args.add_argument("--kd_temperature", default=1.0, type=float,
                           help="temperature of the distillation soft targets")
+    var_args.add_argument("--separation_weight", default=None, type=float,
+                          help="weight of QuerySeparationLoss on the student: a supervised contrastive "
+                               "term on the Hungarian-matched query embeddings, so the representation "
+                               "separates activities instead of leaving it to class_embed. Default: "
+                               "preset['nn']['loss']['separation_weight'] (0 = off).")
     var_args.add_argument("--no_init_from_teacher", action="store_true",
                           help="start the student from random weights instead of the teacher's")
     var_args.add_argument("--no_compile", action="store_true",
@@ -187,7 +192,8 @@ def format_result(var_result, var_shared, var_majority_name):
     var_lines = ["=" * 80,
                  f"NTU-Fi HAR -> WiMANS FEW-SHOT ACTIVITY DISTILLATION "
                  f"(support {var_result['few_shot_ratio']:.2%}, kd_weight {var_result['kd_weight']}, "
-                 f"kd_temperature {var_result['kd_temperature']})",
+                 f"kd_temperature {var_result['kd_temperature']}, "
+                 f"separation_weight {var_result['separation_weight']})",
                  f"Shared activities ({var_result['vocabulary']}): {var_shared} | support frames: "
                  f"{var_result['support_frames']} | query frames: {var_result['query_frames']} | "
                  f"occupants: {var_result['wimans_users']}",
@@ -274,6 +280,8 @@ def run():
     #
     ## ------------------------------------ run the distillation ------------------------------------
     var_save_path = reserve_viz_dir(path="few_shot_ntu_to_wimans/ntu_har")
+    var_sep_weight = (preset["nn"]["loss"].get("separation_weight", 0.0)
+                      if var_args.separation_weight is None else var_args.separation_weight)
     var_per_env = run_few_shot_cross_domain(
         var_task["train_sets_by_env"], var_task["pool_by_env"],
         var_task["support_idx"], var_task["valid_idx"], var_task["query_idx"],
@@ -282,7 +290,8 @@ def run():
         var_teacher_epochs=var_args.teacher_epochs, var_student_epochs=var_args.student_epochs,
         var_init_from_teacher=not var_args.no_init_from_teacher,
         var_compile=not var_args.no_compile, var_repeat=var_args.repeat, var_task="activity",
-        var_env="ntu_har", save_path=var_save_path, var_class_names=var_shared)
+        var_env="ntu_har", save_path=var_save_path, var_class_names=var_shared,
+        var_separation_weight=var_args.separation_weight)
     for var_room, var_metrics in var_baseline.items():
         if var_room in var_per_env:
             var_per_env[var_room].update(var_metrics)
@@ -309,6 +318,7 @@ def run():
         "few_shot_ratio": var_args.few_shot_ratio,
         "kd_weight": var_args.kd_weight,
         "kd_temperature": var_args.kd_temperature,
+        "separation_weight": var_sep_weight,
         "init_from_teacher": not var_args.no_init_from_teacher,
         "compile": not var_args.no_compile,
         "support_frames": int(len(var_task["support_idx"])),

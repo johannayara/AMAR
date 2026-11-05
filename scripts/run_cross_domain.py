@@ -13,7 +13,8 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from src.models import *
-from src.data.load_data import load_data_x, load_data_y, encode_data_y, encode_occupancy_y
+from src.data.load_data import (load_data_y, encode_data_y, encode_occupancy_y,
+                                load_wimans_room_x, wimans_room_names, wimans_room_source)
 from src.utils import *
 from configs.preset import preset
 
@@ -24,21 +25,87 @@ from pathlib import Path
 
 #
 ##
+class LazyRoomArray:
+    """
+    [description]
+    : lazy array-like view of one room's CSI. The room is read only when the array is actually
+      consumed, so the cross-domain runner never holds every room's (N, 3000, 270) float32 array
+      (~3.3 MB/frame) resident at once: a training room is materialized once, when its dataset is
+      built, and a test room once per repeat, inside the evaluation loop. Exposes .shape, .ndim,
+      .dtype, .reshape(...), len() and np.asarray(), so it drops into the code that expects the array
+      load_wimans_room_x returns.
+    """
+    #
+    ##
+    def __init__(self, var_loader, var_shape):
+        self._loader = var_loader
+        self._shape = tuple(var_shape)
+
+    @property
+    def shape(self):
+        return self._shape
+
+    @property
+    def ndim(self):
+        return len(self._shape)
+
+    @property
+    def dtype(self):
+        return np.dtype(np.float32)
+
+    def __len__(self):
+        return self._shape[0]
+
+    def __array__(self, dtype=None, copy=None):
+        var_x = self._loader()
+        return var_x if dtype is None else np.asarray(var_x, dtype=dtype)
+
+    def reshape(self, *var_shape):
+        return np.asarray(self).reshape(*var_shape)
+
+    def __getitem__(self, var_index):
+        return np.asarray(self)[var_index]
+
+
+def _room_shape(var_data_x, var_label_list, var_length):
+    """
+    [description]
+    : the shape LazyRoomArray will produce, without reading the whole room: the frame count and the
+      window length are known from the annotation, and the trailing shape comes from reading one frame.
+    """
+    #
+    ##
+    if not var_label_list:
+        return (0, var_length)
+    var_probe = load_wimans_room_x(var_data_x, var_label_list[:1])
+    return (len(var_label_list), var_length) + tuple(var_probe.shape[2:])
+
+
 def _load_room(preset, var_task, var_model, var_users, var_env):
     """
     [description]
-    : load one room's CSI amplitude and its labels for the given model.
+    : build the lazy CSI source and the labels of one room for the given model. The room key is
+      resolved through wimans_room_source, so a bare environment name reads the real WiMANS source and
+      a "<name><suffix>" key reads the simulated source with the same base room and its own band; the
+      CSI itself is read only when the returned source is consumed.
     """
-    data_pd_y = load_data_y(preset["path"]["data_y"],
-                            var_environment=[var_env],
-                            var_wifi_band=preset["data"]["wifi_band"],
+    #
+    ##
+    var_base, var_data_x, var_data_y, var_band = wimans_room_source(var_env)
+    data_pd_y = load_data_y(var_data_y, var_environment=[var_base], var_wifi_band=var_band,
                             var_num_users=var_users)
     var_label_list = data_pd_y["label"].to_list()
-    var_x = load_data_x(preset["path"]["data_x"], var_label_list)
+    if not var_label_list:
+        raise ValueError(
+            f"no frames for room {var_env!r} (base {var_base!r}, band {var_band}, "
+            f"occupants {var_users})")
+    var_x = LazyRoomArray(lambda: load_wimans_room_x(var_data_x, var_label_list),
+                          _room_shape(var_data_x, var_label_list, preset["data"]["length"]))
     if var_model in ("density_map", "density_map_dem"):
         ## Density-map group counting predicts per-location occupancy, so the label is the room's
-        ## occupancy vector rather than a task encoding.
-        var_y = encode_occupancy_y(data_pd_y, var_env)
+        ## occupancy vector rather than a task encoding. The simulated rooms reuse their base room's
+        ## layout -- same physical room -- so the layout is looked up by the base name.
+        var_y = encode_occupancy_y(data_pd_y, var_base)
     else:
         var_y = encode_data_y(data_pd_y, var_task)
         if var_model in ("AMAR_WO_RVQ", "AMAR"):
@@ -52,13 +119,15 @@ def master_splitter(preset, var_task, var_model, var_users, var_train_envs):
     : build the per-room training sets and the per-room test sets. Pass one training room for the
       one-room protocol, or two for leave-one-room-out (train on two, test on the third). Every room
       not in var_train_envs becomes a test room.
+    : The room list is wimans_room_names(), so with --hp data.synth_wimans.enabled=true the simulated
+      rooms ("<name><suffix>") are test rooms unless they are named in var_train_envs. Each room's X is
+      a LazyRoomArray, read only when the model consumes it.
     : return: train_sets_by_env, test_sets_by_env (dict {env_name: (X, y)})
     """
-    var_all_envs = list(preset["data"]["environment"])
+    var_all_envs = wimans_room_names()
     for var_env in var_train_envs:
         if var_env not in var_all_envs:
-            raise ValueError(f"training room {var_env!r} is not in preset['data']['environment'] "
-                             f"{var_all_envs}")
+            raise ValueError(f"training room {var_env!r} is not one of {var_all_envs}")
     train_sets_by_env = {var_env: _load_room(preset, var_task, var_model, var_users, var_env)
                          for var_env in var_train_envs}
     test_sets_by_env = {var_env: _load_room(preset, var_task, var_model, var_users, var_env)
@@ -254,6 +323,13 @@ def run():
     if var_args.epochs is not None:
         preset["nn"]["epoch"] = var_args.epochs
     var_hp_applied = apply_hp_overrides(var_args.hp)
+    ## The simulated rooms reuse their base room's layout (same physical room), so alias each
+    ## "<name><suffix>" key to it once the --hp overrides have enabled the source. This is what keeps
+    ## the density-map models' preset["layouts"][room] lookups working for a simulated room without
+    ## teaching every call site about the suffix.
+    for var_room in wimans_room_names():
+        if var_room not in preset["layouts"]:
+            preset["layouts"][var_room] = preset["layouts"][wimans_room_source(var_room)[0]]
 
     # Ensuring there is no data leakage while doing splits.
     train_sets_by_env, test_sets_by_env = master_splitter(
@@ -296,7 +372,7 @@ def run():
     "task": var_task,
     "repeat": var_repeat,
     "train_envs": var_train_envs,
-    "test_envs": [e for e in preset["data"]["environment"] if e not in var_train_envs],
+    "test_envs": [e for e in wimans_room_names() if e not in var_train_envs],
     "epochs": preset["nn"]["epoch"],
     "data": preset["data"],
     "nn": preset["nn"],
@@ -307,7 +383,7 @@ def run():
     ## write the JSON and the human-readable report to auto-named files, so the one-room and
     ## leave-one-room-out folds (and repeated runs) never collide and never need renaming
     formatted = format_result(var_model, var_task, result)
-    var_test_envs = [e for e in preset["data"]["environment"] if e not in var_train_envs]
+    var_test_envs = [e for e in wimans_room_names() if e not in var_train_envs]
     var_stem = build_run_stem(var_model, var_task,
                               f"train-{join_envs(var_train_envs)}", f"test-{join_envs(var_test_envs)}",
                               f"r{var_repeat}", f"e{preset['nn']['epoch']}", run_timestamp())
