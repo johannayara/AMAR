@@ -47,7 +47,7 @@ import json
 import os
 import sys
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 ## scripts/ is sys.path[0] when this file is run directly, so the sibling helpers import
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 

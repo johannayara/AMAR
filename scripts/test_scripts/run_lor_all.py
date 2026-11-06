@@ -24,7 +24,7 @@ import time
 import numpy as np
 import torch
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 from configs.preset import preset
 from src.data.unified_rooms import (unified_room_names, dataset_of, load_unified_room,

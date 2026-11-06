@@ -33,14 +33,15 @@ import argparse
 import os
 import sys
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 import numpy as np
 import torch
 
 from configs.preset import preset
 from src.data.load_data import load_data_x, load_data_y, encode_occupancy_y
-from src.models.density_map import (load_density_checkpoint, density_map_maxima, calibrate_empty_threshold)
+from src.models.density_map import density_map_maxima, calibrate_empty_threshold
+from src.models.checkpoints import load_cross_domain_model, checkpoint_model_name
 from src.utils import select_device
 
 
@@ -79,29 +80,56 @@ def parse_args():
 def load_model(var_checkpoint_path, var_device, var_backbone=None, var_encoder_norm=None):
     """
     [description]
-    : rebuild the DensityMapNet described by the checkpoint and load its weights. The backbone and
-      encoder norm are read from the checkpoint, else inferred from the state-dict keys, so a
-      checkpoint trained with nn.backbone=thatv* or a non-batch nn.encoder_norm loads correctly.
-    : return: (model, checkpoint dict)
+    : rebuild any cross-domain model from its checkpoint -- density head, coords head, AMAR_WO_RVQ or
+      the dummy baseline -- and return it with the dispatcher name of the architecture it is.
+    : return: (model, checkpoint dict, model_name)
     """
     #
-    return load_density_checkpoint(var_checkpoint_path, var_device,
-                                   var_backbone=var_backbone, var_encoder_norm=var_encoder_norm)
+    var_model, var_checkpoint = load_cross_domain_model(var_checkpoint_path, var_device)
+    var_name = checkpoint_model_name(var_checkpoint)
+    ## For the density head an explicit backbone / encoder-norm override still wins (the stored values
+    ## are already applied by load_density_checkpoint); for the other architectures the ctor recorded
+    ## in the checkpoint fixes them, so an override would not rebuild a matching module.
+    if var_name in ("density_map", "density_map_dem") and (var_backbone or var_encoder_norm):
+        from src.models.density_map import load_density_checkpoint
+        var_model, var_checkpoint = load_density_checkpoint(
+            var_checkpoint_path, var_device, var_backbone=var_backbone, var_encoder_norm=var_encoder_norm)
+    return var_model, var_checkpoint, var_name
 
 
-def predict_maps(var_model, var_x, var_device, var_batch_size):
+def predict_outputs(var_model_name, var_model, var_x, var_device, var_batch_size):
     """
     [description]
-    : forward the model over a whole array and return the sigmoid density maps (N, grid, grid).
+    : forward any cross-domain model over a whole array.
+    : return (flat (N, D), gate (N,) or None). flat is the per-frame output the relative-change
+      comparison is computed on; gate is the per-frame statistic the model's own empty decision
+      thresholds -- the density map maximum, or the maximum objectness probability -- or None when the
+      architecture ships no empty gate (AMAR_WO_RVQ, the dummy baseline).
     """
     #
-    var_maps = []
+    var_flat, var_gate = [], []
     with torch.no_grad():
         for var_start in range(0, len(var_x), var_batch_size):
             var_batch = torch.from_numpy(var_x[var_start:var_start + var_batch_size]).to(var_device)
-            var_density, _, _ = var_model(var_batch)
-            var_maps.append(var_density.cpu().numpy())
-    return np.concatenate(var_maps, axis=0) if var_maps else np.zeros((0, 1, 1), dtype=np.float32)
+            if var_model_name in ("density_map", "density_map_dem"):
+                var_density = var_model(var_batch)[0]
+                var_flat.append(var_density.reshape(len(var_batch), -1).cpu().numpy())
+                var_gate.append(var_density.amax(dim=(1, 2)).cpu().numpy())
+            elif var_model_name == "density_map_coords":
+                var_xy, var_obj = var_model(var_batch)
+                var_prob = torch.sigmoid(var_obj)
+                var_flat.append(torch.cat([var_xy, var_prob.unsqueeze(-1)], dim=-1)
+                                .reshape(len(var_batch), -1).cpu().numpy())
+                var_gate.append(var_prob.amax(dim=1).cpu().numpy())
+            elif var_model_name == "AMAR_WO_RVQ":
+                ## the decoder stacks its layers; the last one is the trained output (B, queries, classes)
+                var_out = var_model(var_batch)[-1]
+                var_flat.append(var_out.reshape(len(var_batch), -1).cpu().numpy())
+            else:   ## dummy_model
+                var_flat.append(var_model(var_batch).reshape(len(var_batch), -1).cpu().numpy())
+    var_flat = np.concatenate(var_flat, axis=0) if var_flat else np.zeros((0, 1), dtype=np.float32)
+    var_gate = np.concatenate(var_gate, axis=0) if var_gate else None
+    return var_flat, var_gate
 
 
 def _relative_change(var_maps, var_reference):
@@ -157,10 +185,13 @@ def otsu_threshold(var_values, var_is_empty, var_num_bins=256):
 def run():
     var_args = parse_args()
     var_device = select_device()
-    var_model, _ = load_model(var_args.checkpoint, var_device,
-                              var_backbone=var_args.backbone,
-                              var_encoder_norm=var_args.encoder_norm)
-    print(f"Model: nn.backbone={preset['nn']['backbone']} nn.encoder_norm={preset['nn']['encoder_norm']}")
+    var_model, var_checkpoint, var_model_name = load_model(var_args.checkpoint, var_device,
+                                                           var_backbone=var_args.backbone,
+                                                           var_encoder_norm=var_args.encoder_norm)
+    var_is_density = var_model_name in ("density_map", "density_map_dem")
+    print(f"Model: {var_model_name} nn.backbone={preset['nn']['backbone']} "
+          f"nn.encoder_norm={preset['nn']['encoder_norm']} "
+          f"train_envs={var_checkpoint.get('train_envs')}")
     #
     ## --------------------------------------------- data ------------------------------------------- ##
     #
@@ -183,90 +214,108 @@ def run():
           f"preprocessing {preset['data']['preprocess']} (env AMAR_CSI_PREPROCESS="
           f"{os.environ.get('AMAR_CSI_PREPROCESS')})")
     #
-    ## ------------------------------------------- maps --------------------------------------------- ##
+    ## ------------------------------------------- outputs ------------------------------------------ ##
     #
-    var_maps_real = predict_maps(var_model, var_x, var_device, var_args.batch_size)
+    var_out_real, var_gate_real = predict_outputs(var_model_name, var_model, var_x, var_device,
+                                                  var_args.batch_size)
     var_perm = np.random.RandomState(0).permutation(len(var_x))
-    var_maps_shuffled = predict_maps(var_model, var_x[var_perm], var_device, var_args.batch_size)
-    var_maps_zeroed = predict_maps(var_model, np.zeros_like(var_x), var_device, var_args.batch_size)
-    var_maps_mean = np.repeat(var_maps_real.mean(axis=0, keepdims=True), len(var_x), axis=0)
-    #
-    var_counts_real = var_maps_real.sum(axis=(1, 2))
-    var_counts_shuffled = var_maps_shuffled.sum(axis=(1, 2))
-    var_counts_zeroed = var_maps_zeroed.sum(axis=(1, 2))
+    var_out_shuffled, _ = predict_outputs(var_model_name, var_model, var_x[var_perm], var_device,
+                                          var_args.batch_size)
+    var_out_zeroed, _ = predict_outputs(var_model_name, var_model, np.zeros_like(var_x), var_device,
+                                        var_args.batch_size)
+    var_out_mean = np.repeat(var_out_real.mean(axis=0, keepdims=True), len(var_x), axis=0)
+    ## the per-frame response magnitude, correlated across conditions the way the density "count" was
+    var_mag_real = var_out_real.sum(axis=1)
+    var_mag_shuffled = var_out_shuffled.sum(axis=1)
+    var_mag_zeroed = var_out_zeroed.sum(axis=1)
     #
     ## ----------------------------------------- report --------------------------------------------- ##
     #
-    print("\nINPUT DEPENDENCE (mean |map(condition) - map(real)|, and /|map(real)|):")
-    for var_name, var_maps, var_counts in (("shuffled", var_maps_shuffled, var_counts_shuffled),
-                                           ("zeroed", var_maps_zeroed, var_counts_zeroed),
-                                           ("mean predicted map (room marginal)", var_maps_mean, None)):
-        var_abs, var_rel = _relative_change(var_maps, var_maps_real)
-        ## corrcoef divides by the std; a near-constant count series (e.g. all-zero input) makes that
-        ## 0/0, so it returns nan and prints a RuntimeWarning. Detect the degenerate case explicitly
-        ## and suppress the warning rather than let it litter the log.
+    print("\nINPUT DEPENDENCE (mean |output(condition) - output(real)|, and /|output(real)|):")
+    for var_name, var_out, var_mag in (("shuffled", var_out_shuffled, var_mag_shuffled),
+                                       ("zeroed", var_out_zeroed, var_mag_zeroed),
+                                       ("mean predicted output (room marginal)", var_out_mean, None)):
+        var_abs, var_rel = _relative_change(var_out, var_out_real)
+        ## corrcoef divides by the std; a near-constant series (e.g. all-zero input) makes that 0/0,
+        ## so it returns nan and prints a RuntimeWarning. Detect the degenerate case explicitly and
+        ## suppress the warning rather than let it litter the log.
         var_r = float("nan")
-        if (var_counts is not None and np.std(var_counts) > 1e-12
-                and np.std(var_counts_real) > 1e-12):
+        if (var_mag is not None and np.std(var_mag) > 1e-12
+                and np.std(var_mag_real) > 1e-12):
             with np.errstate(invalid="ignore", divide="ignore"):
-                var_r = float(np.corrcoef(var_counts_real, var_counts)[0, 1])
-        print(f"  {var_name:36s} abs={var_abs:.5f}  rel={var_rel:.3f}  count_corr={var_r:.3f}")
-    print("  rel near 0 => the map barely depends on the input (the marginal-map shortcut).")
+                var_r = float(np.corrcoef(var_mag_real, var_mag)[0, 1])
+        print(f"  {var_name:36s} abs={var_abs:.5f}  rel={var_rel:.3f}  resp_corr={var_r:.3f}")
+    print("  rel near 0 => the output barely depends on the input (the marginal / prior shortcut).")
     #
     ## -------------------------------------- empty gate -------------------------------------------- ##
     #
-    var_empty = var_true_count == 0
-    ## The gate is a 1-D threshold on a per-frame statistic of the real map; the shipped one thresholds
-    ## the map maximum. A raised map floor (the cross-domain failure) lifts the maximum without making
-    ## the map peaky, so the scale-invariant statistics are reported next to it: "mass" (= the count)
-    ## and "map mean" both move when the whole map is lifted, while "max/mean" (peakiness) should not.
-    var_map_max = density_map_maxima(var_maps_real)
-    var_stats = {
-        "map max": var_map_max,
-        "map mean": var_maps_real.mean(axis=(1, 2)),
-        "max/mean": var_map_max / (var_maps_real.mean(axis=(1, 2)) + 1e-8),
-        "mass": var_maps_real.sum(axis=(1, 2)),
-    }
-    print(f"\nEMPTY GATE: {int(var_empty.sum())} empty / {int((~var_empty).sum())} occupied frames")
-    print(f"  {'statistic':<11}{'empty':>17}{'occupied':>17}{'Otsu thr':>10}{'Otsu bal':>10}"
-          f"{'sup thr':>10}{'sup bal':>9}")
-    var_gate_threshold = None
-    for var_name, var_values in var_stats.items():
-        var_empty_str = (f"{var_values[var_empty].mean():.4f}+-{var_values[var_empty].std():.4f}"
-                         if var_empty.any() else "(none)")
-        var_occ_str = (f"{var_values[~var_empty].mean():.4f}+-{var_values[~var_empty].std():.4f}"
-                       if (~var_empty).any() else "(none)")
-        ## Otsu is label-free (a room could self-calibrate); the supervised one is the shipped rule and
-        ## is fitted on these frames, so it is an in-sample upper bound
-        var_otsu_thr, var_otsu_bal = otsu_threshold(var_values, var_empty)
-        var_sup_thr, var_sup_bal = calibrate_empty_threshold(var_values, var_true_count)
-        if var_name == "map max":
-            var_gate_threshold = var_sup_thr
-        print(f"  {var_name:<11}{var_empty_str:>17}{var_occ_str:>17}"
-              f"{var_otsu_thr:>10.4f}{var_otsu_bal:>10.3f}{var_sup_thr:>10.4f}{var_sup_bal:>9.3f}")
-    print("  gate fires when the statistic is BELOW the threshold. Otsu = label-free (self-calibrated "
-          "per room); sup = fitted on these frames (upper bound). 0.5 = chance, 1.0 = clean.")
-    #
-    ## The threshold the training run actually used was calibrated on the source rooms; does it fire on
-    ## this room? If it never fires, every empty frame is counted as occupied (count-0 accuracy 0).
-    if var_args.source_empty_threshold is not None:
-        var_src = float(var_args.source_empty_threshold)
-        var_src_empty = var_map_max < var_src
-        print(f"\n  SOURCE GATE (calibrated on the training rooms) = {var_src:.4f}")
-        print(f"    fires on {int(var_src_empty[var_empty].sum())}/{int(var_empty.sum())} empty frames, "
-              f"{int(var_src_empty[~var_empty].sum())}/{int((~var_empty).sum())} occupied frames")
-        if var_empty.any():
-            print(f"    empty recall (= the count-0 accuracy it can reach) = "
-                  f"{float(var_src_empty[var_empty].mean()):.3f}")
-        if not var_src_empty.any():
-            print("    NEVER FIRES on this room: the source threshold sits below this room's whole map "
-                  "range, so every empty frame is counted as occupied.")
-        elif var_empty.any() and float(var_src_empty[var_empty].mean()) < 0.5:
-            print("    Mostly dead on this room: the source threshold misses most empty frames.")
+    if var_gate_real is None:
+        print(f"\nEMPTY GATE: n/a for {var_model_name} (it ships no empty-gate statistic).")
+    else:
+        var_empty = var_true_count == 0
+        ## The gate is a 1-D threshold on a per-frame statistic of the real output; the density head
+        ## thresholds the map maximum. A raised map floor (the cross-domain failure) lifts the maximum
+        ## without making the map peaky, so for the density head the scale-invariant statistics are
+        ## reported next to it: "mass" (= the count) and "map mean" both move when the whole map is
+        ## lifted, while "max/mean" (peakiness) should not. The coords head thresholds its maximum
+        ## objectness probability.
+        if var_is_density:
+            var_grid = int(var_checkpoint.get("grid_size", preset["density"]["grid_size"]))
+            var_maps_real = var_out_real.reshape(len(var_x), var_grid, var_grid)
+            var_gate_stat = density_map_maxima(var_maps_real)
+            var_stats = {
+                "map max": var_gate_stat,
+                "map mean": var_maps_real.mean(axis=(1, 2)),
+                "max/mean": var_gate_stat / (var_maps_real.mean(axis=(1, 2)) + 1e-8),
+                "mass": var_maps_real.sum(axis=(1, 2)),
+            }
+            var_stat_label = "map max"
+        else:
+            var_gate_stat = var_gate_real
+            var_stats = {"obj max": var_gate_stat}
+            var_stat_label = "obj max"
+        print(f"\nEMPTY GATE: {int(var_empty.sum())} empty / {int((~var_empty).sum())} occupied frames")
+        print(f"  {'statistic':<11}{'empty':>17}{'occupied':>17}{'Otsu thr':>10}{'Otsu bal':>10}"
+              f"{'sup thr':>10}{'sup bal':>9}")
+        var_gate_threshold = None
+        for var_name, var_values in var_stats.items():
+            var_empty_str = (f"{var_values[var_empty].mean():.4f}+-{var_values[var_empty].std():.4f}"
+                             if var_empty.any() else "(none)")
+            var_occ_str = (f"{var_values[~var_empty].mean():.4f}+-{var_values[~var_empty].std():.4f}"
+                           if (~var_empty).any() else "(none)")
+            ## Otsu is label-free (a room could self-calibrate); the supervised one is the shipped rule
+            ## and is fitted on these frames, so it is an in-sample upper bound
+            var_otsu_thr, var_otsu_bal = otsu_threshold(var_values, var_empty)
+            var_sup_thr, var_sup_bal = calibrate_empty_threshold(var_values, var_true_count)
+            if var_name == var_stat_label:
+                var_gate_threshold = var_sup_thr
+            print(f"  {var_name:<11}{var_empty_str:>17}{var_occ_str:>17}"
+                  f"{var_otsu_thr:>10.4f}{var_otsu_bal:>10.3f}{var_sup_thr:>10.4f}{var_sup_bal:>9.3f}")
+        print("  gate fires when the statistic is BELOW the threshold. Otsu = label-free (self-calibrated "
+              "per room); sup = fitted on these frames (upper bound). 0.5 = chance, 1.0 = clean.")
+        #
+        ## The threshold the training run actually used was calibrated on the source rooms; does it fire
+        ## on this room? If it never fires, every empty frame is counted as occupied (count-0 accuracy 0).
+        if var_args.source_empty_threshold is not None:
+            var_src = float(var_args.source_empty_threshold)
+            var_src_empty = var_gate_stat < var_src
+            print(f"\n  SOURCE GATE (calibrated on the training rooms) = {var_src:.4f}")
+            print(f"    fires on {int(var_src_empty[var_empty].sum())}/{int(var_empty.sum())} empty frames, "
+                  f"{int(var_src_empty[~var_empty].sum())}/{int((~var_empty).sum())} occupied frames")
+            if var_empty.any():
+                print(f"    empty recall (= the count-0 accuracy it can reach) = "
+                      f"{float(var_src_empty[var_empty].mean()):.3f}")
+            if not var_src_empty.any():
+                print("    NEVER FIRES on this room: the source threshold sits below this room's whole "
+                      "range, so every empty frame is counted as occupied.")
+            elif var_empty.any() and float(var_src_empty[var_empty].mean()) < 0.5:
+                print("    Mostly dead on this room: the source threshold misses most empty frames.")
     #
     ## --------------------------------------- figure ----------------------------------------------- ##
     #
-    if var_args.out:
+    if var_args.out and not var_is_density:
+        print(f"\n(no diagnostic figure for {var_model_name}: the figure plots density-map statistics)")
+    elif var_args.out:
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
@@ -285,16 +334,16 @@ def run():
             var_ax.set_title(var_title); var_ax.legend()
 
         ## panel 0: the shipped statistic, with all three thresholds, so a dead source gate is visible
-        _panel(var_axes[0], var_map_max, "map max: empty vs occupied",
-               [("Otsu", otsu_threshold(var_map_max, var_empty)[0], "--"),
+        _panel(var_axes[0], var_gate_stat, "map max: empty vs occupied",
+               [("Otsu", otsu_threshold(var_gate_stat, var_empty)[0], "--"),
                 ("sup", var_gate_threshold, ":"),
                 ("source", var_args.source_empty_threshold, "-.")])
         ## panel 1: the scale-invariant candidate - a raised floor lifts max but not max/mean
         _panel(var_axes[1], var_stats["max/mean"], "max/mean: empty vs occupied",
                [("Otsu", otsu_threshold(var_stats["max/mean"], var_empty)[0], "--")])
-        var_axes[2].scatter(var_counts_real, var_counts_shuffled, s=6, alpha=0.4)
-        var_axes[2].set_xlabel("count real"); var_axes[2].set_ylabel("count shuffled")
-        var_axes[2].set_title("count under input shuffle")
+        var_axes[2].scatter(var_mag_real, var_mag_shuffled, s=6, alpha=0.4)
+        var_axes[2].set_xlabel("mass real"); var_axes[2].set_ylabel("mass shuffled")
+        var_axes[2].set_title("mass under input shuffle")
         var_axes[3].imshow(var_maps_real.mean(axis=0), origin="lower")
         var_axes[3].set_title("mean predicted map"); var_axes[3].axis("off")
         var_fig.tight_layout()

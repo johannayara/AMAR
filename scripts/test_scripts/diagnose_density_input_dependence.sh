@@ -139,7 +139,7 @@ echo "Diagnostic | checkpoint=${CHECKPOINT} | test_env=${TEST_ENV} | preprocess=
 echo "Log: ${log}"
 
 start=$(date +%s)
-python scripts/diagnose_density_input_dependence.py \
+python scripts/test_scripts/diagnose_density_input_dependence.py \
     --checkpoint "${CHECKPOINT}" \
     --env "${TEST_ENV}" \
     --users "${USERS}" \

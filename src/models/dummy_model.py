@@ -18,6 +18,7 @@ from ptflops import get_model_complexity_info
 from sklearn.metrics import classification_report, accuracy_score
 #
 from src.train import train
+from src.models.checkpoints import save_dummy_checkpoint
 from configs.preset import preset
 from src.utils import *
 import wandb
@@ -327,6 +328,11 @@ def run_dummy_cross_domain(train_sets_by_env,
             print(f"  [{var_env_name}] Total Error {var_metrics['total_error']:.4f} - "
                   f"PPP {var_metrics['perfect_prediction_percentage']:.2f}% - "
                   f"Acc {var_metrics['accuracy']:.4f} - F1 {var_metrics['f1_score']:.4f}")
+        #
+        if var_r == var_repeat - 1:
+            ## keep the last repeat's weights, like the real models, so the baseline is inspectable
+            save_dummy_checkpoint(model_dummy, var_x_shape, var_num_classes, list(train_sets_by_env),
+                                  save_path)
     #
     ## -------------------------------------- aggregate per room ------------------------------------
     results = {}

@@ -96,6 +96,7 @@ run_combo() {
         --model "${model}" --task location --repeat "${REPEAT}" --env "${ENV}"\
         --epochs "${EPOCHS}" \
         --hp "nn.backbone=${backbone}" "${extra[@]}" --hp "nn.encoder_norm=${encoder}"\
+        --hp "density.count_rule=layout_free" \
         > "${log_dir}/run_$(date +%Y%m%d_%H%M%S).log" 2>&1
 }
 

@@ -95,6 +95,7 @@ run_combo() {
         --train_envs "${train_envs}" --epochs "${EPOCHS}" \
         --hp "nn.backbone=${backbone}" --hp "nn.encoder_norm=${encoder}" \
         --hp "density.head=${head}" \
+        --hp "density.count_rule=layout_free" \
         > "${log_dir}/run_$(date +%Y%m%d_%H%M%S).log" 2>&1
 }
 

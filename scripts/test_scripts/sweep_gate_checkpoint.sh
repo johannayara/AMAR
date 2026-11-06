@@ -87,7 +87,7 @@ run_combo() {
     [[ -n "${ENCODER_NORM:-}" ]] && extra+=(--encoder-norm "${ENCODER_NORM}")
     [[ -n "${GATES}" ]] && extra+=(--gates "${GATES}")
     echo "=== checkpoint=${checkpoint} env=${env} train=${train_envs} gates=${GATES:-<default>} peak_rule=${PEAK_RULE}"
-    python scripts/sweep_gate_checkpoint.py \
+    python scripts/test_scripts/sweep_gate_checkpoint.py \
         --checkpoint "${checkpoint}" --env "${env}" --train_envs "${train_envs}" \
         --users "${USERS}" --peak_rule "${PEAK_RULE}" \
         --out "${out_dir}/gate_sweep.json" "${extra[@]}" \

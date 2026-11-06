@@ -41,6 +41,7 @@ from torch.utils.data import TensorDataset
 from ptflops import get_model_complexity_info
 
 from src.models.bce_that import THAT, resolve_encoder_norm
+from src.models.checkpoints import save_coord_checkpoint
 from src.models.modules.molecules import Backbone
 from src.models.that_variance import build_thatv, parse_backbone
 from src.models.losses.supervised_loss import OccupancyDistillationLoss
@@ -1022,6 +1023,10 @@ def save_density_checkpoint(model, var_x_shape, var_env, save_path, var_tag="mod
     os.makedirs(save_path, exist_ok=True)
     var_out_path = os.path.join(save_path, f"{var_tag}.pth")
     torch.save({
+        ## Dispatcher key for src.models.checkpoints.load_cross_domain_model; the DEM variant is the
+        ## same module with a raw output head, so it is told apart by output_mode.
+        "model_name": "density_map_dem" if model.output_mode == "raw" else "density_map",
+        "head": "density",
         "model_state_dict": model.state_dict(),
         "x_shape": tuple(var_x_shape),
         "layout_name": var_env,
@@ -3012,6 +3017,11 @@ def run_density_map_coords(train_sets_by_env, test_sets_by_env, var_repeat=3,
                                                        var_tag=var_name)
                 print(f"  Figure saved to {var_fig_path}")
         #
+        if var_r == var_repeat - 1:
+            ## keep the last repeat's weights, like the density head, so the run can be diagnosed /
+            ## re-evaluated / run on a live capture without retraining
+            save_coord_checkpoint(model, var_x_shape, var_train_envs, save_path)
+        #
         del model, optimizer
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
@@ -3038,11 +3048,6 @@ def run_density_map_coords(train_sets_by_env, test_sets_by_env, var_repeat=3,
         var_empty_values = np.array([var_rep["empty_threshold"] for var_rep in var_rep_list])
         var_env_result["avg_empty_threshold"] = (float(np.nanmean(var_empty_values))
                                                  if np.isfinite(var_empty_values).any() else float("nan"))
-        ## the layout-free peak rule is derived too: record it next to the metrics it produced
-        for var_key in ("peak_threshold", "per_person_mass"):
-            var_values = np.array([var_rep[var_key] for var_rep in var_rep_list], dtype=float)
-            var_env_result[f"avg_{var_key}"] = (float(np.nanmean(var_values))
-                                                if np.isfinite(var_values).any() else float("nan"))
         var_env_result["per_class_accuracy"] = {
             var_class: float(np.mean([var_rep["per_class_accuracy"][var_class] for var_rep in var_rep_list]))
             for var_class in range(var_num_classes)}

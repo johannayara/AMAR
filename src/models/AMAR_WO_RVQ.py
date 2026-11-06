@@ -15,6 +15,7 @@ from src.models.modules.molecules import Backbone, Transformer_Encoder, Transfor
 from src.models.set_clustering import (visualize_query_clustering, matched_slot_points,
                                        per_sample_padding_fraction, visualize_query_tsne_metadata)
 from src.models.that_variance import build_thatv, parse_backbone
+from src.models.checkpoints import save_amar_checkpoint
 from src.models.losses.supervised_loss import (HungarianMatchingLoss, SetDistillationLoss,
                                                QuerySeparationLoss)
 from src.train import train
@@ -559,6 +560,9 @@ def run_cross_domain(train_sets_by_env, test_sets_by_env, var_repeat=10, var_tas
             last_model = model_AMAR_WO_RVQ   
         else:
             del model_AMAR_WO_RVQ
+
+    ## keep the last repeat's weights so the run can be diagnosed / re-evaluated without retraining
+    save_amar_checkpoint(last_model, var_x_shape, list(train_sets_by_env), save_path)
 
     all_envs_results = {}
     for env_name in env_result_accuracy.keys():
