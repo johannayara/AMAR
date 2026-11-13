@@ -62,6 +62,7 @@ DENSITY_LABELS = {
     "Layout-free Mass Accuracy": "mass_accuracy",
     "Layout-free Mass MAE": "mass_mae",
     "Position Error (m)": "position_error_m",
+    "Constant-position Baseline (m)": "const_position_error_m",
     "Position Miss Rate": "position_miss_rate",
     "Position False Positive Rate": "position_false_positive_rate",
 }

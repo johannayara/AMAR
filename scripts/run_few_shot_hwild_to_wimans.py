@@ -69,11 +69,7 @@ def parse_args():
     var_args.add_argument("--support_rooms", default=None, type=str,
                           help="comma-separated rooms the few-shot support set is drawn from. "
                                "Default: the query pool itself, so the support is spread across "
-                               "every --test_rooms room. Set it to fine-tune the student on one "
-                               "room (e.g. classroom) while the query set stays scored on all of "
-                               "--test_rooms; the support rooms are loaded even when they are not "
-                               "in --test_rooms, so the student can be given data from a room the "
-                               "query never scores.")
+                               "every --test_rooms room.")
     var_args.add_argument("--few_shot_ratio", default=0.05, type=float,
                           help="fraction of the support pool (see --support_rooms) used to "
                                "fine-tune the student")
@@ -219,17 +215,13 @@ def run():
                       if var_args.test_rooms else wimans_room_names())
     var_support_rooms = ([var_room.strip() for var_room in var_args.support_rooms.split(',')]
                          if var_args.support_rooms else None)
-    ## When the query pool holds a second source (the simulated rooms), the few-shot support set must
-    ## not: the student is fine-tuned and checkpoint-selected on the real WiMANS rooms only, so the
-    ## simulated rooms are scored but never trained on. With no simulated keys this is left as None,
-    ## i.e. support = query rooms, which is the unchanged behaviour.
+
     if var_support_rooms is None:
         var_real_query_rooms = [var_room for var_room in var_test_rooms
                                 if var_room in preset["data"]["environment"]]
         if len(var_real_query_rooms) != len(var_test_rooms):
             var_support_rooms = var_real_query_rooms
-    ## the teacher's data and the student's support/query pool must be disjoint, or the "held-out"
-    ## query frames would be frames the teacher was trained on
+    ## the teacher's data and the student's support/query pool must be disjoint
     if set(var_train_rooms) & set(var_test_rooms):
         raise ValueError(f"train rooms {var_train_rooms} and test rooms {var_test_rooms} overlap")
     if var_support_rooms and set(var_train_rooms) & set(var_support_rooms):

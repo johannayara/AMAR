@@ -11,6 +11,7 @@ import time
 import warnings
 from pathlib import Path
 
+
 LOCATION_SIZE = 5
 ACTIVITY_SIZE = 9
 MAX_NB_PEOPLE = 6
@@ -1089,3 +1090,5 @@ def reserve_viz_dir(path):
             return var_path
         except FileExistsError:
             var_index += 1
+
+

@@ -95,6 +95,15 @@ def parse_args():
     var_args.add_argument("--kd_weight", default=1.0, type=float, help="weight of the distillation loss")
     var_args.add_argument("--kd_temperature", default=1.0, type=float, help="temperature of the soft targets")
     var_args.add_argument("--no_compile", action="store_true", help="disable torch.compile of the feature extractors")
+    var_args.add_argument("--train_rooms", default=None, type=str,
+                          help="comma-separated teacher rooms (default: H-WILD)")
+    var_args.add_argument("--test_rooms", default=None, type=str,
+                          help="comma-separated rooms forming the query pool "
+                               "(default: WiMANS)")
+    var_args.add_argument("--support_rooms", default=None, type=str,
+                          help="comma-separated rooms the few-shot support set is drawn from. "
+                               "Default: the query pool itself, so the support is spread across "
+                               "every --test_rooms room.")
     return var_args.parse_args()
 
 
@@ -174,6 +183,27 @@ def run():
     if var_teacher_epochs is None:
         var_teacher_epochs = var_args.epochs
 
+    var_train_rooms = ([var_room.strip() for var_room in var_args.train_rooms.split(',')]
+                       if var_args.train_rooms else wimans_room_names())
+    var_test_rooms = ([var_room.strip() for var_room in var_args.test_rooms.split(',')]
+                      if var_args.test_rooms else wimans_room_names())
+    var_support_rooms = ([var_room.strip() for var_room in var_args.support_rooms.split(',')]
+                         if var_args.support_rooms else None)
+
+    if var_support_rooms is None:
+        var_real_query_rooms = [var_room for var_room in var_test_rooms
+                                if var_room in preset["data"]["environment"]]
+        if len(var_real_query_rooms) != len(var_test_rooms):
+            var_support_rooms = var_real_query_rooms
+    ## the teacher's data and the student's support/query pool must be disjoint
+    if set(var_train_rooms) & set(var_test_rooms):
+        raise ValueError(f"train rooms {var_train_rooms} and test rooms {var_test_rooms} overlap")
+    if var_support_rooms and set(var_train_rooms) & set(var_support_rooms):
+        raise ValueError(f"train rooms {var_train_rooms} and support rooms {var_support_rooms} "
+                         f"overlap")
+
+    
+    
     # Ensuring there is no data leakage while doing splits.
     data_train_x, data_train_y, test_sets_by_env = master_splitter(
         preset, var_task, var_model, var_users, var_env)

@@ -134,10 +134,7 @@ def load_wimans_room_x(var_data_x, var_label_list, var_length=None, var_preproce
     [description]
     : load one WiMANS room's CSI amplitude with the single-link capture harmonized to the 3 x 3 grid.
       Real WiMANS is (time, 3 TX, 3 RX, 30) and is returned unchanged; the simulated few-shot source is
-      (time, 1, 1, 30) and is broadcast by harmonize_wimans_antennas as each frame is read, so a room
-      from either source yields the same trailing shape and the same 270 flattened features. Otherwise
-      identical to load_data_x (leading zero padding to preset["data"]["length"], then preprocess_csi),
-      which is what lets a run mix the real and the simulated rooms without a geometry mismatch.
+      (time, 1, 1, 30) and is broadcast by harmonize_wimans_antennas as each frame is read.
     : var_data_x: directory of the room's CSI amplitude files (see wimans_room_source)
     : var_label_list: the room's selected labels
     : var_length: window length in packets (default preset["data"]["length"])

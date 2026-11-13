@@ -4,10 +4,7 @@
 
                 The model predicts a full H x W occupancy probability map over the shared,
                 TX-anchored normalized frame (origin at the transmitter, x right, y away from the
-                transmitter; see preset["layouts"]). Unlike the previous formulation, which could only
-                place mass on a room's known 5 location kernels, the head is continuous: it can put
-                probability at any coordinate, so the same network applies to a room whose layout is
-                not known in advance.
+                transmitter; see preset["layouts"]).
 
                 The room's 5 WiMANS locations are still used, but only to render the Gaussian target
                 during training and to read the per-location occupancy back off the predicted map at
@@ -120,10 +117,7 @@ def render_density_targets(var_occupancy, var_kernels):
         var_target = torch.einsum("bl,lhw->bhw", var_occupancy, var_peak_kernels)
     else:
         var_target = torch.einsum("bl,blhw->bhw", var_occupancy, var_peak_kernels)
-    ## Two occupied locations closer than the kernel width add up to > 1 in the overlap, which leaves
-    ## the [0,1] range a Bernoulli target must stay in. BCEWithLogitsLoss is unbounded below for a
-    ## target > 1: its gradient w.r.t. the logit is sigmoid(x) - target < 0 everywhere, so the logit
-    ## grows without bound and the loss runs away to -inf. Clamp so the map stays a probability.
+   #clamp so the map stays a probability.
     return var_target.clamp_(0.0, 1.0)
 
 
@@ -178,10 +172,7 @@ class DensityMapNet(torch.nn.Module):
         #
         var_backbone = preset["nn"].get("backbone", "default")
         var_is_thatv, _ = parse_backbone(var_backbone)
-        ## "cnn" is the AMAR CNN backbone (src/models/modules/molecules.py). Unlike THAT/THATV it emits
-        ## a token sequence (B, N, D) rather than one vector, so forward() sums it over time to reach
-        ## the (B, D) the density decoder expects. The sum (not a mean) matches THAT's aggregation and
-        ## keeps the total-mass cue the count is read from.
+        ## to use the cnn backbone, set the var_pool_backbone flag so that the forward pass sums over time to produce the right shape embedding. 
         if var_backbone == "cnn":
             self.backbone = Backbone(input_channels=var_x_shape[-1], output_channels=embedding_dim)
             self.var_pool_backbone = True
@@ -221,6 +212,7 @@ class DensityMapNet(torch.nn.Module):
             torch.nn.LeakyReLU(),
             torch.nn.Conv2d(16, 1, kernel_size=3, padding=1),
         )
+       
 
     def forward(self, x):
         """
@@ -465,9 +457,9 @@ def count_metrics(var_true_count, var_pred_count,
     for var_class in range(var_num_classes):
         var_sel = var_true_count == var_class
         var_per_class[var_class] = float(np.mean(var_pred_count[var_sel] == var_class)) if var_sel.any() else 0.0
-    #
+    
     ## macro-average over the count classes actually present: weights the rare empty class as heavily
-    ## as the crowded ones, unlike the overall exact-count accuracy
+    ## as the crowded one
     var_present = [var_class for var_class in range(var_num_classes) if np.any(var_true_count == var_class)]
     var_balanced = float(np.mean([var_per_class[var_class] for var_class in var_present])) if var_present else 0.0
     #
@@ -649,9 +641,9 @@ def resolve_count_decision(var_occupancy, var_true_count, var_map_max):
     : return: (empty_threshold or None, count_threshold)
     """
     var_true_count = np.asarray(var_true_count).astype(int)
-    ## `is not False`, not truthiness: None means "calibrate the gate", False means "disable it"
+    # None means "calibrate the gate", False means "disable it"
     var_staged = preset["density"].get("staged_count", True) is not False
-    #
+    
     var_fixed_count = preset["density"].get("eval_threshold")
     if var_fixed_count is not None:
         var_count_threshold = float(var_fixed_count)
@@ -1874,6 +1866,18 @@ def run_density_map_cross_domain(train_sets_by_env,
     var_grid_size = preset["density"]["grid_size"]
     var_sigma = preset["density"]["sigma"]
     #
+    ## Constant-position baseline: the mean occupied position over the training rooms, in the shared
+    ## TX-anchored frame (meters). It is model-independent -- a function of the training rooms' layouts
+    ## and labels alone -- so it can be printed next to any configuration's Position Error (m). A model
+    ## whose cross-domain position error matches it has not learned a transferable mapping; it is the
+    ## reference the report must carry (mirrors src/models/room_density.run_room_density_cross_domain).
+    var_train_positions = []
+    for var_env_name, (_, var_y_train) in train_sets_by_env.items():
+        var_train_positions.extend(occupancy_to_positions(np.asarray(var_y_train),
+                                                          preset["layouts"][var_env_name]))
+    var_train_mean_m = (np.concatenate(var_train_positions).mean(axis=0)
+                        if var_train_positions else np.zeros(2, dtype=np.float32))
+    #
     ## one unit-mass kernel bank per training room; each sample is rendered and read out with its own
     ## room's kernels, which is what lets several rooms share one model
     var_kernel_bank = torch.stack([
@@ -2002,7 +2006,12 @@ def run_density_map_cross_domain(train_sets_by_env,
             var_rep = {**var_count_metrics, "threshold": var_threshold,
                        "empty_threshold": var_empty_threshold_log,
                        "peak_threshold": _finite_or_nan(var_peak_threshold),
-                       "per_person_mass": _finite_or_nan(var_mass)}
+                       "per_person_mass": _finite_or_nan(var_mass),
+                       "const_position_error_m": position_error_metrics(
+                           [np.tile(var_train_mean_m, (1, 1))
+                            for _ in range(len(var_y_env))],
+                           occupancy_to_positions(var_y_env,
+                                                  preset["layouts"][var_env_name]))["position_error_m"]}
             env_rep_metrics.setdefault(var_env_name, []).append(var_rep)
             env_last_density[var_env_name] = (true_density, pred_density)
             env_last_occupancy[var_env_name] = (var_occupancy, var_threshold, var_y_env, var_extra)
@@ -2052,6 +2061,7 @@ def run_density_map_cross_domain(train_sets_by_env,
     var_metric_names = ("accuracy", "balanced_accuracy", "mae",
                         "mass_accuracy", "mass_balanced_accuracy", "mass_mae",
                         "position_error_m", "position_miss_rate", "position_false_positive_rate",
+                        "const_position_error_m",
                         "occupancy_accuracy", "occupancy_f1")
     results = {}
     for var_env_name, var_rep_list in env_rep_metrics.items():
@@ -2133,18 +2143,13 @@ def run_density_map_few_shot(data_train_x,
                              var_loss_mode="bce"):
     """
     [description]
-    : Few-shot knowledge distillation for the density-map group-counting model, mirroring
-      run_AMAR_WO_RVQ_few_shot. A teacher DensityMapNet is trained on the full training environment; a
+    : Few-shot knowledge distillation for the density-map group-counting model. 
+      A teacher DensityMapNet is trained on the full training environment; a
       student DensityMapNet is trained on a small fraction (var_few_shot_ratio) of that same
       environment with the supervised occupancy loss plus kd_weight * OccupancyDistillationLoss
-      against the frozen teacher. Both are evaluated on every other environment in test_sets_by_env.
-      Because the density model is a per-location sigmoid predictor (not a set predictor), the soft
-      targets are matched element-wise with a temperature-scaled Bernoulli cross-entropy: no
-      Hungarian assignment is involved.
+      against the frozen teacher. 
       Under var_loss_mode="dem" both models use the raw head and the smooth-L1 objective, and the
       distillation term is a smooth-L1 match of the two density maps.
-      The protocol deliberately mirrors the AMAR few-shot runner (same 39-seed split, same validation
-      slice), so the two models' few-shot numbers are directly comparable.
     [parameter]
     : data_train_x: numpy array, CSI amplitude of the single training environment
     : data_train_y: numpy array, per-location occupancy targets (N, num_locations) with 0/1 entries
@@ -2465,11 +2470,10 @@ def run_density_map_few_shot(data_train_x,
 ## ---------------------------------------------------------------------------------------------- ##
 ## --------------------------- coordinate-regression head (one head) ---------------------------- ##
 #
-## The alternative to the density grid: a single head that directly regresses the user locations.
+## single head that directly regresses the user locations.
 ## The head emits `num_queries` coordinate hypotheses and one objectness logit each; a hypothesis is
 ## a predicted user when its objectness clears the validation-calibrated threshold, so the count is
-## exactly the number of predicted locations -- no grid and no post-hoc peak extraction. The
-## architecture (SetLocalizer) and the Hungarian set loss are shared with
+## exactly the number of predicted locations. The architecture (SetLocalizer) and the Hungarian set loss are shared with
 ## src/models/set_localization.py. Select it with preset["density"]["head"] = "coords".
 #
 ##
@@ -2800,9 +2804,7 @@ def train_coord(model, optimizer, data_train_set, data_valid_set, var_batch_size
     : return: best state dict
     """
     from src.models.set_localization import hungarian_set_loss
-    ## Class balance, the same measure the density head applies (preset["density"]["balance_empty_class"]):
-    ## WiMANS has only 5.3% count-0 frames per room (99 of 1881), so a plain shuffle lets the set head
-    ## ignore the empty case. Draw every count class equally often instead, without discarding data.
+    # Class balance, draw every count class equally often, without discarding data. To fix the empty-class imbalance.
     if preset["density"].get("balance_empty_class", False):
         var_sample_weights = set_count_sampling_weights(data_train_set)
         var_sampler = torch.utils.data.WeightedRandomSampler(
@@ -2927,6 +2929,16 @@ def run_density_map_coords(train_sets_by_env, test_sets_by_env, var_repeat=3,
     var_num_queries = preset["nn"]["num_obj_queries"]
     var_train_envs = list(train_sets_by_env)
     #
+    ## Constant-position baseline: the mean occupied position over the training rooms, in the shared
+    ## TX-anchored frame (meters). Model-independent, so it is the same reference next to any config's
+    ## Position Error (m) (mirrors run_density_map_cross_domain and room_density's constant baseline).
+    var_train_positions = []
+    for var_name, (_, var_y) in train_sets_by_env.items():
+        var_train_positions.extend(occupancy_to_positions(np.asarray(var_y),
+                                                          preset["layouts"][var_name]))
+    var_train_mean_m = (np.concatenate(var_train_positions).mean(axis=0)
+                        if var_train_positions else np.zeros(2, dtype=np.float32))
+    #
     var_train_sets, var_valid_sets = [], []
     for var_name in var_train_envs:
         var_x, var_y = train_sets_by_env[var_name]
@@ -2965,14 +2977,12 @@ def run_density_map_coords(train_sets_by_env, test_sets_by_env, var_repeat=3,
                                       var_save_dir=save_path, var_tag=f"coord_r{var_r}")
         model.load_state_dict(var_best_weight)
         model.eval()
-        #
-        ## two-stage count decision from the training rooms' validation split: the empty gate and the
-        ## objectness threshold (or the pinned preset values). Both are reported so a run is
-        ## self-describing.
+      
         with torch.no_grad():
             var_vx, var_vpos, var_vmask = next(iter(
                 torch.utils.data.DataLoader(var_valid_set, len(var_valid_set))))
             var_vxy, var_vobj = model(var_vx.to(device))
+        # two-stage count decision
         var_empty_threshold, var_threshold = resolve_coord_count_decision(
             var_vobj.cpu().numpy(), var_vmask.sum(axis=1).round().numpy())
         #
@@ -2984,6 +2994,10 @@ def run_density_map_coords(train_sets_by_env, test_sets_by_env, var_repeat=3,
                                         var_empty_threshold)
             var_metrics["threshold"] = var_threshold
             var_metrics["empty_threshold"] = _finite_or_nan(var_empty_threshold)
+            var_metrics["const_position_error_m"] = position_error_metrics(
+                [np.tile(var_train_mean_m, (1, 1)) for _ in range(len(var_pos))],
+                [normalized_to_meters(var_pos[var_i][var_mask[var_i] > 0.5].numpy())
+                 for var_i in range(len(var_pos))])["position_error_m"]
             var_env_metrics.setdefault(var_name, []).append(var_metrics)
             wandb.log({f"test_results_per_env/{var_name}/accuracy": var_metrics["accuracy"],
                        f"test_results_per_env/{var_name}/balanced_accuracy": var_metrics["balanced_accuracy"],
@@ -3029,7 +3043,8 @@ def run_density_map_coords(train_sets_by_env, test_sets_by_env, var_repeat=3,
     #
     var_num_classes = preset["nn"]["num_count_classes"]
     var_metric_names = ("accuracy", "balanced_accuracy", "mae", "occupancy_accuracy", "occupancy_f1",
-                        "position_error_m", "position_miss_rate", "position_false_positive_rate")
+                        "position_error_m", "position_miss_rate", "position_false_positive_rate",
+                        "const_position_error_m")
     results = {}
     for var_name, var_rep_list in var_env_metrics.items():
         var_env_result = {}
@@ -3039,7 +3054,7 @@ def run_density_map_coords(train_sets_by_env, test_sets_by_env, var_repeat=3,
                 var_env_result[f"avg_{var_metric}"] = float(np.nanmean(var_arr))
                 var_std = float(np.nanstd(var_arr, ddof=1)) if len(var_arr) > 1 else 0.0
             else:
-                ## e.g. the occupancy metrics: the coordinate head has no per-location readout
+                ##the occupancy metrics: the coordinate head has no per-location readout
                 var_env_result[f"avg_{var_metric}"] = float("nan")
                 var_std = 0.0
             var_env_result[f"std_{var_metric}"] = var_std

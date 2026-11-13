@@ -69,6 +69,15 @@ def _metric_for(var_rec):
     return None, None, None
 
 
+def _const_for(var_rec):
+    """The constant-position baseline (m) a record reports for its fold, or None."""
+    var_fold = _fold(var_rec)
+    if not var_fold:
+        return None
+    var_metrics = var_rec.metrics.get(var_fold) or next(iter(var_rec.metrics.values()), {})
+    return var_metrics.get("const_position_error_m")
+
+
 def _pooled(var_values):
     var_n = len(var_values)
     var_mean = sum(var_values) / var_n
@@ -89,6 +98,7 @@ def main():
     var_records = ar.collect(var_roots)
 
     var_groups = defaultdict(lambda: defaultdict(dict))   # key -> metric -> {fold: value}
+    var_const = defaultdict(dict)                          # key -> {fold: const baseline m}
     var_dummy = defaultdict(lambda: defaultdict(dict))
     for var_rec in var_records:
         if var_rec.protocol not in var_protocols:
@@ -101,17 +111,22 @@ def main():
             var_dummy[var_key][var_metric][var_fold] = var_value
         else:
             var_groups[var_key][var_metric][var_fold] = var_value
+            var_const_val = _const_for(var_rec)
+            if var_const_val is not None:
+                var_const[var_key][var_fold] = var_const_val
 
     var_rows = []
     for var_key, var_by_metric in var_groups.items():
         for var_metric, var_folds in var_by_metric.items():
             var_values = list(var_folds.values())
             var_mean, var_se = _pooled(var_values)
+            var_const_folds = var_const.get(var_key, {})
             var_rows.append({
                 "protocol": var_key[0], "model": var_key[1], "head": var_key[2] or "-",
                 "backbone": var_key[3] or "-", "encoder_norm": var_key[4] or "-",
                 "metric": var_metric, "n": len(var_values), "mean": var_mean, "se": var_se,
                 "folds": dict(sorted(var_folds.items())),
+                "const": (_pooled(list(var_const_folds.values()))[0] if var_const_folds else None),
             })
     ## lower-is-better metrics ascending, higher-is-better descending; then by n, so a config that ran
     ## every fold outranks one that ran a subset at the same mean
@@ -123,13 +138,14 @@ def main():
           f"{'including' if var_args.include_archived else 'live output only'}")
     print("=" * 100)
     print(f"{'model':13s} {'head':7s} {'backbone':14s} {'norm':6s} {'metric':16s} {'n':>2s} "
-          f"{'mean':>9s} {'se':>8s}  folds")
+          f"{'mean':>9s} {'se':>8s} {'const m':>8s}  folds")
     print("-" * 100)
     for var_row in var_rows:
         var_folds = " ".join(f"{var_fold}={var_value:.4f}" for var_fold, var_value in var_row["folds"].items())
+        var_const = f"{var_row['const']:8.4f}" if var_row["const"] is not None else f"{'-':>8s}"
         print(f"{str(var_row['model']):13s} {var_row['head']:7s} {var_row['backbone']:14s} "
               f"{var_row['encoder_norm']:6s} {var_row['metric']:16s} {var_row['n']:2d} "
-              f"{var_row['mean']:9.4f} {var_row['se']:8.4f}  {var_folds}")
+              f"{var_row['mean']:9.4f} {var_row['se']:8.4f} {var_const}  {var_folds}")
 
     print("\nTRAINING-PRIOR BASELINE (dummy_model; a real config must beat it)")
     print(f"{'model':13s} {'head':7s} {'backbone':14s} {'norm':6s} {'metric':16s} {'n':>2s} "

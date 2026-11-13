@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from src.models import *
 from src.data.load_data import (load_data_y, encode_data_y, encode_occupancy_y,
                                 load_wimans_room_x, wimans_room_names, wimans_room_source)
+from src.data.activity_transfer import WIMANS_ACTIVITY_ALIASES
 from src.utils import *
 from configs.preset import preset
 
@@ -94,6 +95,11 @@ def _load_room(preset, var_task, var_model, var_users, var_env):
     var_base, var_data_x, var_data_y, var_band = wimans_room_source(var_env)
     data_pd_y = load_data_y(var_data_y, var_environment=[var_base], var_wifi_band=var_band,
                             var_num_users=var_users)
+    
+    if var_task == "activity":
+        data_pd_y = data_pd_y.copy()
+        for var_col in (f"user_{var_i}_activity" for var_i in range(1, 7)):
+            data_pd_y[var_col] = data_pd_y[var_col].replace(WIMANS_ACTIVITY_ALIASES)
     var_label_list = data_pd_y["label"].to_list()
     if not var_label_list:
         raise ValueError(
@@ -226,6 +232,14 @@ def format_result(var_model, var_task, result):
     ]
 
     lines = ["=" * 80]
+
+    def _const_baseline_line(var_env_results):
+        ## shared by the density head (inside the mass block) and the coords head (which reports a
+        ## position error without the mass metrics), so both print one identical line
+        return (f"  Constant-position Baseline (m): "
+                f"{var_env_results['avg_const_position_error_m']:.4f} "
+                f"± {var_env_results.get('se_const_position_error_m', 0.0):.4f} (SE) "
+                f"[mean training-room position; beat it to show a transferable mapping]")
     lines.append(f"EXPERIMENT RESULTS - Model: {var_model}, Task: {var_task}")
     lines.append("=" * 80)
 
@@ -252,12 +266,20 @@ def format_result(var_model, var_task, result):
                                  f"± {env_results['se_mass_mae']:.4f} (SE)")
                     lines.append(f"  Position Error (m): {env_results['avg_position_error_m']:.4f} "
                                  f"± {env_results['se_position_error_m']:.4f} (SE)")
+                    if 'avg_const_position_error_m' in env_results:
+                        lines.append(_const_baseline_line(env_results))
                     lines.append(f"  Position Miss Rate: {env_results['avg_position_miss_rate']:.4f} "
                                  f"± {env_results['se_position_miss_rate']:.4f} (SE)")
                     if 'avg_position_false_positive_rate' in env_results:
                         lines.append(f"  Position False Positive Rate: "
                                      f"{env_results['avg_position_false_positive_rate']:.4f} "
                                      f"± {env_results['se_position_false_positive_rate']:.4f} (SE)")
+                elif 'avg_position_error_m' in env_results:
+                    ## coords head: a position error with no density mass metrics
+                    lines.append(f"  Position Error (m): {env_results['avg_position_error_m']:.4f} "
+                                 f"± {env_results['se_position_error_m']:.4f} (SE)")
+                    if 'avg_const_position_error_m' in env_results:
+                        lines.append(_const_baseline_line(env_results))
                 per_class = env_results.get('per_class_accuracy', {})
                 if per_class:
                     lines.append("  Per-count Accuracy: "
