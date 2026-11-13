@@ -9,6 +9,7 @@
 ##
 
 import argparse
+import gc
 import os
 import random
 import sys
@@ -39,10 +40,13 @@ def parse_args():
     var_args.add_argument("--task", default=preset["task"], type=str)
     var_args.add_argument("--repeat", default=preset["repeat"], type=int)
     var_args.add_argument("--users", default="0,1,2,3,4,5", type=str, help="Comma-separated list of user IDs")
-    var_args.add_argument("--env", default="empty_room", type=str, help="the single training room")
+    var_args.add_argument("--window", default=None, type=int, help="window length in packets")
+    var_args.add_argument("--max_samples", default=None, type=int,
+                          help="cap the WiMANS samples drawn per room (quick runs / smoke tests)")
     var_args.add_argument("--no_compile", action="store_true", help="disable torch.compile of the feature extractors")
     var_args.add_argument("--train_rooms", default=None, type=str,
-                          help="comma-separated teacher rooms (default: H-WILD)")
+                          help="comma-separated teacher rooms (default: every WiMANS room, real and "
+                               "synthetic)")
     var_args.add_argument("--test_rooms", default=None, type=str,
                           help="comma-separated rooms forming the query pool "
                                "(default: WiMANS)")
@@ -117,72 +121,35 @@ def format_result(var_model, var_task, result, var_few_shot_ratio, var_kd_weight
                                  f"± {stats[f'se_{metric}']:.4f} (SE)")
     return "\n".join(lines)
 
-def load_wimans_room(var_room):
+def standardize_windows(var_x):
     """
     [description]
-    : load one WiMANS room as multi-user (CSI, position-set) samples. A sample's label set holds the
-      occupied discrete locations, one per user, in the room's [0, 1]^2 frame; an empty-room sample
-      (count 0) is kept with an all-zero mask, so "no person" is a valid target.
-    : var_room: name of the room.
-    : return: (X (num_samples, length, 90) float32, POS (num_samples, MAX_USERS, 2) normalized,
-      MASK (num_samples, MAX_USERS) 0/1)
+    : z-score every CSI window over its time x subcarrier entries, removing the per-device gain/AGC
+      level so only the window's frequency-selective shape is left. The simulated WiMANS source has a
+      different capture gain from the real one, so this is what makes a synthetic-room-trained model
+      comparable with the real rooms at test time.
+    : var_x: (N, window, features) float32
+    : return: same shape, float32
     """
-    #
-    var_length = var_length if var_length is not None else preset["hwild"]["window"]
-    var_users = var_users if var_users is not None else preset["data"]["num_users"]
-    var_base, var_data_x, var_data_y, var_source_band = wimans_room_source(var_room)
-    var_band = list(var_band) if var_band is not None else var_source_band
-    var_pd = load_data_y(var_data_y, [var_base], var_band, var_users)
-    var_layout = preset["layouts"][var_base]
-    var_cols = [f"user_{var_idx}_location" for var_idx in range(1, 7)]
-    #
-    var_labels, var_sets = [], []
-    for _, var_row in var_pd.iterrows():
-        var_pts = [var_layout[var_row[var_col]] for var_col in var_cols if var_row[var_col] in var_layout]
-        var_labels.append(var_row["label"])
-        var_sets.append(var_pts)  # may be empty (empty room, count 0)
-    if var_max_samples is not None and len(var_labels) > var_max_samples:
-        ## WiMANS is ordered single-user first, so a "first N" cut would drop every multi-user
-        ## sample; draw a fixed-seed random subset instead.
-        var_keep = np.sort(np.random.RandomState(39).choice(len(var_labels), var_max_samples, replace=False))
-        var_labels = [var_labels[var_idx] for var_idx in var_keep]
-        var_sets = [var_sets[var_idx] for var_idx in var_keep]
-    if not var_labels:
-        raise ValueError(f"no WiMANS samples for room {var_room!r}")
-    #
-    var_num = len(var_labels)
-    var_pos = np.zeros((var_num, MAX_USERS, 2), dtype=np.float32)
-    var_mask = np.zeros((var_num, MAX_USERS), dtype=np.float32)
-    for var_idx, var_pts in enumerate(var_sets):
-        var_pts = np.asarray(var_pts, dtype=np.float32).reshape(-1, 2)[:MAX_USERS]
-        if var_pts.size == 0:
-            continue  # empty room: all-zero mask, no position
-        var_pos[var_idx, :len(var_pts)] = var_pts
-        var_mask[var_idx, :len(var_pts)] = 1.0
-    var_pos = normalize_xy_meters(var_pos * 10.0, WIMANS_BOUNDS)  # layout units -> meters -> frame
-    #
-    var_x = np.empty((var_num, var_length, WIMANS_FEATURES), dtype=np.float32)
-    for var_idx, var_label in enumerate(var_labels):
-        var_amp = np.load(os.path.join(var_data_x, var_label + ".npy")).astype(np.float32)
-        ## real WiMANS is (time, 3 TX, 3 RX, 30); a single-link capture such as the simulated
-        ## few-shot dataset is (time, 1, 1, 30) and is broadcast to the 3 x 3 grid first
-        var_amp = harmonize_wimans_antennas(var_amp)
-        ## average the 3 TX antennas -> (time, 3, 30) -> (time, 90)
-        var_amp = var_amp.mean(axis=2).reshape(var_amp.shape[0], -1)
-        var_x[var_idx] = _resample_time(var_amp, var_length)
-    #
-    return var_x, var_pos, var_mask
+    var_mu = var_x.mean(axis=(1, 2), keepdims=True)
+    var_sd = var_x.std(axis=(1, 2), keepdims=True) + 1e-6
+    return ((var_x - var_mu) / var_sd).astype(np.float32)
+
 
 def load_room_wimans(var_room, var_args, var_tag):
     """
     [description]
-    : load one WiMANS room only the single-occupant
-      frames are kept, since the localizer predicts one position.
+    : load one WiMANS room, real ("<room>") or synthetic ("<room><suffix>"), as single-target (X, XY)
+      samples in the transmitter-anchored metric frame; only the single-occupant frames are kept,
+      since the localizer predicts one position. load_wimans_room_targets routes a synthetic key to
+      the simulated source through wimans_room_source (preset["data"]["synth_wimans"]) while keeping
+      its real room's layout and physical frame.
     : return: (X, XY)
     """
     #
     if var_room in wimans_room_names():
-        var_x, var_y = load_wimans_room(var_room)
+        var_x, var_y = load_wimans_room_targets(var_room, var_max_samples=var_args.max_samples,
+                                                var_length=preset["hwild"]["window"])
         if len(var_x) == 0:
             raise ValueError(f"no single-occupant WiMANS frames for {var_room!r}")
         print(f"[{var_tag}]{var_room:12s} X {var_x.shape} XY {var_y.shape} "
@@ -244,8 +211,12 @@ def apply_hp_overrides(var_overrides):
 def run():
     """
     [description]
-    : run few-shot knowledge distillation (train on one env, test on the others). Dispatches to
-      run_density_map_few_shot for the density_map model and run_AMAR_WO_RVQ_few_shot otherwise.
+    : run few-shot knowledge distillation for the room_localizer. The teacher is trained on the
+      --train_rooms rooms (real or synthetic WiMANS), then frozen; the student is warm-started from it
+      and fine-tuned on a --few_shot_ratio fraction of the --support_rooms pool (default: the query
+      rooms) with the supervised Huber position loss plus --kd_weight * a smooth-L1 match to the
+      teacher. Every --test_rooms room is scored on the frames held out of both the support set and
+      the student's validation slice.
     """
     SEED = 103
     random.seed(SEED)
@@ -263,10 +234,6 @@ def run():
     var_model = var_args.model
     var_repeat = var_args.repeat
     var_users = [u.strip() for u in var_args.users.split(',')]
-    var_env = var_args.env
-    var_teacher_epochs = var_args.teacher_epochs
-    if var_teacher_epochs is None:
-        var_teacher_epochs = var_args.epochs
 
     var_train_rooms = ([var_room.strip() for var_room in var_args.train_rooms.split(',')]
                        if var_args.train_rooms else wimans_room_names())
@@ -286,6 +253,9 @@ def run():
     if var_support_rooms and set(var_train_rooms) & set(var_support_rooms):
         raise ValueError(f"train rooms {var_train_rooms} and support rooms {var_support_rooms} "
                          f"overlap")
+    #
+    if var_args.window is not None:
+        preset["hwild"]["window"] = var_args.window
 
     train_sets_by_room, test_sets_by_room, support_sets_by_room = {}, {}, {}
     for var_room in var_train_rooms:
@@ -299,13 +269,38 @@ def run():
             continue
         support_sets_by_room[var_room] = load_room_wimans(var_room, var_args, "support]")
 
+    #
+    ## -------------------------------- shared transmitter frame ---------------------------------
+    ## every room's positions are already meters from the transmitter (preset["layouts"]), so one
+    ## rectangle with a small margin covers them all and every model predicts in the same frame
+    var_all_xy = np.concatenate([var_y for _, var_y in list(train_sets_by_room.values())
+                                 + list(test_sets_by_room.values())
+                                 + list(support_sets_by_room.values())])
+    var_margin = 0.5
+    var_rect = (float(var_all_xy[:, 0].min() - var_margin), float(var_all_xy[:, 0].max() + var_margin),
+                float(var_all_xy[:, 1].min() - var_margin), float(var_all_xy[:, 1].max() + var_margin))
+    print(f"\nTransmitter-anchored frame rectangle (m): x [{var_rect[0]:.2f}, {var_rect[1]:.2f}], "
+          f"y [{var_rect[2]:.2f}, {var_rect[3]:.2f}]  "
+          f"(span {var_rect[1] - var_rect[0]:.2f} x {var_rect[3] - var_rect[2]:.2f} m)")
+    #
+    if var_args.standardize == "window":
+        for var_sets in (train_sets_by_room, test_sets_by_room, support_sets_by_room):
+            for var_room, (var_x, var_y) in var_sets.items():
+                var_sets[var_room] = (standardize_windows(var_x), var_y)
+        print("CSI: per-window z-score (gain/AGC removed)")
+    else:
+        print("CSI: raw amplitude")
+    #
+    for var_sets in (train_sets_by_room, test_sets_by_room, support_sets_by_room):
+        for var_room, (var_x, var_y) in var_sets.items():
+            var_sets[var_room] = (var_x, normalize_xy_meters(var_y, var_rect))
 
     var_pool_sets_by_room = {**test_sets_by_room, **support_sets_by_room}
-    var_save_path = reserve_viz_dir(path=f"few_shot_hwild_to_wimans/{'_'.join(var_train_rooms)}")
+    var_save_path = reserve_viz_dir(path=f"few_shot_wimans_to_wimans/{'_'.join(var_train_rooms)}")
     var_results = run_few_shot_localization(
         train_sets_by_room, var_pool_sets_by_room,
         var_few_shot_ratio=var_args.few_shot_ratio, var_kd_weight=var_args.kd_weight,
-        var_repeat=var_args.repeat, var_teacher_epochs=var_args.teacher_epochs,
+        var_repeat=var_repeat, var_teacher_epochs=var_args.teacher_epochs,
         var_student_epochs=var_args.student_epochs,
         var_init_from_teacher=not var_args.no_init_from_teacher,
         var_bounds=var_rect, save_path=var_save_path,
@@ -314,7 +309,8 @@ def run():
     #
     ## run few-shot distillation
     var_result = {
-        "protocol": "train few-shot KD fine-tune on WiMANS -> test held-out WiMANS",
+        "protocol": ("train few-shot KD fine-tune on WiMANS (real or synthetic) -> test held-out "
+                     "WiMANS"),
         "train_rooms": var_train_rooms,
         "test_rooms": var_test_rooms,
         "support_rooms": (var_support_rooms if var_support_rooms else var_test_rooms),
@@ -322,34 +318,39 @@ def run():
         "few_shot_ratio": var_args.few_shot_ratio,
         "kd_weight": var_args.kd_weight,
         "init_from_teacher": not var_args.no_init_from_teacher,
-        "repeat": var_args.repeat,
+        "repeat": var_repeat,
         "teacher_epochs": (var_args.teacher_epochs if var_args.teacher_epochs is not None
-                           else preset["nn"]["epoch"]),
+                           else preset["hwild"]["epoch"]),
         "student_epochs": (var_args.student_epochs if var_args.student_epochs is not None
-                           else preset["nn"]["epoch"]),
-       
+                           else preset["hwild"]["epoch"]),
+        "window": preset["hwild"]["window"],
+        "max_samples": var_args.max_samples,
         "users": var_users,
         "standardize": var_args.standardize,
         "hp_overrides": var_hp_applied,
-        
+        "tx_frame_rect_m": var_rect,
         "per_env": var_results,
     }
 
-    formatted = format_result(var_model, var_task, var_result, var_args.few_shot_ratio, var_args.kd_weight, var_env)
+    formatted = format_result(var_model, var_task, var_result, var_args.few_shot_ratio,
+                              var_args.kd_weight, join_envs(var_train_rooms))
     ## write the JSON and the human-readable report to auto-named files, so the per-teacher-room and
     ## repeated runs never collide and never need renaming
-    var_stem = build_run_stem(var_model, var_task, f"train-{var_env}",
-                              f"test-{join_envs(list(test_sets_by_env))}", f"k{var_args.few_shot_ratio}",
-                              f"r{var_repeat}", f"e{var_args.epochs}", run_timestamp())
+    var_epochs_tag = (var_args.student_epochs if var_args.student_epochs is not None
+                      else preset["hwild"]["epoch"])
+    var_stem = build_run_stem(var_model, var_task, f"train-{join_envs(var_train_rooms)}",
+                              f"test-{join_envs(var_test_rooms)}", f"k{var_args.few_shot_ratio}",
+                              f"r{var_repeat}", f"e{var_epochs_tag}", run_timestamp())
     var_json_path, var_txt_path = save_run_outputs(
-        preset["path"].get("save_dir", "output"), "few_shot", var_stem, var_result, formatted)
+        preset["path"].get("save_dir", "output"), "few_shot_multi_rooms", var_stem, var_result,
+        formatted)
 
     print(formatted)
     print(f"\nResults saved to: {var_json_path}")
     print(f"Report saved to:  {var_txt_path}")
 
-    # Release the multi-GB per-task arrays before the next task
-    del train_sets_by_room, data_train_y, test_sets_by_env
+    ## release the multi-GB per-room arrays before the process exits
+    del train_sets_by_room, test_sets_by_room, support_sets_by_room
     gc.collect()
 
 
