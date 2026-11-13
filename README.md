@@ -481,16 +481,26 @@ same `--activities`: the pool, and therefore the query frames, depend on the voc
 
 ### 9. Simulated WiMANS data
 
-`dataset/synth_wimans/fewshot-groups-wimans/` (generated with `human-csi-sim`) is a simulated
-WiMANS-format set — one annotation CSV in WiMANS's columns plus `wifi_csi/amp/<label>.npy` per sample.
-Two of its properties differ from real WiMANS and are handled at the data layer, so the set can be
+`dataset/synth_wimans/` (generated with `human-csi-sim`) holds two simulated WiMANS-format sets —
+each one annotation CSV in WiMANS's columns plus `wifi_csi/amp/<label>.npy` per sample, with identical
+groups, trials and placement:
+
+- `fewshot-groups-3x3-wimans/` — `(time, 3, 3, 30)`, WiMANS's antenna geometry. **This is what
+  `preset["data"]["synth_wimans"]` loads by default.**
+- `fewshot-groups-wimans/` — `(time, 1, 1, 30)`, one antenna pair (the 3 x 3 set's middle).
+
+Two of the set's properties differ from real WiMANS and are handled at the data layer, so it can be
 loaded through the same loaders:
 
-- **Antenna geometry.** Its CSI is one antenna pair, `(time, 1, 1, 30)`, where real WiMANS is
-  `(time, 3, 3, 30)`. `src.data.load_data.harmonize_wimans_antennas` broadcasts a single link over the
-  3 x 3 grid, so it loads with the same feature count (270 for the activity pipeline, 90 for the
-  localization one) and no model change. Real WiMANS is returned unchanged. The copies add no channel
-  diversity the source does not have.
+- **Antenna geometry.** The 3 x 3 set matches real WiMANS and loads unchanged. The 1 x 1 set is put
+  on the 3 x 3 grid by `src.data.load_data.harmonize_wimans_antennas`, which broadcasts the single
+  link, so it loads with the same feature count and no model change; the copies add no channel
+  diversity the source does not have. Point the preset's `synth_wimans.data_x`/`data_y` at
+  `fewshot-groups-wimans/` to use it (e.g. `--hp data.synth_wimans.data_x=...`). The localization
+  loaders take either the full 3 x 3 x 30 grid (270 features, for a WiMANS-only run) or one antenna
+  axis averaged (90, H-WILD's layout, needed by the H-WILD -> WiMANS transfer) via
+  `load_wimans_room(_targets)(..., var_antennas="full"/"avg")` (the `--features` flag of
+  `scripts/run_few_shot_multi_rooms.py`).
 - **Activity names.** The simulator labels a sitting occupant `sit`, which the preset vocabulary does
   not name (`sit_down`/`stand_up`). `src.data.activity_transfer.WIMANS_ACTIVITY_ALIASES` maps it to
   `sit_down` (the simulator's action behind it is `sitting`, never standing); without the alias a

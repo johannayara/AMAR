@@ -16,9 +16,11 @@
                 the density-map formulation is built on. Positions are returned padded to MAX_USERS
                 with a 0/1 mask marking the valid entries.
 
-                Feature vectors are made compatible: WiMANS CSI is (time, 3, 3, 30) = 270 values, so
-                the 3 TX antennas are averaged to the 3 x 30 = 90 layout H-WILD uses. WiMANS samples
-                are resampled from their native length to the shared window length.
+                Feature vectors are made compatible with the H-WILD layout when needed: WiMANS CSI is
+                (time, 3, 3, 30) = 270 values, and averaging one antenna axis gives the 3 x 30 = 90
+                layout H-WILD uses, so one model can be trained on H-WILD and evaluated on WiMANS.
+                The full 270-value grid can be kept instead for a WiMANS-only run. WiMANS samples are
+                resampled from their native length to the shared window length.
 """
 #
 ##
@@ -41,7 +43,8 @@ WIMANS_ROOMS = ["empty_room", "meeting_room", "classroom"]
 ## 1000 cm, i.e. 1 unit = 10 m, with the origin at the transmitter.
 WIMANS_EXTENT_M = (5.10, 10.30)
 WIMANS_BOUNDS = (0.0, WIMANS_EXTENT_M[0], 0.0, WIMANS_EXTENT_M[1])
-WIMANS_FEATURES = 90  # 3 antennas x 30 subcarriers after averaging the 3 TX antennas
+WIMANS_FEATURES = 90  # one antenna axis averaged -> 3 x 30 (the H-WILD layout)
+WIMANS_FEATURES_FULL = 270  # the full 3 TX x 3 RX x 30 subcarrier grid
 MAX_USERS = 6         # WiMANS labels up to 6 users; every room's label set is padded to this size
 
 
@@ -112,7 +115,8 @@ def _resample_time(var_x, var_length):
     return resample_poly(var_x, var_length, var_num, axis=0).astype(np.float32)
 
 
-def load_wimans_room(var_room, var_max_samples=None, var_length=None, var_band=None, var_users=None):
+def load_wimans_room(var_room, var_max_samples=None, var_length=None, var_band=None, var_users=None,
+                     var_antennas="avg"):
     """
     [description]
     : load one WiMANS room as multi-user (CSI, position-set) samples. A sample's label set holds the
@@ -125,8 +129,12 @@ def load_wimans_room(var_room, var_max_samples=None, var_length=None, var_band=N
     : var_length: window length in timesteps (defaults to preset["hwild"]["window"])
     : var_max_samples: int or None, cap the number of samples by a fixed-seed random subset
     : var_band: annotation band filter; None (default) uses the room's own source band
-    : return: (X (num_samples, length, 90) float32, POS (num_samples, MAX_USERS, 2) normalized,
-      MASK (num_samples, MAX_USERS) 0/1)
+    : var_antennas: "avg" (default) averages one antenna axis, giving 90 features = H-WILD's (3 x 30)
+      layout, which is what lets one model transfer between the two datasets; "full" keeps the whole
+      (time, 3 TX, 3 RX, 30) grid flattened to 270 features, for a WiMANS-only run where the extra
+      antenna diversity is signal rather than a compatibility cost.
+    : return: (X (num_samples, length, features) float32, POS (num_samples, MAX_USERS, 2) normalized,
+      MASK (num_samples, MAX_USERS) 0/1), features 90 for "avg" / 270 for "full"
     """
     #
     var_length = var_length if var_length is not None else preset["hwild"]["window"]
@@ -162,21 +170,26 @@ def load_wimans_room(var_room, var_max_samples=None, var_length=None, var_band=N
         var_mask[var_idx, :len(var_pts)] = 1.0
     var_pos = normalize_xy_meters(var_pos * 10.0, WIMANS_BOUNDS)  # layout units -> meters -> frame
     #
-    var_x = np.empty((var_num, var_length, WIMANS_FEATURES), dtype=np.float32)
+    if var_antennas not in ("avg", "full"):
+        raise ValueError(f"var_antennas must be 'avg' or 'full'; got {var_antennas!r}")
+    var_features = WIMANS_FEATURES if var_antennas == "avg" else WIMANS_FEATURES_FULL
+    var_x = np.empty((var_num, var_length, var_features), dtype=np.float32)
     for var_idx, var_label in enumerate(var_labels):
         var_amp = np.load(os.path.join(var_data_x, var_label + ".npy")).astype(np.float32)
         ## real WiMANS is (time, 3 TX, 3 RX, 30); a single-link capture such as the simulated
         ## few-shot dataset is (time, 1, 1, 30) and is broadcast to the 3 x 3 grid first
         var_amp = harmonize_wimans_antennas(var_amp)
-        ## average the 3 TX antennas -> (time, 3, 30) -> (time, 90)
-        var_amp = var_amp.mean(axis=2).reshape(var_amp.shape[0], -1)
+        if var_antennas == "avg":
+            ## average one antenna axis -> (time, 3, 30) -> (time, 90), the layout H-WILD uses
+            var_amp = var_amp.mean(axis=2)
+        var_amp = var_amp.reshape(var_amp.shape[0], -1)
         var_x[var_idx] = _resample_time(var_amp, var_length)
     #
     return var_x, var_pos, var_mask
 
 
 def load_wimans_room_targets(var_room, var_max_samples=None, var_length=None, var_band=None,
-                             var_users=None):
+                             var_users=None, var_antennas="avg"):
     """
     [description]
     : load one WiMANS room as single-target (X, XY) samples in the transmitter-anchored metric frame,
@@ -185,12 +198,12 @@ def load_wimans_room_targets(var_room, var_max_samples=None, var_length=None, va
     : The frame is the one preset["layouts"] states: origin at the transmitter, +x right, +y away,
       in meters. That is the same physical frame tx_frame_xy() puts an H-WILD capture in, so a model
       trained on H-WILD can be evaluated on these positions with no per-room re-normalisation.
-    : var_max_samples / var_length / var_band / var_users: as load_wimans_room
-    : return: (X (N, length, 90) float32, Y (N, 2) float32 meters from the transmitter)
+    : var_max_samples / var_length / var_band / var_users / var_antennas: as load_wimans_room
+    : return: (X (N, length, features) float32, Y (N, 2) float32 meters from the transmitter)
     """
     var_x, var_pos, var_mask = load_wimans_room(var_room, var_max_samples=var_max_samples,
                                                 var_length=var_length, var_band=var_band,
-                                                var_users=var_users)
+                                                var_users=var_users, var_antennas=var_antennas)
     var_single = np.where(var_mask.sum(axis=1).round().astype(int) == 1)[0]
     ## var_pos is normalised into WIMANS_BOUNDS, whose origin is the transmitter, so scaling by the
     ## room extent returns meters measured from the transmitter.

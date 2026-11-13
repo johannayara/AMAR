@@ -27,20 +27,21 @@ preset = {
     ## data selection for experiments
     "data": {
         "num_users": ["0","1", "2", "3", "4", "5"] ,   # TODO: fix this number for my app. select number(s) of users, (e.g., ["0", "1"], ["2", "3", "4", "5"])
-        "wifi_band": ["5"],                           # select WiFi band(s) (e.g., ["2.4"], ["5"], ["2.4", "5"])
+        "wifi_band": ["2.4"],                           # select WiFi band(s) (e.g., ["2.4"], ["5"], ["2.4", "5"])
         "environment": ["empty_room", "meeting_room", "classroom"],               # select environment(s) (e.g., ["classroom"], ["meeting_room"], ["empty_room"])
         "length": 3000,                                 # default length of CSI
         ## Optional second WiMANS-format source. When enabled its rooms are appended to the WiMANS
         ## room list as "<room><suffix>" (e.g. classroom_synth), loaded from these paths and band, so
         ## a cross-dataset run can be scored on the real WiMANS rooms alone (enabled false, the
         ## default) or on the real rooms plus the simulated ones. The two sources coexist: the real
-        ## rooms keep preset["path"], and only the simulated keys use this block. The simulated set
-        ## is a single antenna pair; src.data.load_data.harmonize_wimans_antennas puts it on the 3x3
-        ## grid, so it loads with the same feature count as real WiMANS.
+        ## rooms keep preset["path"], and only the simulated keys use this block. The default paths
+        ## point at the 3 TX x 3 RX simulation (fewshot-groups-3x3-wimans), which matches WiMANS's
+        ## antenna geometry and loads unchanged; the 1 x 1 set (fewshot-groups-wimans) can be used
+        ## instead, and src.data.load_data.harmonize_wimans_antennas broadcasts it over the 3x3 grid.
         "synth_wimans": {
             "enabled": False,
-            "data_x": "dataset/synth_wimans/fewshot-groups-wimans/wifi_csi/amp",
-            "data_y": "dataset/synth_wimans/fewshot-groups-wimans/annotation.csv",
+            "data_x": "dataset/synth_wimans/fewshot-groups-3x3-wimans/wifi_csi/amp",
+            "data_y": "dataset/synth_wimans/fewshot-groups-3x3-wimans/annotation.csv",
             "wifi_band": ["2.4"],
             "suffix": "_synth",
         },

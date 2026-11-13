@@ -36,13 +36,17 @@ def parse_args():
     : parse arguments from input
     """
     var_args = argparse.ArgumentParser()
-    var_args.add_argument("--model", default=preset["model"], type=str)
-    var_args.add_argument("--task", default=preset["task"], type=str)
+    var_args.add_argument("--model", default="room_localizer", type=str)
+    var_args.add_argument("--task", default="localization", type=str)
     var_args.add_argument("--repeat", default=preset["repeat"], type=int)
     var_args.add_argument("--users", default="0,1,2,3,4,5", type=str, help="Comma-separated list of user IDs")
     var_args.add_argument("--window", default=None, type=int, help="window length in packets")
     var_args.add_argument("--max_samples", default=None, type=int,
                           help="cap the WiMANS samples drawn per room (quick runs / smoke tests)")
+    var_args.add_argument("--features", default="full", choices=("avg", "full"),
+                          help="'full' (default) keeps the whole (time, 3 TX, 3 RX, 30) CSI grid as 270 "
+                               "features; 'avg' averages one antenna axis to 90, matching the H-WILD "
+                               "layout the cross-dataset (H-WILD -> WiMANS) runs need")
     var_args.add_argument("--no_compile", action="store_true", help="disable torch.compile of the feature extractors")
     var_args.add_argument("--train_rooms", default=None, type=str,
                           help="comma-separated teacher rooms (default: every WiMANS room, real and "
@@ -143,13 +147,15 @@ def load_room_wimans(var_room, var_args, var_tag):
       samples in the transmitter-anchored metric frame; only the single-occupant frames are kept,
       since the localizer predicts one position. load_wimans_room_targets routes a synthetic key to
       the simulated source through wimans_room_source (preset["data"]["synth_wimans"]) while keeping
-      its real room's layout and physical frame.
+      its real room's layout and physical frame. --features picks the CSI layout: 270 (full 3 x 3
+      grid, the default for this WiMANS-only run) or 90 (one antenna axis averaged).
     : return: (X, XY)
     """
     #
     if var_room in wimans_room_names():
         var_x, var_y = load_wimans_room_targets(var_room, var_max_samples=var_args.max_samples,
-                                                var_length=preset["hwild"]["window"])
+                                                var_length=preset["hwild"]["window"],
+                                                var_antennas=var_args.features)
         if len(var_x) == 0:
             raise ValueError(f"no single-occupant WiMANS frames for {var_room!r}")
         print(f"[{var_tag}]{var_room:12s} X {var_x.shape} XY {var_y.shape} "
@@ -325,6 +331,7 @@ def run():
                            else preset["hwild"]["epoch"]),
         "window": preset["hwild"]["window"],
         "max_samples": var_args.max_samples,
+        "features": var_args.features,
         "users": var_users,
         "standardize": var_args.standardize,
         "hp_overrides": var_hp_applied,
