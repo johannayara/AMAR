@@ -2,10 +2,8 @@
 [file]          run_few_shot_multi_rooms.py
 [description]   Few-shot knowledge distillation runner for room_localizer with wimans rooms.
 
-                Trains on a single environment (--env) and tests on every other environment listed
-                in preset["data"]["environment"]. The teacher is trained on the full training
-                environment; the student is trained on a small fraction (--few_shot_ratio) of that
-                same environment while being distilled from the frozen teacher.
+                The teacher is trained on the training rooms; the student is trained on support rooms or a 
+                small fraction of test rooms while being distilled from the frozen teacher.
 """
 #
 ##
@@ -119,6 +117,62 @@ def format_result(var_model, var_task, result, var_few_shot_ratio, var_kd_weight
                                  f"± {stats[f'se_{metric}']:.4f} (SE)")
     return "\n".join(lines)
 
+def load_wimans_room(var_room):
+    """
+    [description]
+    : load one WiMANS room as multi-user (CSI, position-set) samples. A sample's label set holds the
+      occupied discrete locations, one per user, in the room's [0, 1]^2 frame; an empty-room sample
+      (count 0) is kept with an all-zero mask, so "no person" is a valid target.
+    : var_room: name of the room.
+    : return: (X (num_samples, length, 90) float32, POS (num_samples, MAX_USERS, 2) normalized,
+      MASK (num_samples, MAX_USERS) 0/1)
+    """
+    #
+    var_length = var_length if var_length is not None else preset["hwild"]["window"]
+    var_users = var_users if var_users is not None else preset["data"]["num_users"]
+    var_base, var_data_x, var_data_y, var_source_band = wimans_room_source(var_room)
+    var_band = list(var_band) if var_band is not None else var_source_band
+    var_pd = load_data_y(var_data_y, [var_base], var_band, var_users)
+    var_layout = preset["layouts"][var_base]
+    var_cols = [f"user_{var_idx}_location" for var_idx in range(1, 7)]
+    #
+    var_labels, var_sets = [], []
+    for _, var_row in var_pd.iterrows():
+        var_pts = [var_layout[var_row[var_col]] for var_col in var_cols if var_row[var_col] in var_layout]
+        var_labels.append(var_row["label"])
+        var_sets.append(var_pts)  # may be empty (empty room, count 0)
+    if var_max_samples is not None and len(var_labels) > var_max_samples:
+        ## WiMANS is ordered single-user first, so a "first N" cut would drop every multi-user
+        ## sample; draw a fixed-seed random subset instead.
+        var_keep = np.sort(np.random.RandomState(39).choice(len(var_labels), var_max_samples, replace=False))
+        var_labels = [var_labels[var_idx] for var_idx in var_keep]
+        var_sets = [var_sets[var_idx] for var_idx in var_keep]
+    if not var_labels:
+        raise ValueError(f"no WiMANS samples for room {var_room!r}")
+    #
+    var_num = len(var_labels)
+    var_pos = np.zeros((var_num, MAX_USERS, 2), dtype=np.float32)
+    var_mask = np.zeros((var_num, MAX_USERS), dtype=np.float32)
+    for var_idx, var_pts in enumerate(var_sets):
+        var_pts = np.asarray(var_pts, dtype=np.float32).reshape(-1, 2)[:MAX_USERS]
+        if var_pts.size == 0:
+            continue  # empty room: all-zero mask, no position
+        var_pos[var_idx, :len(var_pts)] = var_pts
+        var_mask[var_idx, :len(var_pts)] = 1.0
+    var_pos = normalize_xy_meters(var_pos * 10.0, WIMANS_BOUNDS)  # layout units -> meters -> frame
+    #
+    var_x = np.empty((var_num, var_length, WIMANS_FEATURES), dtype=np.float32)
+    for var_idx, var_label in enumerate(var_labels):
+        var_amp = np.load(os.path.join(var_data_x, var_label + ".npy")).astype(np.float32)
+        ## real WiMANS is (time, 3 TX, 3 RX, 30); a single-link capture such as the simulated
+        ## few-shot dataset is (time, 1, 1, 30) and is broadcast to the 3 x 3 grid first
+        var_amp = harmonize_wimans_antennas(var_amp)
+        ## average the 3 TX antennas -> (time, 3, 30) -> (time, 90)
+        var_amp = var_amp.mean(axis=2).reshape(var_amp.shape[0], -1)
+        var_x[var_idx] = _resample_time(var_amp, var_length)
+    #
+    return var_x, var_pos, var_mask
+
 def load_room_wimans(var_room, var_args, var_tag):
     """
     [description]
@@ -128,8 +182,7 @@ def load_room_wimans(var_room, var_args, var_tag):
     """
     #
     if var_room in wimans_room_names():
-        var_x, var_y = load_wimans_room_targets(var_room, var_max_samples=var_args.max_samples,
-                                                var_length=preset["hwild"]["window"])
+        var_x, var_y = load_wimans_room(var_room)
         if len(var_x) == 0:
             raise ValueError(f"no single-occupant WiMANS frames for {var_room!r}")
         print(f"[{var_tag}]{var_room:12s} X {var_x.shape} XY {var_y.shape} "
@@ -194,7 +247,7 @@ def run():
     : run few-shot knowledge distillation (train on one env, test on the others). Dispatches to
       run_density_map_few_shot for the density_map model and run_AMAR_WO_RVQ_few_shot otherwise.
     """
-    SEED = 103  # Ensuring the results are reproducible
+    SEED = 103
     random.seed(SEED)
     np.random.seed(SEED)
     torch.manual_seed(SEED)
@@ -204,9 +257,7 @@ def run():
         torch.backends.cudnn.benchmark = False
 
     #
-    ## parse arguments from input
     var_args = parse_args()
-    #
     var_hp_applied = apply_hp_overrides(var_args.hp)
     var_task = var_args.task
     var_model = var_args.model
@@ -236,8 +287,6 @@ def run():
         raise ValueError(f"train rooms {var_train_rooms} and support rooms {var_support_rooms} "
                          f"overlap")
 
-    var_load_kwargs = {"var_root": var_args.data_root, "var_users": var_users,
-                       "var_interference": var_interference, "var_max_files": var_args.max_files}
     train_sets_by_room, test_sets_by_room, support_sets_by_room = {}, {}, {}
     for var_room in var_train_rooms:
         train_sets_by_room[var_room] = load_room_wimans(var_room, var_args, "train] ")
@@ -305,7 +354,6 @@ def run():
 
 
 if __name__ == "__main__":
-
-    start_time = time.time()
+    var_start = time.time()
     run()
-    print("Total time: %s seconds" % (time.time() - start_time))
+    print("Total time: %s seconds" % (time.time() - var_start))
