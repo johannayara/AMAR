@@ -635,7 +635,7 @@ def run_few_shot_localization(hwild_sets_by_room, wimans_sets_by_room, var_few_s
                               var_kd_weight=1.0, var_repeat=3, var_teacher_epochs=None,
                               var_student_epochs=None, var_init_from_teacher=True, var_bounds=None,
                               save_path="./visualizations/few_shot_localization",
-                              var_support_rooms=None, var_query_rooms=None):
+                              var_support_rooms=None, var_query_rooms=None, var_model_factory=None):
     """
     [description]
     : H-WILD -> WiMANS few-shot localization by knowledge distillation.
@@ -666,10 +666,14 @@ def run_few_shot_localization(hwild_sets_by_room, wimans_sets_by_room, var_few_s
     : var_teacher_epochs / var_student_epochs: default preset["hwild"]["epoch"]
     : var_init_from_teacher: warm-start the student from the teacher's weights (standard KD init)
     : var_bounds: (x0, x1, y0, y1) of the shared frame in meters
+    : var_model_factory: callable taking the CSI window shape (time, features) and returning the
+      localizer module. None (default) builds RoomLocalizer. This is what lets a caller swap the
+      backbone (e.g. src.models.resnet1d.ResNet1DLocalizer) without touching the training or metric code.
     : return: dict with per-room student/teacher/baseline metrics
     """
     #
     device = select_device()
+    var_build_model = var_model_factory if var_model_factory is not None else RoomLocalizer
     print(f"Using device: {device}")
     if var_teacher_epochs is None:
         var_teacher_epochs = preset["hwild"]["epoch"]
@@ -762,7 +766,7 @@ def run_few_shot_localization(hwild_sets_by_room, wimans_sets_by_room, var_few_s
     wandb.init(project="few_shot_localization", name=f"teacher_kd{var_kd_weight}", config=preset,
                reinit=True)
     torch.random.manual_seed(39)
-    var_teacher = RoomLocalizer(var_x_shape).to(device)
+    var_teacher = var_build_model(var_x_shape).to(device)
     var_teacher_opt = torch.optim.Adam(var_teacher.parameters(), lr=preset["hwild"]["lr"],
                                        weight_decay=preset["hwild"]["weight_decay"])
     var_teacher_weight, _ = train_room_localizer(
@@ -787,7 +791,7 @@ def run_few_shot_localization(hwild_sets_by_room, wimans_sets_by_room, var_few_s
         wandb.init(project="few_shot_localization",
                    name=f"FewShotLoc{var_r}_kd{var_kd_weight}", config=preset, reinit=True)
         torch.random.manual_seed(var_r + 39)
-        var_student = RoomLocalizer(var_x_shape).to(device)
+        var_student = var_build_model(var_x_shape).to(device)
         if var_init_from_teacher:
             var_student.load_state_dict(var_teacher.state_dict())
         var_student_opt = torch.optim.Adam(var_student.parameters(), lr=preset["hwild"]["lr"],

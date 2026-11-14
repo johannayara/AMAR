@@ -23,7 +23,9 @@ from configs.preset import preset
 from src.data.hwild import room_names as hwild_room_names, load_hwild_room, HWILD_ROOMS
 from src.data.unified_rooms import (load_wimans_room_targets, normalize_xy_meters,
                                     wimans_room_names)
-from src.models.room_localization import run_few_shot_localization, format_few_shot_result
+from src.models.room_localization import (RoomLocalizer, run_few_shot_localization,
+                                          format_few_shot_result)
+from src.models.resnet1d import ResNet1DLocalizer
 from src.utils import save_run_outputs, build_run_stem, join_envs, run_timestamp, reserve_viz_dir
 
 #
@@ -36,8 +38,13 @@ def parse_args():
     : parse arguments from input
     """
     var_args = argparse.ArgumentParser()
-    var_args.add_argument("--model", default="room_localizer", type=str)
+    var_args.add_argument("--model", default=None, type=str,
+                          help="run label (default: room_localizer-<backbone>)")
     var_args.add_argument("--task", default="localization", type=str)
+    var_args.add_argument("--backbone", default="resnet1d", choices=("that", "resnet1d"),
+                          help="localizer backbone. 'resnet1d' (default) is a small 1D ResNet over the "
+                               "CSI window (src/models/resnet1d.py); 'that' is the WiMANS THAT backbone "
+                               "that RoomLocalizer uses")
     var_args.add_argument("--repeat", default=preset["repeat"], type=int)
     var_args.add_argument("--users", default="0,1,2,3,4,5", type=str, help="Comma-separated list of user IDs")
     var_args.add_argument("--window", default=None, type=int, help="window length in packets")
@@ -83,7 +90,11 @@ def parse_args():
 def format_result(var_model, var_task, result, var_few_shot_ratio, var_kd_weight, var_env):
     """
     [description]
-    : build a formatted string of the per-environment results
+    : build a formatted string of the per-room few-shot localization results.
+    : result: what run_few_shot_localization returns -- room -> metric dict, with avg_/se_ prefixed
+      student, teacher and constant-baseline mean/RMSE/median error in meters and occupancy accuracy.
+      (This runner only ever builds a localization task, so the density-map branches an earlier
+      copy-paste carried are gone.)
     """
     lines = []
     lines.append("=" * 80)
@@ -91,39 +102,38 @@ def format_result(var_model, var_task, result, var_few_shot_ratio, var_kd_weight
     lines.append(f"Train env: {var_env} | Few-shot ratio: {var_few_shot_ratio} | KD weight: {var_kd_weight}")
     lines.append("=" * 80)
     lines.append("PER_ENV_RESULTS:")
-    for env_name in sorted(k for k in result.keys()
-                           if isinstance(result[k], dict) and "avg_accuracy" in result[k]):
+    for env_name in sorted(result):
         stats = result[env_name]
         lines.append(f"\n{env_name.upper()}:")
-        if "avg_mae" in stats:
-            ## density-map group-count metrics
-            lines.append(f"  Avg Exact-count Accuracy: {stats['avg_accuracy']:.4f} "
-                         f"± {stats['se_accuracy']:.4f} (SE)")
-            if "avg_balanced_accuracy" in stats:
-                lines.append(f"  Avg Balanced-count Accuracy: {stats['avg_balanced_accuracy']:.4f} "
-                             f"± {stats['se_balanced_accuracy']:.4f} (SE)")
-            lines.append(f"  Avg Count MAE: {stats['avg_mae']:.4f} ± {stats['se_mae']:.4f} (SE)")
-            lines.append(f"  Avg Occupancy Accuracy: {stats['avg_occupancy_accuracy']:.4f} "
-                         f"± {stats['se_occupancy_accuracy']:.4f} (SE)")
-            lines.append(f"  Avg Occupancy F1: {stats['avg_occupancy_f1']:.4f} "
-                         f"± {stats['se_occupancy_f1']:.4f} (SE)")
-            if "avg_mass_accuracy" in stats:
-                lines.append(f"  Avg Layout-free Mass Accuracy: {stats['avg_mass_accuracy']:.4f} "
-                             f"± {stats['se_mass_accuracy']:.4f} (SE)")
-                lines.append(f"  Avg Layout-free Mass MAE: {stats['avg_mass_mae']:.4f} "
-                             f"± {stats['se_mass_mae']:.4f} (SE)")
-                lines.append(f"  Avg Position Error (m): {stats['avg_position_error_m']:.4f} "
-                             f"± {stats['se_position_error_m']:.4f} (SE)")
-                lines.append(f"  Avg Position Miss Rate: {stats['avg_position_miss_rate']:.4f} "
-                             f"± {stats['se_position_miss_rate']:.4f} (SE)")
-        else:
-            for metric, label in (("precision", "Precision"), ("recall", "Recall"),
-                                  ("PPP", "Perfect Prediction %"), ("f1_score", "F1 Score"),
-                                  ("accuracy", "Accuracy"), ("total_error", "Total Error")):
-                if f"avg_{metric}" in stats:
-                    lines.append(f"  Avg {label}: {stats[f'avg_{metric}']:.4f} "
-                                 f"± {stats[f'se_{metric}']:.4f} (SE)")
+        for var_tag, var_label in (("student", "Student"),
+                                   ("teacher", "Teacher (frozen, no fine-tuning)")):
+            if f"avg_{var_tag}_mean_error_m" not in stats:
+                continue
+            lines.append(f"  {var_label} MDE: {stats[f'avg_{var_tag}_mean_error_m']:.4f} "
+                         f"± {stats[f'se_{var_tag}_mean_error_m']:.4f} m (SE) | "
+                         f"RMSE {stats[f'avg_{var_tag}_rmse_m']:.4f} "
+                         f"± {stats[f'se_{var_tag}_rmse_m']:.4f} m (SE) | "
+                         f"Median {stats[f'avg_{var_tag}_median_error_m']:.4f} "
+                         f"± {stats[f'se_{var_tag}_median_error_m']:.4f} m (SE)")
+            lines.append(f"  {var_label} Occupancy Accuracy: "
+                         f"{stats[f'avg_{var_tag}_occupancy_accuracy']:.4f} "
+                         f"± {stats[f'se_{var_tag}_occupancy_accuracy']:.4f} (SE)")
+        if "avg_const_mean_error_m" in stats:
+            lines.append(f"  Constant MDE: {stats['avg_const_mean_error_m']:.4f} m | "
+                         f"RMSE {stats['avg_const_rmse_m']:.4f} m | "
+                         f"Median {stats['avg_const_median_error_m']:.4f} m | "
+                         f"OccAcc {stats['avg_const_occupancy_accuracy']:.4f}  "
+                         f"(mean support position; beat this to show the few-shot step learned anything)")
     return "\n".join(lines)
+
+def localizer_factory(var_backbone):
+    """
+    [description]
+    : resolve --backbone to the localizer class run_few_shot_localization builds. Both classes share the
+      (batch, time, features) -> (batch, 2) contract, so nothing else in the runner changes.
+    """
+    return ResNet1DLocalizer if var_backbone == "resnet1d" else RoomLocalizer
+
 
 def standardize_windows(var_x):
     """
@@ -237,7 +247,7 @@ def run():
     var_args = parse_args()
     var_hp_applied = apply_hp_overrides(var_args.hp)
     var_task = var_args.task
-    var_model = var_args.model
+    var_model = var_args.model or f"room_localizer-{var_args.backbone}"
     var_repeat = var_args.repeat
     var_users = [u.strip() for u in var_args.users.split(',')]
 
@@ -310,13 +320,16 @@ def run():
         var_student_epochs=var_args.student_epochs,
         var_init_from_teacher=not var_args.no_init_from_teacher,
         var_bounds=var_rect, save_path=var_save_path,
-        var_support_rooms=var_support_rooms, var_query_rooms=var_test_rooms)
+        var_support_rooms=var_support_rooms, var_query_rooms=var_test_rooms,
+        var_model_factory=localizer_factory(var_args.backbone))
 
     #
     ## run few-shot distillation
     var_result = {
         "protocol": ("train few-shot KD fine-tune on WiMANS (real or synthetic) -> test held-out "
                      "WiMANS"),
+        "model": var_model,
+        "task": var_task,
         "train_rooms": var_train_rooms,
         "test_rooms": var_test_rooms,
         "support_rooms": (var_support_rooms if var_support_rooms else var_test_rooms),
@@ -332,6 +345,7 @@ def run():
         "window": preset["hwild"]["window"],
         "max_samples": var_args.max_samples,
         "features": var_args.features,
+        "backbone": var_args.backbone,
         "users": var_users,
         "standardize": var_args.standardize,
         "hp_overrides": var_hp_applied,
@@ -339,7 +353,7 @@ def run():
         "per_env": var_results,
     }
 
-    formatted = format_result(var_model, var_task, var_result, var_args.few_shot_ratio,
+    formatted = format_result(var_model, var_task, var_results, var_args.few_shot_ratio,
                               var_args.kd_weight, join_envs(var_train_rooms))
     ## write the JSON and the human-readable report to auto-named files, so the per-teacher-room and
     ## repeated runs never collide and never need renaming
