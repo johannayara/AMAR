@@ -42,9 +42,10 @@ def parse_args():
                           help="run label (default: room_localizer-<backbone>)")
     var_args.add_argument("--task", default="localization", type=str)
     var_args.add_argument("--backbone", default="resnet1d", choices=("that", "resnet1d"),
-                          help="localizer backbone. 'resnet1d' (default) is a small 1D ResNet over the "
-                               "CSI window (src/models/resnet1d.py); 'that' is the WiMANS THAT backbone "
-                               "that RoomLocalizer uses")
+                          help="which localizer to build. Each choice is a complete model, backbone plus "
+                               "its own regression head: 'resnet1d' (default) is ResNet1DLocalizer over "
+                               "the CSI window (src/models/resnet1d.py); 'that' is RoomLocalizer with the "
+                               "WiMANS THAT backbone")
     var_args.add_argument("--repeat", default=preset["repeat"], type=int)
     var_args.add_argument("--users", default="0,1,2,3,4,5", type=str, help="Comma-separated list of user IDs")
     var_args.add_argument("--window", default=None, type=int, help="window length in packets")
@@ -129,8 +130,9 @@ def format_result(var_model, var_task, result, var_few_shot_ratio, var_kd_weight
 def localizer_factory(var_backbone):
     """
     [description]
-    : resolve --backbone to the localizer class run_few_shot_localization builds. Both classes share the
-      (batch, time, features) -> (batch, 2) contract, so nothing else in the runner changes.
+    : resolve --backbone to the localizer class run_few_shot_localization builds. Both classes are
+      complete models (backbone + its own head) and share only the (batch, time, features) -> (batch, 2)
+      contract, so nothing else in the runner changes.
     """
     return ResNet1DLocalizer if var_backbone == "resnet1d" else RoomLocalizer
 

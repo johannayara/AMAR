@@ -17,8 +17,9 @@
                 Its parallel activity head and its softmax-over-locations head are not reproduced: the
                 localization runner regresses one position in a per-run shared [0, 1]^2 frame so a model
                 can be scored on rooms it never trained on (src/models/room_localization.py), which a
-                fixed per-room location vocabulary cannot express. The head here is a small MLP to
-                (x, y), so it is interchangeable with RoomLocalizer.
+                fixed per-room location vocabulary cannot express. The head here is its own small MLP to
+                (x, y), paired with the ResNet1D backbone; the two localizers only share the
+                (batch, time, features) -> (batch, 2) contract, not the head.
 
                 Purpose: a small, well-known CSI architecture to test whether the THAT backbone's
                 collapse to the mean position (see scripts/test_scripts/diagnose_localizer_fit.py) is a
@@ -27,7 +28,6 @@
 #
 ##
 
-import torch
 import torch.nn as nn
 
 #
@@ -117,8 +117,9 @@ class ResNet1DLocalizer(nn.Module):
     """
     [description]
     : RoomLocalizer-shaped wrapper: the same (batch, time, features) -> (batch, 2) contract, so
-      src.models.room_localization.run_few_shot_localization can build either backbone through its
-      var_model_factory without touching the training or the metric code.
+      src.models.room_localization.run_few_shot_localization can build either localizer through its
+      var_model_factory without touching the training or the metric code. Its own head is paired with
+      the ResNet1D backbone.
     : var_x_shape: (time, features) of one CSI window
     """
     #

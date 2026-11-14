@@ -16,7 +16,11 @@ start=$(date +%s)
 echo "Start: $(date)"
 export WANDB_MODE=offline 
 export AMAR_ENCODER_NORM=group
+## --backbone selects the localizer: 'resnet1d' (default, src/models/resnet1d.py) or 'that' (the WiMANS
+## THAT backbone RoomLocalizer uses). AMAR_ENCODER_NORM only affects the THAT encoder, so it is a no-op
+## for resnet1d.
 python scripts/run_few_shot_multi_rooms.py \
+  --backbone resnet1d \
   --train_rooms "meeting_room_synth, classroom_synth, empty_room_synth" \
   --test_rooms "meeting_room, empty_room" \
   --support_rooms classroom --repeat 3 \
