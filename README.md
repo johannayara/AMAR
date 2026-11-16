@@ -204,8 +204,8 @@ Positions live in a fixed per-room `[0, 1]^2` frame built from the dataset's own
 (`src/data/hwild.py`, transcribed from `obtain_parameters.m`), so a model trained on some rooms
 predicts normalized coordinates that denormalize to meters in any room. Per-room metrics, prediction
 scatters and a training-curve plot are written under `visualizations/hwild/`, and the JSON/TXT report
-under `output/hwild/`. The per-room `predictions_<room>.png` puts the training rooms' positions (grey
-prior cloud), the ground truth, the prediction and the **constant (mean training position) baseline** in
+under `output/hwild/`. The per-room `predictions_<room>.png` puts the training rooms' positions (a prior
+cloud), the ground truth, the prediction and the **constant (mean training position) baseline** in
 one figure, so the constant the report prints as an error is also visible as a point, and a prediction
 cloud sitting on the prior says the model learned the training rooms and nothing else. Each test room
 also gets the standard performance figures
@@ -269,7 +269,7 @@ room (`predictions_<room>.png`): the true and the predicted WiMANS location posi
 transmitter, one marker per occupied location per frame, plus a **constant-baseline marker** — the
 occurrence-weighted mean of the training rooms' locations, placed in the test room's layout, i.e. the
 point "always predict the average location" lands on — and, drawn underneath, the **training prior**:
-the training rooms' locations as a grey cloud (`location_prior_positions`, one row per training
+the training rooms' locations as a cloud (`location_prior_positions`, one row per training
 frame × location, scaled down when it would be huge), so the same figure answers "do the predictions
 sit on the training rooms' prior?" without a second plot. That makes the reference the reports print as a
 number visible against the prediction cloud. It is
@@ -313,7 +313,7 @@ python scripts/run_hwild_to_wimans.py --backbone resnet1d --repeat 2 --epochs 40
 
 `--backbone that|resnet1d` selects the localizer the `localizer` model trains (see §3); the run's JSON
 records the choice, and the per-room `predictions_<room>.png` scatter shows where the predictions land
-rather than only their error — the training rooms' positions as a grey prior cloud underneath, true,
+rather than only their error — the training rooms' positions as a prior cloud underneath, true,
 predicted and the constant (mean training position) baseline in one figure, so "does not beat the
 constant" is visible and not only printed.
 

@@ -16,8 +16,9 @@ LOCATION_SIZE = 5
 ACTIVITY_SIZE = 9
 MAX_NB_PEOPLE = 6
 GT_COLOR = "#F06595"    
-PRED_COLOR = "#66D9E8" 
-CONST_COLOR = "#B0413E"     # the constant-baseline marker; also the y = x line of the count scatter
+PRED_COLOR = "#20B8CF"     # darker cyan than the original #66D9E8: at alpha 0.5 the light one washed out
+CONST_COLOR = "#6e3eb0" 
+PRIOR_COLOR = "#32a852"     
 CMAP = "cool" 
 
 def load_model_components(model, load_path, lr, scenario="full", device=None):
@@ -500,9 +501,6 @@ def performance_metrics_joint_multiSensX(y_true_act, y_pred_act, y_true_loc, y_p
     return act_metrics, loc_metrics
 
 def performance_metrics_joint(y_true_act, y_pred_act, y_true_loc, y_pred_loc):
-
-    ### This function should be integrated to main performance metrics function. The method involve
-    ### in changing the main function so that it returns the two metrics.
     # Ensure inputs are numpy arrays
     y_true_act = np.array(y_true_act)
     y_pred_act = np.array(y_pred_act)
@@ -837,7 +835,9 @@ def visualize_model_performance(y_pred, y_true, save_dir="./visualizations",
 
         lo = min(yt.min(), yp.min()) - 0.5
         hi = max(yt.max(), yp.max()) + 0.5
-        ax.plot([lo, hi], [lo, hi], linestyle='--', color='#B0413E', linewidth=1.2, label='y = x')
+        ## the reference line shares the constant-baseline colour: on this figure the trivial "no
+        ## error" answer and on the position scatter the trivial "always predict the average" answer
+        ax.plot([lo, hi], [lo, hi], linestyle='--', color=CONST_COLOR, linewidth=1.2, label='y = x')
         ax.set_xlim(lo, hi)
         ax.set_ylim(lo, hi)
         ax.set_title(class_names[i])
@@ -991,7 +991,7 @@ def visualize_location_position_scatter(var_true_pos, var_pred_pos, var_room, va
       one marker per distinct point: it predicts the same thing for every frame, so its cloud is the
       point the model has to move away from. None = not drawn.
     : var_prior_pos: (M, 2) positions of the data the model was trained on (see
-      location_prior_positions), drawn as a grey cloud *under* the predictions: where the model's
+      location_prior_positions), drawn as a cloud *under* the predictions: where the model's
       predictions sit on it, it has learned the training rooms' prior rather than the transfer. None =
       not drawn.
     : return: path of the written predictions_<room>.png
@@ -1002,18 +1002,17 @@ def visualize_location_position_scatter(var_true_pos, var_pred_pos, var_room, va
     var_pred_pos = np.asarray(var_pred_pos, dtype=float).reshape(-1, 2)
     var_series = []
     if var_prior_pos is not None:
-        var_series.append((np.asarray(var_prior_pos, dtype=float).reshape(-1, 2), "0.45",
-                           var_prior_label, "o", 10, 0.25))
+        var_series.append((np.asarray(var_prior_pos, dtype=float).reshape(-1, 2), PRIOR_COLOR,
+                           var_prior_label, "s", 12, 0.5))
     var_series += [(var_true_pos, GT_COLOR, "true", "o", 12, 0.5),
-                   (var_pred_pos, PRED_COLOR, "pred", "o", 12, 0.5)]
+                   (var_pred_pos, PRED_COLOR, "pred", "^", 16, 0.6)]
     if var_const_pos is not None:
-        ## a constant emitter's cloud is one point however many frames it was scored on, so the
-        ## duplicates are dropped rather than drawn on top of each other
+        # duplicates are dropped rather than drawn on top of each other
         var_const_pos = np.unique(np.asarray(var_const_pos, dtype=float).reshape(-1, 2), axis=0)
         var_series.append((var_const_pos, CONST_COLOR, var_const_label, "X", 150, 0.9))
     #
     os.makedirs(str(var_save_dir), exist_ok=True)
-    var_fig, var_ax = plt.subplots(figsize=(6, 6))
+    var_fig, var_ax = plt.subplots(figsize=(7.4, 6))
     for var_pos, var_color, var_label, var_marker, var_size, var_alpha in var_series:
         if len(var_pos) == 0:
             continue
@@ -1030,10 +1029,13 @@ def visualize_location_position_scatter(var_true_pos, var_pred_pos, var_room, va
     var_ax.set_xlabel("x (m)")
     var_ax.set_ylabel("y (m)")
     var_ax.set_title(f"{var_room} - true vs predicted locations")
-    var_ax.legend(loc="upper right")
+    ## the legend sits beside the axes, not inside them: the upper-right corner of the room is where a
+    ## model that has not transferred piles its predictions, and the box would cover exactly those
+    var_ax.legend(loc="upper left", bbox_to_anchor=(1.02, 1.0), borderaxespad=0.0)
     var_path = os.path.join(str(var_save_dir), f"predictions_{var_room}.png")
     var_fig.tight_layout()
-    var_fig.savefig(var_path, dpi=120)
+    ## bbox_inches="tight" grows the saved canvas to the legend, which tight_layout does not account for
+    var_fig.savefig(var_path, dpi=120, bbox_inches="tight")
     plt.close(var_fig)
     return var_path
 
