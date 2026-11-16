@@ -1,0 +1,19 @@
+================================================================================
+EXPERIMENT RESULTS - Model: room_localizer-resnet1d, Task: localization
+Train env: meeting_room_synth+classroom_synth+empty_room_synth | Few-shot ratio: 0.1 | KD weight: 0.0
+================================================================================
+PER_ENV_RESULTS:
+
+EMPTY_ROOM:
+  Student MDE: 2.0245 ± 0.0037 m (SE) | RMSE 2.2077 ± 0.0241 m (SE) | Median 2.0701 ± 0.0836 m (SE)
+  Student Occupancy Accuracy: 0.0455 ± 0.0114 (SE)
+  Teacher (frozen, no fine-tuning) MDE: 1.9730 ± 0.0000 m (SE) | RMSE 2.1576 ± 0.0000 m (SE) | Median 2.0833 ± 0.0000 m (SE)
+  Teacher (frozen, no fine-tuning) Occupancy Accuracy: 0.0417 ± 0.0000 (SE)
+  Constant MDE: 1.7554 m | RMSE 1.9193 m | Median 2.0677 m | OccAcc 0.2027  (mean support position; beat this to show the few-shot step learned anything)
+
+MEETING_ROOM:
+  Student MDE: 2.3458 ± 0.0208 m (SE) | RMSE 2.5682 ± 0.0468 m (SE) | Median 2.3984 ± 0.0966 m (SE)
+  Student Occupancy Accuracy: 0.0505 ± 0.0163 (SE)
+  Teacher (frozen, no fine-tuning) MDE: 2.2978 ± 0.0000 m (SE) | RMSE 2.5339 ± 0.0000 m (SE) | Median 2.4465 ± 0.0000 m (SE)
+  Teacher (frozen, no fine-tuning) Occupancy Accuracy: 0.0647 ± 0.0000 (SE)
+  Constant MDE: 2.2225 m | RMSE 2.3875 m | Median 2.5376 m | OccAcc 0.1941  (mean support position; beat this to show the few-shot step learned anything)

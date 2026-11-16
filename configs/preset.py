@@ -30,14 +30,9 @@ preset = {
         "wifi_band": ["2.4"],                           # select WiFi band(s) (e.g., ["2.4"], ["5"], ["2.4", "5"])
         "environment": ["empty_room", "meeting_room", "classroom"],               # select environment(s) (e.g., ["classroom"], ["meeting_room"], ["empty_room"])
         "length": 3000,                                 # default length of CSI
-        ## Optional second WiMANS-format source. When enabled its rooms are appended to the WiMANS
-        ## room list as "<room><suffix>" (e.g. classroom_synth), loaded from these paths and band, so
-        ## a cross-dataset run can be scored on the real WiMANS rooms alone (enabled false, the
-        ## default) or on the real rooms plus the simulated ones. The two sources coexist: the real
-        ## rooms keep preset["path"], and only the simulated keys use this block. The default paths
-        ## point at the 3 TX x 3 RX simulation (fewshot-groups-3x3-wimans), which matches WiMANS's
-        ## antenna geometry and loads unchanged; the 1 x 1 set (fewshot-groups-wimans) can be used
-        ## instead, and src.data.load_data.harmonize_wimans_antennas broadcasts it over the 3x3 grid.
+        ## Optional second WiMANS-format source. When enabled its rooms are appended to the WiMANS. The simulated set
+        ## is a single antenna pair; on the 3x3
+        ## grid, so it loads with the same feature count as real WiMANS.
         "synth_wimans": {
             "enabled": False,
             "data_x": "dataset/synth_wimans/fewshot-groups-3x3-wimans/wifi_csi/amp",
@@ -58,9 +53,8 @@ preset = {
     ## hyperparameters of models
     "nn": {
         "lr": 0.0012,                                     # learning rate
-        ## Optimizer for the density-map model (src/models/density_map.build_optimizer). "adam" keeps
-        ## the original behaviour; "sgd" uses the same lr/weight_decay plus nn.momentum (default 0,
-        ## i.e. plain SGD). Override per run without editing this file, e.g. --hp nn.optimizer=sgd.
+        ## "adam" keeps o.g. behaviour; "sgd"
+        ## the original behaviour; "sgd" uses the same lr/weight_decay plus nn.momentum (default 0,i.e. plain SGD). 
         "optimizer": "adam",                             # "adam" or "sgd"
         "momentum": 0.0,                                 # SGD momentum (ignored by adam)
         "epoch": 100,                                 # number of epochs 
@@ -117,7 +111,7 @@ preset = {
         ##     it over time to (B, D) to match THAT's aggregation. ~5.7x fewer parameters than THAT
         ##     (0.19M vs 1.08M). Other models ignore it and fall back to THAT.
         "backbone": "default",
-        "num_obj_queries": 10, #TODO: change this if more people
+        "num_obj_queries": 20, #TODO: change this if more people
         "num_decoder_layers":6,
         "dim_FFN": 512,
         "token_length": 188, 
@@ -236,23 +230,17 @@ preset = {
         ## config cannot win by fitting the threshold sweep rather than the model.
         "eval_threshold": None,
         ## Two-stage count decision. Stage 1 is an empty gate: a sample whose density-map maximum is
-        ## below "empty_threshold" is predicted empty regardless of its per-location readouts. This
-        ## decouples "is the room empty" from "how many locations are occupied" and is what stops a
-        ## raised map floor under domain shift from turning every empty frame into a count >= 1.
+        ## below "empty_threshold" is predicted empty regardless of its per-location readouts
         ## "staged_count": True/None => keep the gate and calibrate it on the validation split; only an
         ## explicit False disables it (single-threshold behaviour, calibrated on every frame).
-        ## Pinned to False because every result committed up to 2026-10-27 was produced with the gate
-        ## off; set it to None (or True) for a gate-on run. Before the fix in resolve_count_decision,
-        ## None was read as falsy and behaved exactly like False.
         "staged_count": False,
         "empty_threshold": None,# threshold for the stages scenario where we classify some values as empty
     },
 
-    ## H-WILD human-held-device localization (src/data/hwild.py). "path" is the dataset root holding
-    ## the Conference/, Laboratory/, Office/ and Lounge/ folders. Packets are sliced into fixed-length
-    ## windows; "window" must be a multiple of 20 and at least 320, which is what the THAT backbone's
-    ## pooling/conv geometry requires (see src/models/bce_that.py). The regression head is a small MLP
-    ## on the backbone embedding; the output is the normalized (x, y) position.
+    ## H-WILD human-held-device localization. Packets are sliced into fixed-length
+    ## windows; "window" must be a multiple of 20 and at least 320, bc of the THAT backbone's
+    ## pooling/conv geometry. The regression head is a small MLP on the backbone embedding; 
+    ## the output is the normalized (x, y) position.
     "hwild": {
         "path": "dataset/hwild",
         "window": 400,
@@ -266,7 +254,7 @@ preset = {
         "weight_decay": 2e-4,
     },
 
-    ## NTU-Fi HAR (src/data/ntu_har.py) cross-dataset activity transfer. The label space is picked by
+    ## NTU-Fi HAR cross-dataset activity transfer. The label space is picked by
     ## --activities of scripts/run_ntu_to_wimans.py / scripts/run_few_shot_ntu_to_wimans.py, see
     ## src/data/activity_transfer.resolve_vocabulary. "features" is the feature count both sides are
     ## aligned to: 270 is WiMANS's native (time, 3 TX, 3 RX, 30 subcarrier) flattening, and the
@@ -286,4 +274,4 @@ preset = {
 }
 
 preset["nn"]["num_classes"] = 6 if preset["task"] in ("location", "count") else 10
-preset["nn"]["num_count_classes"] = 6 #TODO check why this is used
+preset["nn"]["num_count_classes"] = 6 

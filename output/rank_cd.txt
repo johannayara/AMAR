@@ -1,0 +1,26 @@
+====================================================================================================
+CROSS-DOMAIN WiMANS RANKING - protocols ['cross_domain', 'lor_matrix'], live output only
+====================================================================================================
+model         head    backbone       norm   metric            n      mean       se  const m  folds
+----------------------------------------------------------------------------------------------------
+density_map   -       -              -      position_error_m  3    2.9567   1.1501        -  classroom=4.7038 empty_room=3.3788 meeting_room=0.7875
+density_map_dem -       -              -      position_error_m  1    3.6986   0.0000        -  meeting_room=3.6986
+density_map   -       -              -      position_error_m  3    4.9120   0.9510        -  classroom=4.7038 empty_room=3.3788 meeting_room=6.6535
+density_map   coords  thatv-nostats  batch  position_error_m  3    5.6441   0.9765        -  classroom=6.6119 empty_room=3.6911 meeting_room=6.6292
+density_map   coords  thatv-nostats  layer  position_error_m  3    5.9245   1.1163        -  classroom=7.0888 empty_room=3.6925 meeting_room=6.9922
+density_map   density default        layer  position_error_m  3    5.9534   0.7602        -  classroom=7.0820 empty_room=6.2713 meeting_room=4.5069
+density_map   density thatv-nostats  group  position_error_m  3    6.1235   0.6111        -  classroom=6.9181 empty_room=6.5304 meeting_room=4.9220
+density_map   density thatv-nostats  batch  position_error_m  3    6.1785   1.1010        -  classroom=7.9740 empty_room=6.3848 meeting_room=4.1767
+density_map   density thatv-nostats  layer  position_error_m  3    6.2118   0.9559        -  classroom=7.8660 empty_room=6.2147 meeting_room=4.5548
+density_map   coords  default        group  position_error_m  3    6.3229   1.2631        -  classroom=8.0912 empty_room=3.8764 meeting_room=7.0012
+density_map   coords  default        batch  position_error_m  3    6.4192   1.1615        -  classroom=6.9833 empty_room=4.1855 meeting_room=8.0888
+density_map   coords  thatv-nostats  group  position_error_m  3    6.4232   1.6089        -  classroom=9.0875 empty_room=3.5284 meeting_room=6.6536
+density_map   density default        batch  position_error_m  3    6.4306   0.3397        -  classroom=6.2182 empty_room=7.0956 meeting_room=5.9779
+density_map   density default        group  position_error_m  3    6.4830   0.6045        -  classroom=7.6700 empty_room=6.0884 meeting_room=5.6907
+density_map   coords  default        layer  position_error_m  3    7.6630   0.4610        -  classroom=8.4635 empty_room=7.6589 meeting_room=6.8667
+density_map   coords  -              -      position_error_m  3    8.6611   1.8286        -  classroom=7.4594 empty_room=6.2706 meeting_room=12.2533
+
+TRAINING-PRIOR BASELINE (dummy_model; a real config must beat it)
+model         head    backbone       norm   metric            n      mean       se
+----------------------------------------------------------------------------------------------------
+dummy_model   -       -              -      f1                2    0.1778   0.0019

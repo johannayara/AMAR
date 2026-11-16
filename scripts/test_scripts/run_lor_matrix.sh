@@ -36,6 +36,8 @@ EPOCHS="${EPOCHS:-70}"
 USERS="${USERS:-0,1,2,3,4,5}"
 MAX_JOBS="${MAX_JOBS:-4}"
 
+export BACKBONES="default thatv thatv-nostats thatv-nopool thatv-notokens"
+
 models=(${MODELS:-density_map})
 HEADS=(${HEADS_OVERRIDE:-coords density})
 backbones=(${BACKBONES:-default thatv-nostats})
@@ -87,7 +89,7 @@ run_combo() {
     local model backbone encoder holdout train_envs head
     IFS='|' read -r model backbone encoder holdout train_envs head <<< "${combo}"
     ## the head is part of the path: coords and density would otherwise share a log directory
-    local log_dir="./output/lor_matrix/${model}/${head}/${backbone}/${encoder}/holdout_${holdout}"
+    local log_dir="./output/lor_matrix/lor_best_model/${model}/${head}/${backbone}/${encoder}/holdout_${holdout}"
     mkdir -p "${log_dir}"
     echo "=== model=${model} head=${head} backbone=${backbone} encoder_norm=${encoder} holdout=${holdout} train=${train_envs}"
     python scripts/run_cross_domain.py \

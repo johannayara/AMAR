@@ -30,7 +30,13 @@ mkdir -p ./output/lor/all_data
 
 start=$(date +%s)
 echo "Start: $(date)"
-python scripts/run_lor_all.py \
-    --model set --holdout classroom --max_per_room 60 --epochs 150 --repeat 3 > "./output/lor/all_data/run_$(date +%Y%m%d_%H%M%S).log" 2>&1
+export MODELS="density_map" 
+export BACKBONES="default thatv thatv-nostats thatv-nopool thatv-notokens" 
+export HEADS_OVERRIDE="density coords" 
+export ENCODERS="batch group layer" 
+export MAX_JOBS=4 
+python ./scripts/test_scripts/run_lor_matrix.sh
+# python scripts/run_lor_all.py \
+#     --model set --holdout classroom --max_per_room 60 --epochs 150 --repeat 3 > "./output/lor/all_data/run_$(date +%Y%m%d_%H%M%S).log" 2>&1
 end=$(date +%s)
 echo "Total runtime: $((end - start)) seconds"

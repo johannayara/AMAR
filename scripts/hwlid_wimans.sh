@@ -10,7 +10,7 @@ set -euo pipefail
 source /software/anaconda3/etc/profile.d/conda.sh
 conda activate AMAR
 
-mkdir -p "./output/few_shot_hwild_wimans/group"
+mkdir -p "./output/few_shot_hwild_wimans/wimans_hwild"
 
 start=$(date +%s)
 echo "Start: $(date)"
@@ -23,33 +23,19 @@ export AMAR_ENCODER_NORM=group
 #   --support_rooms classroom --repeat 3 \
 #   --teacher_epochs 200 --student_epochs 200 --few_shot_ratio 0.1 --kd_weight 0 > "./output/few_shot_hwild_wimans/group/run_$(date +%Y%m%d_%H%M).log" 2>&1
 python scripts/run_few_shot_hwild_to_wimans.py \
-  --train_rooms "Conference, Laboratory, Lounge, Office" \
-  --test_rooms "meeting_room, empty_room, meeting_room_synth, empty_room_synth" \
-  --support_rooms classroom --repeat 3 \
+  --train_rooms "meeting_room, empty_room, meeting_room_synth, empty_room_synth, classroom, classroom_synth" \
+  --test_rooms "Conference, Laboratory, Lounge " \
+  --support_rooms Office --repeat 3 \
   --teacher_epochs 200 --student_epochs 200 --few_shot_ratio 0.1 --kd_weight 0 \
   --hp data.synth_wimans.enabled=true \
-  > "./output/few_shot_hwild_wimans/group/run_synth_$(date +%Y%m%d_%H%M).log" 2>&1
+  > "./output/few_shot_hwild_wimans/wimans_hwild/run_synth_$(date +%Y%m%d_%H%M).log" 2>&1
 
-python scripts/run_few_shot_hwild_to_wimans.py \
-  --train_rooms "Conference, Laboratory, Lounge, Office" \
-  --test_rooms "meeting_room, empty_room, meeting_room_synth, empty_room_synth" \
-  --support_rooms classroom --repeat 3 \
+python scripts/run_few_shot_hwild_to_wimans.py --repeat 3 \
+  --train_rooms "meeting_room, empty_room, classroom" \
+  --test_rooms "Conference, Laboratory, Lounge " \
+  --support_rooms Office --repeat 3 \
   --teacher_epochs 200 --student_epochs 200 --few_shot_ratio 0.1 --kd_weight 0 \
-  --hp data.synth_wimans.enabled=true --no_init_from_teacher \
-  > "./output/few_shot_hwild_wimans/group/run_synth_$(date +%Y%m%d_%H%M).log" 2>&1
-
-
-python scripts/run_few_shot_hwild_to_wimans.py --repeat 3 \
-  --teacher_epochs 200 --student_epochs 200 \
-  --train_rooms "Conference, Laboratory, Lounge, Office" \
-  --test_rooms "meeting_room, classroom, empty_room" \
-  --few_shot_ratio 0.1 --kd_weight 0 > "./output/few_shot_hwild_wimans/group/run_$(date +%Y%m%d_%H%M).log" 2>&1 
-
-python scripts/run_few_shot_hwild_to_wimans.py --repeat 3 \
-  --teacher_epochs 200 --student_epochs 200 --no_init_from_teacher \
-  --train_rooms "Conference, Laboratory, Lounge, Office" \
-  --test_rooms "meeting_room, classroom, empty_room" \
-  --few_shot_ratio 0.1 --kd_weight 0 > "./output/few_shot_hwild_wimans/group/run_$(date +%Y%m%d_%H%M).log" 2>&1 
+  > "./output/few_shot_hwild_wimans/wimans_hwild/run_$(date +%Y%m%d_%H%M).log" 2>&1 
 
 end=$(date +%s)
 
