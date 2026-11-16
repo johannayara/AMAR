@@ -116,10 +116,11 @@ class ResNet1D(nn.Module):
 class ResNet1DLocalizer(nn.Module):
     """
     [description]
-    : RoomLocalizer-shaped wrapper: the same (batch, time, features) -> (batch, 2) contract, so
-      src.models.room_localization.run_few_shot_localization can build either localizer through its
-      var_model_factory without touching the training or the metric code. Its own head is paired with
-      the ResNet1D backbone.
+    : RoomLocalizer-shaped wrapper: the same (batch, time, features) -> (batch, 2) contract, so the
+      localization runners (src.models.room_localization run_localization_cross_domain /
+      run_few_shot_localization) can build either localizer through their var_model_factory without
+      touching the training or the metric code — src.models.room_localization.localizer_class maps a
+      --backbone name to this class. Its own head is paired with the ResNet1D backbone.
     : var_x_shape: (time, features) of one CSI window
     """
     #

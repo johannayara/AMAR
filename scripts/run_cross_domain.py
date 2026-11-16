@@ -17,6 +17,7 @@ from src.data.load_data import (load_data_y, encode_data_y, encode_occupancy_y,
                                 load_wimans_room_x, wimans_room_names, wimans_room_source)
 from src.data.activity_transfer import WIMANS_ACTIVITY_ALIASES
 from src.utils import *
+from src.data.unified_rooms import WIMANS_BOUNDS
 from configs.preset import preset
 
 import time
@@ -117,6 +118,32 @@ def _load_room(preset, var_task, var_model, var_users, var_env):
         if var_model in ("AMAR_WO_RVQ", "AMAR"):
             var_y = reduce_dataset(var_y, var_task, preset["nn"]["num_obj_queries"])
     return var_x, var_y
+
+
+def location_position_bank():
+    """
+    [description]
+    : {room: {class index: (x, y)}} in meters for the location task, built from
+      preset["encoding"]["location"] (which class index each location letter is) and preset["layouts"]
+      (where each letter sits in that room). Layout values are in units of 1000 cm, i.e. 10 m, with the
+      origin at the transmitter, so multiplying by 10 puts every room in one metres-from-transmitter
+      frame: that is the frame the per-room position scatter draws, and it makes the rooms comparable.
+    : return: (bank, bounds), bounds = (x_min, x_max, y_min, y_max) in meters of the WiMANS rectangle
+    """
+    #
+    ##
+    var_letters = {}
+    for var_name, var_vector in preset["encoding"]["location"].items():
+        var_vector = np.asarray(var_vector)
+        if var_vector.sum():
+            ## "nan" is the all-zero no-location encoding, so every other key has its own index
+            var_letters[int(var_vector.argmax())] = var_name
+    var_rooms = [var_room for var_room in wimans_room_names() if var_room in preset["layouts"]]
+    var_bank = {var_room: {var_index: tuple(float(var_coord) * 10.0
+                                            for var_coord in preset["layouts"][var_room][var_letter])
+                           for var_index, var_letter in var_letters.items()}
+                for var_room in var_rooms}
+    return var_bank, WIMANS_BOUNDS
 
 
 def master_splitter(preset, var_task, var_model, var_users, var_train_envs):
@@ -374,6 +401,11 @@ def run():
             var_index += 1
     #
     ## run WiFi-based model
+    ## The location runs also get the position scatter, which needs the metres-from-transmitter
+    ## coordinates each location class index stands for (the density heads draw their own spatial
+    ## figures: a density map and a coordinate heatmap).
+    var_location_positions, var_location_bounds = (location_position_bank()
+                                                   if var_task == "location" else (None, None))
     if var_model == "density_map":
         all_envs_results = run_density_map_cross_domain(train_sets_by_env, test_sets_by_env,
                                                         var_repeat, var_task, save_path)
@@ -382,10 +414,14 @@ def run():
                                                             var_repeat, var_task, save_path)
     elif var_model == "dummy_model":
         all_envs_results = run_dummy_cross_domain(train_sets_by_env, test_sets_by_env,
-                                                  var_repeat, var_task, var_train_envs, save_path)
+                                                  var_repeat, var_task, var_train_envs, save_path,
+                                                  var_location_positions=var_location_positions,
+                                                  var_location_bounds=var_location_bounds)
     else:
         all_envs_results = run_cross_domain(train_sets_by_env, test_sets_by_env,
-                                            var_repeat, var_task, var_train_envs, save_path)
+                                            var_repeat, var_task, var_train_envs, save_path,
+                                            var_location_positions=var_location_positions,
+                                            var_location_bounds=var_location_bounds)
     #
     ##
     result = {
@@ -399,11 +435,15 @@ def run():
     "data": preset["data"],
     "nn": preset["nn"],
     "hp_overrides": var_hp_applied,
+    ## the metres-from-transmitter position of each location class index, per room: the input of the
+    ## per-room predictions_<room>.png scatter, kept so the figure can be read without guessing where a
+    ## predicted location index actually is
+    "location_positions_m": ({var_room: {str(var_index): list(var_xy)
+                                         for var_index, var_xy in var_bank.items()}
+                              for var_room, var_bank in var_location_positions.items()}
+                             if var_location_positions is not None else None),
     }
 
-    #
-    ## write the JSON and the human-readable report to auto-named files, so the one-room and
-    ## leave-one-room-out folds (and repeated runs) never collide and never need renaming
     formatted = format_result(var_model, var_task, result)
     var_test_envs = [e for e in wimans_room_names() if e not in var_train_envs]
     var_stem = build_run_stem(var_model, var_task,

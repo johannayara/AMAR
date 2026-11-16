@@ -17,6 +17,7 @@ ACTIVITY_SIZE = 9
 MAX_NB_PEOPLE = 6
 GT_COLOR = "#F06595"    
 PRED_COLOR = "#66D9E8" 
+CONST_COLOR = "#B0413E"     # the constant-baseline marker; also the y = x line of the count scatter
 CMAP = "cool" 
 
 def load_model_components(model, load_path, lr, scenario="full", device=None):
@@ -898,6 +899,143 @@ def visualize_room_grid_performance(var_true_sets, var_pred_sets, var_save_dir, 
     #the standard per-location figures are produced from cell occupancy
     return visualize_model_performance(var_pred, var_true, save_dir=var_save_dir, var_mode="occupancy",
                                        class_names=var_class_names, var_threshold=var_threshold)
+
+
+def location_label_positions(var_labels, var_positions, var_mode="sets", var_threshold=0.3):
+    """
+    [description]
+    : the (x, y) positions of the locations a batch of labels marks as occupied, pooled over the
+      batch, so a location run can be plotted in space and not only per location. The set-prediction
+      models carry the locations as one-hot sets, the count baselines as a per-location readout.
+    : var_labels: (n, Q, C) one-hot sets (var_mode="sets"; the last class is the no-object slot) or
+      (n, C) per-location counts / occupancy scores (var_mode="counts")
+    : var_positions: dict, class index -> (x, y) in meters
+    : return: (M, 2) float array of positions
+    """
+    #
+    ##
+    var_labels = np.asarray(var_labels)
+    if var_mode == "sets":
+        var_index = np.argmax(var_labels, axis=-1)
+        var_ids = var_index[var_index != var_labels.shape[-1] - 1]
+    elif var_mode == "counts":
+        var_threshold_vec = np.vectorize(threshold_round)
+        var_ids = np.where(var_threshold_vec(var_labels, threshold=var_threshold).ravel() > 0)[0]
+        var_ids = var_ids % var_labels.shape[1]
+    else:
+        raise ValueError(f"unsupported var_mode: {var_mode}")
+    var_ids = [int(var_idx) for var_idx in var_ids if int(var_idx) in var_positions]
+    return np.array([var_positions[var_idx] for var_idx in var_ids], dtype=float).reshape(-1, 2)
+
+
+def location_mean_position(var_counts, var_positions):
+    """
+    [description]
+    : the occurrence-weighted mean of the location positions a training set holds: the constant
+    : var_counts: (C,) how many training frames mark each class index
+    : var_positions: {class index: (x, y)} in meters, of the room the baseline is placed in
+    : return: (1, 2) float array, or (0, 2) when the labels hold no position at all
+    """
+    #
+    ##
+    var_counts = np.asarray(var_counts, dtype=float)
+    var_ids = [var_idx for var_idx in var_positions if var_idx < len(var_counts)]
+    var_weight = np.array([var_counts[var_idx] for var_idx in var_ids], dtype=float)
+    if var_weight.sum() <= 0:
+        return np.zeros((0, 2), dtype=float)
+    var_pos = np.array([var_positions[var_idx] for var_idx in var_ids], dtype=float)
+    return (var_pos * var_weight[:, None]).sum(axis=0, keepdims=True) / var_weight.sum()
+
+
+def location_prior_positions(var_counts, var_positions, var_max_rows=20000):
+    """
+    [description]
+    : the training locations as a cloud, one row per (training frame, location) occurrence, so the same
+      figure that scatters the predictions can scatter the prior they were drawn from: a cloud sitting
+      on the model's predictions is a model that learned the training rooms' prior and nothing else.
+      The occurrence counts are scaled down when they would exceed var_max_rows, so a large training
+      set does not turn a figure into a memory problem; the scaling is common to every location, so the
+      relative mass of the locations is preserved.
+    : var_counts: (C,) how many training frames mark each class index
+    : var_positions: {class index: (x, y)} in meters, of the room the prior is placed in
+    : return: (M, 2) float array, M <= var_max_rows + len(var_positions)
+    """
+    #
+    ##
+    var_counts = np.asarray(var_counts, dtype=float)
+    var_ids = [var_idx for var_idx in var_positions if var_idx < len(var_counts)]
+    var_weight = np.array([var_counts[var_idx] for var_idx in var_ids], dtype=float)
+    var_total = var_weight.sum()
+    if var_total <= 0:
+        return np.zeros((0, 2), dtype=float)
+    var_scale = min(1.0, var_max_rows / var_total)
+    var_repeat = np.maximum(1, np.round(var_weight * var_scale)).astype(int)
+    var_pos = np.array([var_positions[var_idx] for var_idx in var_ids], dtype=float)
+    return np.repeat(var_pos, var_repeat, axis=0)
+
+
+def visualize_location_position_scatter(var_true_pos, var_pred_pos, var_room, var_save_dir, var_bounds,
+                                        var_const_pos=None, var_const_label="constant baseline",
+                                        var_prior_pos=None, var_prior_label="training prior",
+                                        var_max_points=2000, var_seed=39):
+    """
+    [description]
+    : true against predicted location positions of one test room, in meters on the room frame: the
+      spatial counterpart of the per-location count scatter, and the readout of whether a cross-domain
+      location model puts people where they actually are. A model that spreads its predictions over
+      the room, or piles them on the training rooms' prior, has not transferred even when its
+      per-location counts look reasonable.
+    : var_true_pos / var_pred_pos: (M, 2) positions in meters (see location_label_positions)
+    : var_bounds: (x_min, x_max, y_min, y_max) in meters of the room frame
+    : var_const_pos: (M, 2) positions of the constant baseline (see location_mean_position), drawn as
+      one marker per distinct point: it predicts the same thing for every frame, so its cloud is the
+      point the model has to move away from. None = not drawn.
+    : var_prior_pos: (M, 2) positions of the data the model was trained on (see
+      location_prior_positions), drawn as a grey cloud *under* the predictions: where the model's
+      predictions sit on it, it has learned the training rooms' prior rather than the transfer. None =
+      not drawn.
+    : return: path of the written predictions_<room>.png
+    """
+    #
+    ##
+    var_true_pos = np.asarray(var_true_pos, dtype=float).reshape(-1, 2)
+    var_pred_pos = np.asarray(var_pred_pos, dtype=float).reshape(-1, 2)
+    var_series = []
+    if var_prior_pos is not None:
+        var_series.append((np.asarray(var_prior_pos, dtype=float).reshape(-1, 2), "0.45",
+                           var_prior_label, "o", 10, 0.25))
+    var_series += [(var_true_pos, GT_COLOR, "true", "o", 12, 0.5),
+                   (var_pred_pos, PRED_COLOR, "pred", "o", 12, 0.5)]
+    if var_const_pos is not None:
+        ## a constant emitter's cloud is one point however many frames it was scored on, so the
+        ## duplicates are dropped rather than drawn on top of each other
+        var_const_pos = np.unique(np.asarray(var_const_pos, dtype=float).reshape(-1, 2), axis=0)
+        var_series.append((var_const_pos, CONST_COLOR, var_const_label, "X", 150, 0.9))
+    #
+    os.makedirs(str(var_save_dir), exist_ok=True)
+    var_fig, var_ax = plt.subplots(figsize=(6, 6))
+    for var_pos, var_color, var_label, var_marker, var_size, var_alpha in var_series:
+        if len(var_pos) == 0:
+            continue
+        var_show = var_pos
+        if len(var_pos) > var_max_points:
+            var_rng = np.random.RandomState(var_seed)
+            var_show = var_pos[np.sort(var_rng.choice(len(var_pos), var_max_points, replace=False))]
+        var_ax.scatter(var_show[:, 0], var_show[:, 1], s=var_size, c=var_color, alpha=var_alpha,
+                       marker=var_marker, label=var_label,
+                       edgecolors="white" if var_marker != "o" else "none", linewidths=0.8)
+    var_ax.set_xlim(var_bounds[0], var_bounds[1])
+    var_ax.set_ylim(var_bounds[2], var_bounds[3])
+    var_ax.set_aspect("equal")
+    var_ax.set_xlabel("x (m)")
+    var_ax.set_ylabel("y (m)")
+    var_ax.set_title(f"{var_room} - true vs predicted locations")
+    var_ax.legend(loc="upper right")
+    var_path = os.path.join(str(var_save_dir), f"predictions_{var_room}.png")
+    var_fig.tight_layout()
+    var_fig.savefig(var_path, dpi=120)
+    plt.close(var_fig)
+    return var_path
 
 
 def log_attention_weights(model, y_pred, y_actual, epoch, var_task = "activity"):

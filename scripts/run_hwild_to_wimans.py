@@ -36,7 +36,8 @@ from src.data.hwild import room_names as hwild_room_names, load_hwild_room, HWIL
 from src.data.unified_rooms import (load_wimans_room_targets, normalize_xy_meters,
                                     wimans_room_names, load_unified_room, dataset_of,
                                     room_span, room_bounds)
-from src.models.room_localization import run_localization_cross_domain, format_localization_result
+from src.models.room_localization import (run_localization_cross_domain, format_localization_result,
+                                          localizer_class)
 from src.models.room_density import run_room_density_cross_domain, format_room_density_result
 from src.utils import save_run_outputs, build_run_stem, join_envs, run_timestamp, reserve_viz_dir
 
@@ -79,6 +80,12 @@ def parse_args():
                           help="'window' z-scores each CSI window (removes the per-capture gain/AGC "
                                "scale that otherwise differs between the two datasets); 'none' feeds "
                                "raw amplitude")
+    var_args.add_argument("--backbone", default="that", choices=("that", "resnet1d"),
+                          help="which localizer the 'localizer' model trains (--model density ignores "
+                               "it). Each choice is a complete model, backbone plus its own regression "
+                               "head: 'that' (default) is RoomLocalizer over the WiMANS THAT backbone, "
+                               "'resnet1d' is ResNet1DLocalizer over the CSI window "
+                               "(src/models/resnet1d.py)")
     var_args.add_argument("--hp", action="append", default=None, type=str, metavar="KEY=VALUE",
                           help="Override a preset field, dotted path, e.g. "
                                "--hp data.synth_wimans.enabled=true. Repeatable. Values are parsed as "
@@ -275,6 +282,9 @@ def run():
                         if var_args.interference else None)
     #
     if var_args.model == "density":
+        if var_args.backbone != "that":
+            raise ValueError("--backbone applies to --model localizer; the density head builds its own "
+                             "backbone")
         run_density(var_args, var_train_rooms, var_test_rooms, var_hp_applied, var_users,
                     var_interference)
         return
@@ -350,10 +360,12 @@ def run():
     os.makedirs(var_save_path, exist_ok=True)
     var_results = run_localization_cross_domain(train_sets_by_room, test_sets_by_room,
                                                 var_repeat=var_args.repeat, save_path=var_save_path,
-                                                var_spans=var_spans, var_bounds=var_bounds)
+                                                var_spans=var_spans, var_bounds=var_bounds,
+                                                var_model_factory=localizer_class(var_args.backbone))
     #
     var_result = {
         "protocol": "train H-WILD -> test WiMANS, shared transmitter-anchored metric frame",
+        "backbone": var_args.backbone,
         "train_rooms": var_train_rooms,
         "test_rooms": var_test_rooms,
         "repeat": var_args.repeat,

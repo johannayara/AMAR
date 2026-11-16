@@ -359,7 +359,8 @@ def run_AMAR_WO_RVQ(data_train_x,
 ## ====================================================================================================================
 # CROSS DOMAIN 
 
-def run_cross_domain(train_sets_by_env, test_sets_by_env, var_repeat=10, var_task = "activity", var_env = "empty_room", save_path = "./visualizations/temp"):                    
+def run_cross_domain(train_sets_by_env, test_sets_by_env, var_repeat=10, var_task = "activity", var_env = "empty_room", save_path = "./visualizations/temp",
+                     var_class_names=None, var_location_positions=None, var_location_bounds=None):                    
     """
     [description]
     : leave-one-room-out run of AMAR_WO_RVQ. Trains on every room in train_sets_by_env (each keeping
@@ -368,8 +369,15 @@ def run_cross_domain(train_sets_by_env, test_sets_by_env, var_repeat=10, var_tas
     : train_sets_by_env: dict, env name -> (CSI amplitude, labels) of a training room
     : test_sets_by_env: dict, env name -> (CSI amplitude, labels) of a held-out room
     : var_repeat: int, number of repeated experiments
-    [return]
-    : result: dict, results of experiments
+    : var_class_names: activity names in class order, without the no-object class; when given, the
+      per-room clustering figure and the cross-room embedding-metadata figure are drawn beside the
+      confusion matrices, exactly as run_few_shot_cross_domain does (None = skip, e.g. the location task)
+    : var_location_positions: {room: {class index: (x, y) in meters}} of the location task's classes
+      (each room places a location letter differently); when given, every test room in it also gets the
+      true-against-predicted position scatter, so a run shows whether the positions transfer and not
+      only their per-location counts
+    : var_location_bounds: (x_min, x_max, y_min, y_max) in meters of the room frame that scatter uses
+    : return: dict, results of experiments
     """
     #
     ##
@@ -605,7 +613,17 @@ def run_cross_domain(train_sets_by_env, test_sets_by_env, var_repeat=10, var_tas
             'avg_present_recall': present_recall_mean, 'std_present_recall': present_recall_std,
             'se_present_recall': present_recall_se,
         } 
-    for env_name, (_, y_env) in test_sets_by_env.items():
+    ## {field: [per-environment arrays]}, the cross-room embedding-metadata figure's input, filled
+    ## below when class names are given
+    var_meta_collect = {var_field: [] for var_field in ("points", "activity", "room", "split",
+                                                        "occupants", "padding")}
+    ## how many training frames mark each location class, the weight of the constant baseline below.
+    ## Only the labels are touched, so a LazyRoomArray source is not materialized for this.
+    var_location_counts = None
+    if var_location_positions is not None:
+        var_train_labels = [np.asarray(var_y_env) for _, var_y_env in train_sets_by_env.values()]
+        var_location_counts = (np.concatenate(var_train_labels, axis=0).sum(axis=1) > 0).sum(axis=0)
+    for env_name, (X_env, y_env) in test_sets_by_env.items():
         if env_name not in env_predict_y_last:
             continue
         viz_stats = visualize_model_performance(
@@ -614,6 +632,44 @@ def run_cross_domain(train_sets_by_env, test_sets_by_env, var_repeat=10, var_tas
             var_mode=var_mode,
             save_dir=os.path.join(save_path, env_name)
         )
+        if var_location_positions is not None and env_name in var_location_positions:
+            ## the spatial view of the same frames: the last decoder layer's predicted locations
+            ## against the true ones, in this room's own layout (each room places a letter differently),
+            ## plus the constant baseline the model has to beat
+            var_room_positions = var_location_positions[env_name]
+            visualize_location_position_scatter(
+                location_label_positions(y_env, var_room_positions, var_mode="sets"),
+                location_label_positions(env_predict_y_last[env_name][-1], var_room_positions,
+                                         var_mode="sets"),
+                env_name, os.path.join(save_path, env_name), var_location_bounds,
+                var_const_pos=location_mean_position(var_location_counts, var_room_positions),
+                var_const_label="constant (mean training location)",
+                var_prior_pos=location_prior_positions(var_location_counts, var_room_positions),
+                var_prior_label="training prior (training locations)")
+        if var_class_names is not None:
+            ## the same per-room clustering figure run_few_shot_cross_domain draws, off the last
+            ## repeat's model (kept above) and the frames the confusion matrices just used
+            var_x_env = X_env.reshape(X_env.shape[0], X_env.shape[1], -1)
+            all_envs_results[env_name]["clustering"] = visualize_query_clustering(
+                last_model, var_x_env, y_env, var_class_names,
+                save_path=os.path.join(save_path, env_name),
+                var_model_name=f"model_r{var_repeat - 1}")
+            ## the same matched-slot points, kept so the cross-room figure below can colour them by
+            ## room / split / occupancy as well as activity
+            var_points, var_act, _, var_matched = matched_slot_points(
+                last_model, var_x_env, y_env, var_batch_size=preset["nn"]["batch_size"],
+                var_device=device)
+            ## occupant count per frame: the target slots that are not the no-object class
+            var_y_arr = np.asarray(y_env)
+            var_occupants = (var_y_arr.argmax(-1) != var_y_arr.shape[-1] - 1).sum(axis=1)
+            var_meta_collect["points"].append(var_points)
+            var_meta_collect["activity"].append(var_act)
+            var_meta_collect["room"].append(np.full(len(var_points), env_name))
+            var_meta_collect["split"].append(np.full(
+                len(var_points), "synth" if env_name.endswith("_synth") else "real"))
+            var_meta_collect["occupants"].append(var_occupants[var_matched])
+            var_meta_collect["padding"].append(per_sample_padding_fraction(
+                var_x_env, np.arange(len(var_x_env)))[var_matched])
         stats = all_envs_results[env_name]
         ## micro-F1 / present-F1 are the class-absence-free readouts; 'accuracy' sits near (C-2)/C
         ## on a single-occupant task whatever the model does (see calculate_scores)
@@ -623,6 +679,19 @@ def run_cross_domain(train_sets_by_env, test_sets_by_env, var_repeat=10, var_tas
             f"PPP {stats['avg_PPP']:.4f} ± {stats['se_PPP']:.4f} | "
             f"Total Error {stats['avg_total_error']:.4f} ± {stats['se_total_error']:.4f} | "
             f"(TN-inflated Accuracy {stats['avg_accuracy']:.4f}, F1 {stats['avg_f1_score']:.4f})")
+    if var_class_names is not None and var_meta_collect["points"]:
+        ## one figure over every test room at once: the single-room t-SNE cannot show whether the
+        ## embedding separates rooms or domains rather than activities
+        var_meta = {var_field: np.concatenate(var_values)
+                    for var_field, var_values in var_meta_collect.items()
+                    if var_field not in ("points", "activity")}
+        var_meta_summary = visualize_query_tsne_metadata(
+            np.concatenate(var_meta_collect["points"]),
+            np.concatenate(var_meta_collect["activity"]),
+            var_class_names, var_meta, save_path, f"model_r{var_repeat - 1}")
+        print(f"  [model] embedding metadata separation: " + " | ".join(
+            f"{var_field} kNN-purity {var_info['knn_purity']:.2f} vs chance {var_info['chance']:.2f}"
+            for var_field, var_info in var_meta_summary.items() if isinstance(var_info, dict)))
     wandb.finish()
     return all_envs_results
 

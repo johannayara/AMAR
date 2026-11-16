@@ -23,9 +23,8 @@ from configs.preset import preset
 from src.data.hwild import room_names as hwild_room_names, load_hwild_room, HWILD_ROOMS
 from src.data.unified_rooms import (load_wimans_room_targets, normalize_xy_meters,
                                     wimans_room_names)
-from src.models.room_localization import (RoomLocalizer, run_few_shot_localization,
-                                          format_few_shot_result)
-from src.models.resnet1d import ResNet1DLocalizer
+from src.models.room_localization import (run_few_shot_localization, format_few_shot_result,
+                                          localizer_class)
 from src.utils import save_run_outputs, build_run_stem, join_envs, run_timestamp, reserve_viz_dir
 
 #
@@ -126,16 +125,6 @@ def format_result(var_model, var_task, result, var_few_shot_ratio, var_kd_weight
                          f"OccAcc {stats['avg_const_occupancy_accuracy']:.4f}  "
                          f"(mean support position; beat this to show the few-shot step learned anything)")
     return "\n".join(lines)
-
-def localizer_factory(var_backbone):
-    """
-    [description]
-    : resolve --backbone to the localizer class run_few_shot_localization builds. Both classes are
-      complete models (backbone + its own head) and share only the (batch, time, features) -> (batch, 2)
-      contract, so nothing else in the runner changes.
-    """
-    return ResNet1DLocalizer if var_backbone == "resnet1d" else RoomLocalizer
-
 
 def standardize_windows(var_x):
     """
@@ -323,7 +312,7 @@ def run():
         var_init_from_teacher=not var_args.no_init_from_teacher,
         var_bounds=var_rect, save_path=var_save_path,
         var_support_rooms=var_support_rooms, var_query_rooms=var_test_rooms,
-        var_model_factory=localizer_factory(var_args.backbone))
+        var_model_factory=localizer_class(var_args.backbone))
 
     #
     ## run few-shot distillation

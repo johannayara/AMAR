@@ -230,7 +230,8 @@ def run_DUMMY(data_train_x,
 def run_dummy_cross_domain(train_sets_by_env,
                            test_sets_by_env,
                            var_repeat=10, var_task="location", var_env="empty_room",
-                           save_path="./visualizations/temp"):
+                           save_path="./visualizations/temp",
+                           var_location_positions=None, var_location_bounds=None):
     """
     [description]
     : leave-one-room-out run of the "most average output" dummy. The dummy is trained on the training
@@ -241,6 +242,11 @@ def run_dummy_cross_domain(train_sets_by_env,
       emitting the training rooms' location prior.
     : train_sets_by_env / test_sets_by_env: dict env -> (X, y). y is the raw label; it is summed over
       its user axis to the per-location occupancy the metric scores.
+    : var_location_positions / var_location_bounds: {room: {class index: (x, y) meters}} of the
+      location task and the room frame in meters; when given, every test room also gets the
+      true-against-predicted position scatter. On a constant emitter it collapses onto the locations
+      the training rooms' prior marks occupied, which is the point: it shows what "no transferable
+      mapping" looks like.
     : return: dict, env -> averaged metrics with SE, plus the dummy's mean output, the mean training
       output and the test room's own mean target (all in the JSON), so "is the model just
       reproducing the training prior?" can be answered without re-running.
@@ -335,6 +341,11 @@ def run_dummy_cross_domain(train_sets_by_env,
                                   save_path)
     #
     ## -------------------------------------- aggregate per room ------------------------------------
+    ## how many training frames mark each location class: the weight of the constant-baseline point and
+    ## the mass of the prior cloud each per-room figure draws
+    var_location_counts = None
+    if var_location_positions is not None:
+        var_location_counts = (np.concatenate(var_train_targets, axis=0) > 0).sum(axis=0)
     results = {}
     for var_env_name, var_rep_list in env_rep_metrics.items():
         var_env_result = {}
@@ -362,6 +373,19 @@ def run_dummy_cross_domain(train_sets_by_env,
         visualize_model_performance(y_pred=var_pred_last, y_true=var_true_last,
                                     var_mode="count_classification",
                                     save_dir=os.path.join(str(save_path), var_env_name))
+        if var_location_positions is not None and var_env_name in var_location_positions:
+            ## the same per-location readouts in space, at the count rounding the metrics use, plus
+            ## the mean-position constant: the dummy's own cloud is the training prior, so the marker
+            ## is what a model that only says "the average training location" would look like
+            var_room_positions = var_location_positions[var_env_name]
+            visualize_location_position_scatter(
+                location_label_positions(var_true_last, var_room_positions, var_mode="counts"),
+                location_label_positions(var_pred_last, var_room_positions, var_mode="counts"),
+                var_env_name, os.path.join(str(save_path), var_env_name), var_location_bounds,
+                var_const_pos=location_mean_position(var_train_mean, var_room_positions),
+                var_const_label="constant (mean training location)",
+                var_prior_pos=location_prior_positions(var_location_counts, var_room_positions),
+                var_prior_label="training prior (training locations)")
     #
     if wandb.run is not None:
         wandb.log({f"dummy/{var_env}/{var_key}": var_value

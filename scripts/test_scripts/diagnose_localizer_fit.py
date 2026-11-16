@@ -19,11 +19,14 @@
                 Positions are one of the room's discrete layout points, so the centroid baseline is the
                 honest yardstick: the network should be able to reach it.
 
+                A "<room><suffix>" room name (e.g. meeting_room_synth) turns the simulated source on by
+                itself, so nothing else is needed to diagnose the synthetic set.
+
                 Example (synthetic 3 x 3 source, both backbones, one room):
                     python scripts/test_scripts/diagnose_localizer_fit.py \
-                        --room meeting_room_synth --synth --backbone resnet1d --steps 400
+                        --room meeting_room_synth --backbone resnet1d --steps 400
                     python scripts/test_scripts/diagnose_localizer_fit.py \
-                        --room meeting_room_synth --synth --backbone that --steps 400
+                        --room meeting_room_synth --backbone that --steps 400
 """
 #
 ##
@@ -40,8 +43,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..',
 
 from configs.preset import preset
 from src.data.unified_rooms import load_wimans_room_targets, wimans_room_names
-from src.models.resnet1d import ResNet1DLocalizer
-from src.models.room_localization import RoomLocalizer
+from src.models.room_localization import localizer_class
 from src.utils import select_device
 
 #
@@ -61,7 +63,8 @@ def parse_args():
     var_args.add_argument("--features", default="full", choices=("avg", "full"),
                           help="as scripts/run_few_shot_multi_rooms.py: 270 (full 3 x 3 grid) or 90")
     var_args.add_argument("--synth", action="store_true",
-                          help="enable preset['data']['synth_wimans'] before resolving the room")
+                          help="force preset['data']['synth_wimans'] on. A '<room><suffix>' --room "
+                               "enables it by itself, so this is normally unnecessary")
     var_args.add_argument("--max_samples", default=None, type=int)
     var_args.add_argument("--steps", default=400, type=int, help="gradient steps")
     var_args.add_argument("--lr", default=1e-3, type=float)
@@ -108,6 +111,19 @@ def evaluate(var_model, var_x, var_y, var_index):
 
 
 ##
+def enable_synth_for_room(var_room):
+    """
+    [description]
+    : a "<room><suffix>" key only exists while the simulated source is enabled, so asking for one turns
+      it on rather than failing. A bare real-room name leaves the preset as it is.
+    : return: bool, whether the simulated source ends up enabled
+    """
+    var_synth = preset["data"]["synth_wimans"]
+    if var_room.endswith(var_synth.get("suffix", "_synth")):
+        var_synth["enabled"] = True
+    return bool(var_synth.get("enabled"))
+
+
 def run():
     """
     [description]
@@ -116,6 +132,7 @@ def run():
     var_args = parse_args()
     if var_args.synth:
         preset["data"]["synth_wimans"]["enabled"] = True
+    enable_synth_for_room(var_args.room)
     if var_args.room not in wimans_room_names():
         raise ValueError(f"unknown room {var_args.room!r}; expected one of {wimans_room_names()}")
 
@@ -136,7 +153,7 @@ def run():
 
     var_device = select_device()
     torch.manual_seed(var_args.seed)
-    var_class = ResNet1DLocalizer if var_args.backbone == "resnet1d" else RoomLocalizer
+    var_class = localizer_class(var_args.backbone)
     var_model = var_class(var_x.shape[1:]).to(var_device)
 
     var_xt = torch.from_numpy(var_x).to(var_device)

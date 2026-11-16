@@ -37,8 +37,9 @@ from torch.utils.data import DataLoader, TensorDataset
 from configs.preset import preset
 from src.models.bce_that import THAT
 from src.models.density_map import get_cosine_schedule_with_warmup, augment_csi
+from src.models.resnet1d import ResNet1DLocalizer
 from src.utils import (select_device, save_run_outputs, build_run_stem, join_envs, run_timestamp,
-                       visualize_room_grid_performance)
+                       visualize_room_grid_performance, visualize_location_position_scatter)
 import wandb
 
 #
@@ -80,6 +81,28 @@ class RoomLocalizer(nn.Module):
         : xy: (batch, 2) predicted normalized position in the room's [0, 1]^2 frame
         """
         return self.head(self.backbone(x))
+
+LOCALIZERS = {"that": RoomLocalizer, "resnet1d": ResNet1DLocalizer}
+
+
+def localizer_class(var_backbone):
+    """
+    [description]
+    : the localizer a --backbone value selects. Both classes are complete models (a CSI backbone plus
+      its own regression head) that share only the (batch, time, features) -> (batch, 2) contract, so
+      nothing in a runner changes with the choice.
+    : var_backbone: "that" | "resnet1d", or the class name a checkpoint records
+    : return: the nn.Module class to build
+    """
+    #
+    ##
+    var_found = LOCALIZERS.get(var_backbone)
+    if var_found is None:
+        var_found = next((var_cls for var_cls in LOCALIZERS.values()
+                          if var_cls.__name__ == var_backbone), None)
+    if var_found is None:
+        raise ValueError(f"unknown backbone {var_backbone!r}; choose from {sorted(LOCALIZERS)}")
+    return var_found
 
 
 def _grid_cell_index(var_xy, var_grid):
@@ -268,41 +291,21 @@ def train_room_localizer(model, optimizer, data_train_set, data_valid_set, var_b
     return var_best_weight, var_history
 
 
-def visualize_localization_predictions(var_true_xy, var_pred_xy, var_room, save_dir, var_bounds,
-                                       var_num_samples=400):
+def positions_to_meters(var_xy, var_bounds):
     """
     [description]
-    : scatter the true and predicted positions of a test room in raw meters, so a run's spatial error
-      is visible at a glance. Saves <save_dir>/predictions_<room>.png.
-    : var_true_xy / var_pred_xy: (N, 2) normalized positions
+    : map normalized positions of a room's frame back to meters, the frame the position scatters draw
+      in (the inverse of src.data.unified_rooms.normalize_xy_meters for a room's own frame).
+    : var_xy: (M, 2) normalized positions
     : var_bounds: (x_min, x_max, y_min, y_max) in meters of the room's frame
+    : return: (M, 2) positions in meters
     """
     #
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-    #
-    os.makedirs(save_dir, exist_ok=True)
+    ##
     var_x0, var_x1, var_y0, var_y1 = var_bounds
-    var_num = min(var_num_samples, len(var_true_xy))
-    var_pick = np.linspace(0, len(var_true_xy) - 1, var_num).astype(int)
-    var_true_xy = np.asarray(var_true_xy)[var_pick]
-    var_pred_xy = np.asarray(var_pred_xy)[var_pick]
-    var_true_m = np.stack([var_x0 + var_true_xy[:, 0] * (var_x1 - var_x0),
-                           var_y0 + var_true_xy[:, 1] * (var_y1 - var_y0)], axis=1)
-    var_pred_m = np.stack([var_x0 + var_pred_xy[:, 0] * (var_x1 - var_x0),
-                           var_y0 + var_pred_xy[:, 1] * (var_y1 - var_y0)], axis=1)
-    #
-    var_fig, var_ax = plt.subplots(figsize=(6, 6))
-    var_ax.scatter(var_true_m[:, 0], var_true_m[:, 1], s=10, c="tab:pink", alpha=0.5, label="true")
-    var_ax.scatter(var_pred_m[:, 0], var_pred_m[:, 1], s=10, c="tab:blue", alpha=0.5, label="pred")
-    var_ax.set_xlim(var_x0, var_x1); var_ax.set_ylim(var_y0, var_y1)
-    var_ax.set_aspect("equal"); var_ax.set_xlabel("x (m)"); var_ax.set_ylabel("y (m)")
-    var_ax.set_title(f"{var_room} - true vs predicted positions")
-    var_ax.legend(loc="upper right")
-    var_path = os.path.join(save_dir, f"predictions_{var_room}.png")
-    var_fig.tight_layout(); var_fig.savefig(var_path, dpi=120); plt.close(var_fig)
-    return var_path
+    var_xy = np.asarray(var_xy, dtype=np.float64).reshape(-1, 2)
+    return np.stack([var_x0 + var_xy[:, 0] * (var_x1 - var_x0),
+                     var_y0 + var_xy[:, 1] * (var_y1 - var_y0)], axis=1)
 
 
 def visualize_sample_predictions(var_room_data, save_dir, var_bounds, var_num_samples=5):
@@ -310,7 +313,8 @@ def visualize_sample_predictions(var_room_data, save_dir, var_bounds, var_num_sa
     [description]
     : per-sample ground-truth-vs-prediction panels for every query room in one figure: one row per
       query sample, two columns per room (ground truth | predicted), both in raw meters on the shared
-      frame. The aggregate scatter (visualize_localization_predictions) shows the error distribution;
+      frame. The aggregate scatter (visualize_location_position_scatter, drawn by the runner next to the
+      constant baseline) shows the error distribution;
       this shows what one prediction actually looks like, which is what separates "close but the wrong
       side of the room" from "lands on the neighbouring location". Saves
       <save_dir>/samples_all_rooms.png.
@@ -379,7 +383,7 @@ def visualize_sample_predictions(var_room_data, save_dir, var_bounds, var_num_sa
 
 def run_localization_cross_domain(train_sets_by_room, test_sets_by_room, var_repeat=3,
                                   save_path="./visualizations/room_localization",
-                                  var_spans=None, var_bounds=None):
+                                  var_spans=None, var_bounds=None, var_model_factory=None):
     """
     [description]
     : leave-one-room-out localization over an arbitrary room set (possibly mixing datasets). Trains on
@@ -390,11 +394,15 @@ def run_localization_cross_domain(train_sets_by_room, test_sets_by_room, var_rep
     : train_sets_by_room / test_sets_by_room: dict room name -> (X (N, window, features), XY (N, 2) normalized)
     : var_spans: dict room -> (x_span, y_span) in meters (defaults to H-WILD geometry)
     : var_bounds: dict room -> (x_min, x_max, y_min, y_max) in meters (defaults to H-WILD geometry)
+    : var_model_factory: callable taking the CSI window shape (time, features) and returning the
+      localizer to train; the default is RoomLocalizer. src.models.room_localization.localizer_class
+      resolves a --backbone name to one, and what the checkpoint records is that class's name.
     : return: dict, room name -> averaged localization metrics with SE
     """
     #
     device = select_device()
-    print(f"Using device: {device}")
+    var_build_model = var_model_factory if var_model_factory is not None else RoomLocalizer
+    print(f"Using device: {device} | localizer {var_build_model.__name__}")
     #
     var_all_rooms = list(train_sets_by_room) + list(test_sets_by_room)
     var_spans = _resolve_spans(var_all_rooms, var_spans)
@@ -426,8 +434,10 @@ def run_localization_cross_domain(train_sets_by_room, test_sets_by_room, var_rep
     var_x_shape = tuple(var_train_datasets[0].dataset.tensors[0].shape[1:])
     ## The mean training-room position is a trivial "no-information" localizer. It is reported next
     ## to every test-room error: a model that does not beat it has not learned a transferable mapping
-    ## from CSI to position, however low the raw error looks.
-    var_train_mean_xy = np.concatenate(var_train_y_all).mean(axis=0)
+    ## from CSI to position, however low the raw error looks. The pooled positions are kept as well, so
+    ## each per-room figure can draw the prior the model was trained on under its own predictions.
+    var_train_xy = np.concatenate(var_train_y_all)
+    var_train_mean_xy = var_train_xy.mean(axis=0)
     print(f"Training rooms: {var_train_rooms} ({len(data_train_set)} train / "
           f"{len(data_valid_set)} valid) | Test rooms: {list(test_sets_by_room)}")
     print(f"Constant-position baseline (mean training position): {var_train_mean_xy.round(3)}")
@@ -440,7 +450,7 @@ def run_localization_cross_domain(train_sets_by_room, test_sets_by_room, var_rep
                    config=preset, reinit=True)
         torch.random.manual_seed(var_r + 39)
         #
-        model = RoomLocalizer(var_x_shape).to(device)
+        model = var_build_model(var_x_shape).to(device)
         optimizer = torch.optim.Adam(model.parameters(), lr=preset["hwild"]["lr"],
                                      weight_decay=preset["hwild"]["weight_decay"])
         var_best_weight, _ = train_room_localizer(
@@ -488,7 +498,7 @@ def run_localization_cross_domain(train_sets_by_room, test_sets_by_room, var_rep
             gc.collect()
         else:
             var_ckpt = {"state_dict": model.state_dict(), "x_shape": var_x_shape,
-                        "train_rooms": var_train_rooms}
+                        "backbone": var_build_model.__name__, "train_rooms": var_train_rooms}
             torch.save(var_ckpt, os.path.join(save_path, "model.pth"))
     wandb.finish()
     #
@@ -510,8 +520,17 @@ def run_localization_cross_domain(train_sets_by_room, test_sets_by_room, var_rep
             np.mean([var_rep["const_occupancy_accuracy"] for var_rep in var_rep_list]))
         results[var_room] = var_env_result
         var_true_xy, var_pred_xy = var_env_last_xy[var_room]
-        visualize_localization_predictions(var_true_xy, var_pred_xy, var_room,
-                                           os.path.join(save_path, var_room), var_bounds[var_room])
+        ## true, predicted and the constant baseline (the mean training position) in one scatter: the
+        ## visual counterpart of the const_mean_error_m the report prints for this room
+        visualize_location_position_scatter(
+            positions_to_meters(var_true_xy, var_bounds[var_room]),
+            positions_to_meters(var_pred_xy, var_bounds[var_room]),
+            var_room, os.path.join(save_path, var_room), var_bounds[var_room],
+            var_const_pos=positions_to_meters(np.asarray(var_train_mean_xy)[None, :],
+                                              var_bounds[var_room]),
+            var_const_label="constant (mean training position)",
+            var_prior_pos=positions_to_meters(var_train_xy, var_bounds[var_room]),
+            var_prior_label="training prior (training rooms)")
         ## the standard per-location figures, with the room's grid cells as locations
         visualize_room_grid_performance([[var_t] for var_t in var_true_xy],
                                         [[var_p] for var_p in var_pred_xy],
@@ -668,7 +687,8 @@ def run_few_shot_localization(hwild_sets_by_room, wimans_sets_by_room, var_few_s
     : var_bounds: (x0, x1, y0, y1) of the shared frame in meters
     : var_model_factory: callable taking the CSI window shape (time, features) and returning the
       localizer module. None (default) builds RoomLocalizer. This is what lets a caller swap the
-      backbone (e.g. src.models.resnet1d.ResNet1DLocalizer) without touching the training or metric code.
+      backbone (e.g. src.models.resnet1d.ResNet1DLocalizer) without touching the training or metric
+      code; localizer_class resolves a --backbone name to one.
     : return: dict with per-room student/teacher/baseline metrics
     """
     #
@@ -751,8 +771,9 @@ def run_few_shot_localization(hwild_sets_by_room, wimans_sets_by_room, var_few_s
                                           torch.from_numpy(var_w_y[var_few_idx]))
     var_student_valid_set = TensorDataset(torch.from_numpy(var_w_x[var_valid_idx]),
                                           torch.from_numpy(var_w_y[var_valid_idx]))
-    print(f"H-WILD teacher: {len(var_teacher_x)} windows ({len(var_t_train)} train / "
-          f"{len(var_teacher_valid_set)} valid)")
+    var_teacher_rooms = list(hwild_sets_by_room)
+    print(f"Teacher: {len(var_teacher_x)} windows from {join_envs(var_teacher_rooms)} "
+          f"({len(var_t_train)} train / {len(var_teacher_valid_set)} valid)")
     var_support_label = (",".join(var_wimans_rooms[var_idx] for var_idx in var_support_room_idx)
                          if var_support_rooms is not None
                          else f"query pool ({len(var_wimans_rooms)} rooms)")
@@ -762,7 +783,7 @@ def run_few_shot_localization(hwild_sets_by_room, wimans_sets_by_room, var_few_s
     print(f"kd_weight {var_kd_weight} | init_from_teacher {var_init_from_teacher}")
     #
     ## ------------------------------------------ teacher --------------------------------------------
-    print("\n--- teacher (H-WILD) ---")
+    print(f"\n--- teacher ({join_envs(var_teacher_rooms)}) ---")
     wandb.init(project="few_shot_localization", name=f"teacher_kd{var_kd_weight}", config=preset,
                reinit=True)
     torch.random.manual_seed(39)
@@ -866,8 +887,14 @@ def run_few_shot_localization(hwild_sets_by_room, wimans_sets_by_room, var_few_s
                 np.mean([var_rep[f"const_{var_name}"] for var_rep in var_student_list]))
         results[var_room] = var_env_result
         var_true_xy, var_pred_xy = var_env_last_xy[var_room]
-        visualize_localization_predictions(var_true_xy, var_pred_xy, var_room,
-                                           os.path.join(save_path, var_room), var_bounds)
+        visualize_location_position_scatter(
+            positions_to_meters(var_true_xy, var_bounds),
+            positions_to_meters(var_pred_xy, var_bounds),
+            var_room, os.path.join(save_path, var_room), var_bounds,
+            var_const_pos=positions_to_meters(np.asarray(var_const_baseline)[None, :], var_bounds),
+            var_const_label="constant (mean support position)",
+            var_prior_pos=positions_to_meters(var_w_y[var_few_idx], var_bounds),
+            var_prior_label="support pool prior (the frames the student saw)")
         ## collected for the single all-rooms per-sample figure drawn after the loop
         var_sample_panels.append((var_room, var_true_xy, var_pred_xy))
         ## the standard per-location figures, with the room's grid cells as locations
@@ -927,13 +954,14 @@ def format_few_shot_result(var_few_shot_ratio, var_kd_weight, results):
 def load_room_model(var_path, device=None):
     """
     [description]
-    : rebuild a RoomLocalizer saved by run_localization_cross_domain and load its weights.
+    : rebuild a localizer saved by run_localization_cross_domain and load its weights. The checkpoint
+      records which class was trained (its "backbone" entry), so a ResNet1D run reloads as one.
     : return: (model, checkpoint dict)
     """
     #
     var_device = device if device is not None else select_device()
     var_ckpt = torch.load(var_path, map_location=var_device)
-    var_model = RoomLocalizer(tuple(var_ckpt["x_shape"])).to(var_device)
+    var_model = localizer_class(var_ckpt.get("backbone", "that"))(tuple(var_ckpt["x_shape"])).to(var_device)
     var_model.load_state_dict(var_ckpt["state_dict"])
     var_model.eval()
     return var_model, var_ckpt

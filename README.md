@@ -188,13 +188,27 @@ python scripts/run_hwild.py --holdout Lounge --repeat 3 --epochs 60
 
 # quick smoke test on a few captures per room
 python scripts/run_hwild.py --holdout Lounge --max_files 4 --epochs 2 --repeat 1
+
+# the same run with the ResNet1D localizer instead of the THAT one
+python scripts/run_hwild.py --holdout Lounge --backbone resnet1d --repeat 3 --epochs 60
 ```
+
+`--backbone` picks the localizer: `that` (default) is `RoomLocalizer` over the WiMANS THAT backbone,
+`resnet1d` is `ResNet1DLocalizer` over the CSI window (`src/models/resnet1d.py`, the
+ResNet1D-[1,1,1,1] of the WiMANS paper with its own MLP head). Both are complete models behind the same
+`(batch, time, features) -> (batch, 2)` contract, resolved in one place by
+`src.models.room_localization.localizer_class` — which is also what a checkpoint records, so a
+saved ResNet1D run reloads as one.
 
 Positions live in a fixed per-room `[0, 1]^2` frame built from the dataset's own coordinate grid
 (`src/data/hwild.py`, transcribed from `obtain_parameters.m`), so a model trained on some rooms
 predicts normalized coordinates that denormalize to meters in any room. Per-room metrics, prediction
 scatters and a training-curve plot are written under `visualizations/hwild/`, and the JSON/TXT report
-under `output/hwild/`. Each test room also gets the standard performance figures
+under `output/hwild/`. The per-room `predictions_<room>.png` puts the training rooms' positions (grey
+prior cloud), the ground truth, the prediction and the **constant (mean training position) baseline** in
+one figure, so the constant the report prints as an error is also visible as a point, and a prediction
+cloud sitting on the prior says the model learned the training rooms and nothing else. Each test room
+also gets the standard performance figures
 (`count_distributions`, `confusion_matrices`, `confusion_matrices_norm`, `error_distribution`,
 `class_errors`, `prediction_scatter`) with the room's `[0,1]^2` frame split into a fixed
 `preset["viz"]["grid"]` x `preset["viz"]["grid"]` cell grid as the "locations".
@@ -248,6 +262,24 @@ so a run that only predicts a room centre is obvious. Outputs go to `output/lor_
 per fold, `visualizations/lor_all/<model>/holdout_<room>/<test_room>/` (training curves, position
 scatter, and the standard per-location figures on the fixed `preset["viz"]["grid"]` cell grid).
 
+The older, WiMANS-only cross-domain runner (`scripts/run_cross_domain.py`, driven by
+`scripts/cross-domain.sh` and `scripts/cross_domain_3_env.sh`) trains on one or two WiMANS rooms and
+tests on every remaining one. Its `--task location` runs now also write a **position scatter** per test
+room (`predictions_<room>.png`): the true and the predicted WiMANS location positions in meters from the
+transmitter, one marker per occupied location per frame, plus a **constant-baseline marker** — the
+occurrence-weighted mean of the training rooms' locations, placed in the test room's layout, i.e. the
+point "always predict the average location" lands on — and, drawn underneath, the **training prior**:
+the training rooms' locations as a grey cloud (`location_prior_positions`, one row per training
+frame × location, scaled down when it would be huge), so the same figure answers "do the predictions
+sit on the training rooms' prior?" without a second plot. That makes the reference the reports print as a
+number visible against the prediction cloud. It is
+built from the class indices of the labels and of the model's last decoder layer, mapped through
+`preset["encoding"]["location"]` and `preset["layouts"]` (the same bank is echoed as
+`location_positions_m` in the run's JSON). `AMAR_WO_RVQ` draws it, and the `dummy_model` constant
+baseline draws it too — there the cloud *is* the training prior, so the same marker is drawn beside it
+as the "always say the average training location" reference; the density heads keep their own spatial
+figures (density map, coordinate heatmap).
+
 ### 5. H-WILD → WiMANS transfer in a shared transmitter-anchored frame
 
 `scripts/run_hwild_to_wimans.py` trains a room-agnostic model on H-WILD and evaluates it on the WiMANS
@@ -274,7 +306,16 @@ feeds raw amplitude.
 ```bash
 python scripts/run_hwild_to_wimans.py --repeat 2 --epochs 40 --max_files 3 --standardize window
 python scripts/run_hwild_to_wimans.py --standardize none     # raw-amplitude ablation
+
+# ResNet1D localizer instead of RoomLocalizer (--model density has its own backbone and rejects it)
+python scripts/run_hwild_to_wimans.py --backbone resnet1d --repeat 2 --epochs 40 --max_files 3
 ```
+
+`--backbone that|resnet1d` selects the localizer the `localizer` model trains (see §3); the run's JSON
+records the choice, and the per-room `predictions_<room>.png` scatter shows where the predictions land
+rather than only their error — the training rooms' positions as a grey prior cloud underneath, true,
+predicted and the constant (mean training position) baseline in one figure, so "does not beat the
+constant" is visible and not only printed.
 
 **`--model density`** swaps the single-target regressor for the multi-user density head
 (`src/models/room_density.py`), which predicts an occupancy map and reports occupancy/detection
@@ -433,7 +474,10 @@ six rooms is ~20 GiB. The few-shot runner therefore streams the pool room by roo
 (`prepare_transfer_task(..., var_stream_pool=True)`), reading only the frames each indexing step
 touches; the pure-split runner materializes just its query split.
 
-Reports go to `output/ntu_to_wimans/*.json|txt` and figures to `visualizations/ntu_to_wimans/`.
+Reports go to `output/ntu_to_wimans/*.json|txt` and figures to `visualizations/ntu_to_wimans/` — the
+confusion-matrix panel plus the head-clustering figure the *What the head does with the query frames*
+section describes, drawn for this runner's single model (no teacher/student pair to contrast here), and
+the cross-room embedding-metadata figure that comes with it.
 
 ### 8. NTU-Fi HAR → WiMANS few-shot knowledge distillation
 
@@ -526,9 +570,10 @@ algorithm, so every occupant lands on one slot and the samples that land on the 
 the head treats as one thing. On the last repeat the few-shot runner draws that for the teacher and the
 student, per environment, into
 `visualizations/few_shot_ntu_to_wimans/<run>/<environment>/clustering_teacher_r<k>.png` and
-`clustering_student_r<k>.png`, and puts the per-slot and per-cluster summaries (`samples`,
-`top_activity`, `purity`; slots also carry `predicted_class`) under `per_env.<environment>.clustering`
-in the run's JSON.
+`clustering_student_r<k>.png`; the pure-split runner draws the same figure for its single model into
+`visualizations/ntu_to_wimans/<run>/<environment>/clustering_model_r<k>.png`. Both then put the per-slot
+and per-cluster summaries (`samples`, `top_activity`, `purity`; slots also carry `predicted_class`)
+under `per_env.<environment>.clustering` in the run's JSON.
 
 Each figure has: the query embeddings of the matched slots in a t-SNE coloured by true activity; the
 same points coloured by a KMeans clustering of those matched-slot embeddings, each cluster labelled

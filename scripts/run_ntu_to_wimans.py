@@ -246,7 +246,8 @@ def run():
     var_save_path = reserve_viz_dir(path="ntu_to_wimans/ntu_har")
     var_per_env = run_cross_domain(var_task["train_sets_by_env"], var_task["query_by_env"],
                                    var_repeat=var_args.repeat, var_task="activity",
-                                   var_env=["ntu_har"], save_path=var_save_path)
+                                   var_env=["ntu_har"], save_path=var_save_path,
+                                   var_class_names=var_shared)
     for var_room, var_metrics in var_baseline.items():
         if var_room in var_per_env:
             var_per_env[var_room].update(var_metrics)

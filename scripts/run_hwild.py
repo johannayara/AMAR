@@ -24,7 +24,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from configs.preset import preset
 from src.data.hwild import room_names, load_hwild_room, room_span, HWILD_ROOMS
-from src.models.room_localization import run_localization_cross_domain, format_localization_result
+from src.models.room_localization import (run_localization_cross_domain, format_localization_result,
+                                          localizer_class)
 from src.utils import save_run_outputs, build_run_stem, join_envs, run_timestamp
 
 #
@@ -56,6 +57,11 @@ def parse_args():
                           help="comma-separated volunteer ids, e.g. '1,2,3'")
     var_args.add_argument("--interference", default=None, type=str,
                           help="'w' (with interference), 'wo' (without), or 'w,wo'")
+    var_args.add_argument("--backbone", default="that", choices=("that", "resnet1d"),
+                          help="which localizer to train. Each choice is a complete model, backbone "
+                               "plus its own regression head: 'that' (default) is RoomLocalizer over "
+                               "the WiMANS THAT backbone, 'resnet1d' is ResNet1DLocalizer over the CSI "
+                               "window (src/models/resnet1d.py)")
     #
     return var_args.parse_args()
 
@@ -120,11 +126,13 @@ def run():
     ## --------------------------------------- run the model ----------------------------------------
     var_save_path = f"./visualizations/hwild/{'_'.join(var_train_rooms)}"
     os.makedirs(var_save_path, exist_ok=True)
-    var_results = run_localization_cross_domain(train_sets_by_room, test_sets_by_room,
-                                                var_repeat=var_args.repeat, save_path=var_save_path)
+    var_results = run_localization_cross_domain(
+        train_sets_by_room, test_sets_by_room, var_repeat=var_args.repeat, save_path=var_save_path,
+        var_model_factory=localizer_class(var_args.backbone))
     #
     var_result = {
         "protocol": "leave-one-room-out",
+        "backbone": var_args.backbone,
         "train_rooms": var_train_rooms,
         "test_rooms": var_test_rooms,
         "repeat": var_args.repeat,
