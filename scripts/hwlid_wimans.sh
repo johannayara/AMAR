@@ -10,7 +10,7 @@ set -euo pipefail
 source /software/anaconda3/etc/profile.d/conda.sh
 conda activate AMAR
 
-mkdir -p "./output/few_shot_hwild_wimans/wimans_hwild"
+mkdir -p "./output/few_shot_sim_wimans"
 
 start=$(date +%s)
 echo "Start: $(date)"
@@ -23,19 +23,12 @@ export AMAR_ENCODER_NORM=group
 #   --support_rooms classroom --repeat 3 \
 #   --teacher_epochs 200 --student_epochs 200 --few_shot_ratio 0.1 --kd_weight 0 > "./output/few_shot_hwild_wimans/group/run_$(date +%Y%m%d_%H%M).log" 2>&1
 python scripts/run_few_shot_hwild_to_wimans.py \
-  --train_rooms "meeting_room, empty_room, meeting_room_synth, empty_room_synth, classroom, classroom_synth" \
-  --test_rooms "Conference, Laboratory, Lounge " \
-  --support_rooms Office --repeat 3 \
+  --train_rooms "meeting_room_synth, empty_room_synth, classroom_synth" \
+  --test_rooms "empty_room, meeting_room, classroom " \
+  --support_rooms classroom --repeat 3 \
   --teacher_epochs 200 --student_epochs 200 --few_shot_ratio 0.1 --kd_weight 0 \
   --hp data.synth_wimans.enabled=true \
-  > "./output/few_shot_hwild_wimans/wimans_hwild/run_synth_$(date +%Y%m%d_%H%M).log" 2>&1
-
-python scripts/run_few_shot_hwild_to_wimans.py --repeat 3 \
-  --train_rooms "meeting_room, empty_room, classroom" \
-  --test_rooms "Conference, Laboratory, Lounge " \
-  --support_rooms Office --repeat 3 \
-  --teacher_epochs 200 --student_epochs 200 --few_shot_ratio 0.1 --kd_weight 0 \
-  > "./output/few_shot_hwild_wimans/wimans_hwild/run_$(date +%Y%m%d_%H%M).log" 2>&1 
+  > "./output/few_shot_sim_wimans/run_synth_$(date +%Y%m%d_%H%M).log" 2>&1
 
 end=$(date +%s)
 

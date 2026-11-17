@@ -346,8 +346,7 @@ def run():
 
     formatted = format_result(var_model, var_task, var_results, var_args.few_shot_ratio,
                               var_args.kd_weight, join_envs(var_train_rooms))
-    ## write the JSON and the human-readable report to auto-named files, so the per-teacher-room and
-    ## repeated runs never collide and never need renaming
+  
     var_epochs_tag = (var_args.student_epochs if var_args.student_epochs is not None
                       else preset["hwild"]["epoch"])
     var_stem = build_run_stem(var_model, var_task, f"train-{join_envs(var_train_rooms)}",

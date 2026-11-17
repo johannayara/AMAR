@@ -35,8 +35,8 @@ preset = {
         ## grid, so it loads with the same feature count as real WiMANS.
         "synth_wimans": {
             "enabled": False,
-            "data_x": "dataset/synth_wimans/fewshot-groups-3x3-wimans/wifi_csi/amp",
-            "data_y": "dataset/synth_wimans/fewshot-groups-3x3-wimans/annotation.csv",
+            "data_x": "dataset/synth_wimans/fewshot-anywhere-wimans/wifi_csi/amp",
+            "data_y": "dataset/synth_wimans/fewshot-anywhere-wimans/annotation.csv",
             "wifi_band": ["2.4"],
             "suffix": "_synth",
         },
@@ -111,7 +111,7 @@ preset = {
         ##     it over time to (B, D) to match THAT's aggregation. ~5.7x fewer parameters than THAT
         ##     (0.19M vs 1.08M). Other models ignore it and fall back to THAT.
         "backbone": "default",
-        "num_obj_queries": 20, #TODO: change this if more people
+        "num_obj_queries": 20, # change this if more classes, amount of queries to be classified 
         "num_decoder_layers":6,
         "dim_FFN": 512,
         "token_length": 188, 

@@ -12,18 +12,7 @@
                         skip  = C1D 1 -> 128, BN        (matches the channel count so f(x) + x works)
                         out   = ReLU(f(x) + skip(x))
                   - global average pool -> linear head
-
-                This is the ResNet1D-[1,1,1,1] of the paper (4 residual blocks, one basic block each).
-                Its parallel activity head and its softmax-over-locations head are not reproduced: the
-                localization runner regresses one position in a per-run shared [0, 1]^2 frame so a model
-                can be scored on rooms it never trained on (src/models/room_localization.py), which a
-                fixed per-room location vocabulary cannot express. The head here is its own small MLP to
-                (x, y), paired with the ResNet1D backbone; the two localizers only share the
-                (batch, time, features) -> (batch, 2) contract, not the head.
-
-                Purpose: a small, well-known CSI architecture to test whether the THAT backbone's
-                collapse to the mean position (see scripts/test_scripts/diagnose_localizer_fit.py) is a
-                property of the backbone or of the task.
+              
 """
 #
 ##
