@@ -22,6 +22,7 @@ python scripts/run_cross_domain.py --model "${model}" --task location \
   --train_envs "meeting_room, empty_room, anywhere" \
   --repeat 3 --epochs 70 \
   --hp data.synth_wimans.enabled=true \
+  --hp hwild.grad_clip=1.0 --hp hwild.ema_decay=0.999 \
   > "./output/cd/sim_wimans/${model}/run_$(date +%Y%m%d_%H%M).log" 2>&1
 
 # Train on anywhere alone, test on every real and simulated room.
@@ -29,6 +30,7 @@ python scripts/run_cross_domain.py --model "${model}" --task location \
   --train_envs "anywhere" \
   --repeat 3 --epochs 70 \
   --hp data.synth_wimans.enabled=true \
+  --hp hwild.grad_clip=1.0 --hp hwild.ema_decay=0.999 \
   > "./output/cd/sim_wimans/${model}/run_$(date +%Y%m%d_%H%M).log" 2>&1
 
 end=$(date +%s)

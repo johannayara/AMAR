@@ -25,6 +25,7 @@ python scripts/run_few_shot_multi_rooms.py \
   --support_rooms classroom --repeat 3 --standardize window \
   --teacher_epochs 70 --student_epochs 200 --few_shot_ratio 0.1 --kd_weight 0.3 \
   --hp data.synth_wimans.enabled=true  --no_init_from_teacher \
+  --hp hwild.grad_clip=1.0 --hp hwild.ema_decay=0.999 \
   > "./output/sim_wimans/few-shot-anywhere/normal_rooms/run_synth_$(date +%Y%m%d_%H%M).log" 2>&1
 
 python scripts/run_few_shot_multi_rooms.py \
@@ -34,6 +35,7 @@ python scripts/run_few_shot_multi_rooms.py \
   --support_rooms classroom --repeat 3 --standardize window \
   --teacher_epochs 70 --student_epochs 200 --few_shot_ratio 0.1 --kd_weight 0.3 \
   --hp data.synth_wimans.enabled=true  --no_init_from_teacher \
+  --hp hwild.grad_clip=1.0 --hp hwild.ema_decay=0.999 \
   > "./output/sim_wimans/few-shot-anywhere/sim_rooms/run_synth_$(date +%Y%m%d_%H%M).log" 2>&1
 
 end=$(date +%s)

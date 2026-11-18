@@ -227,10 +227,19 @@ def train_room_localizer(model, optimizer, data_train_set, data_valid_set, var_b
         num_training_steps=var_epochs * len(var_train_loader),
         min_lr_ratio=preset["nn"]["scheduler"]["min_lr_ratio"])
     #
+    ## stabilisation (see preset["hwild"]): clip the step, and optionally keep a weight EMA that is
+    ## used when it scores better on the validation split than the best raw checkpoint
+    var_grad_clip = float(preset["hwild"].get("grad_clip", 0.0) or 0.0)
+    var_ema_decay = float(preset["hwild"].get("ema_decay", 0.0) or 0.0)
+    var_ema_model = copy.deepcopy(model).eval() if var_ema_decay > 0 else None
+    if var_ema_model is not None:
+        for var_ema_p in var_ema_model.parameters():
+            var_ema_p.requires_grad_(False)
+    #
     var_history = {var_key: [] for var_key in (
         "epoch", "train_loss", "valid_loss", "valid_error_m", "valid_error_m_smoothed", "learning_rate")}
     var_best_score, var_best_weight, var_epoch_saved, var_counter = np.inf, None, 0, 0
-    var_ema_error, var_ema_decay = None, 0.3
+    var_ema_error, var_ema_decay_metric = None, 0.3
     #
     for var_epoch in range(var_epochs):
         var_time = time.time()
@@ -242,8 +251,16 @@ def train_room_localizer(model, optimizer, data_train_set, data_valid_set, var_b
             var_loss = F.smooth_l1_loss(model(var_x), var_xy)
             optimizer.zero_grad()
             var_loss.backward()
+            if var_grad_clip > 0:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), var_grad_clip)
             optimizer.step()
             var_scheduler.step()
+            if var_ema_model is not None:
+                with torch.no_grad():
+                    for var_ema_p, var_p in zip(var_ema_model.parameters(), model.parameters()):
+                        var_ema_p.mul_(var_ema_decay).add_(var_p, alpha=1.0 - var_ema_decay)
+                    for var_ema_b, var_b in zip(var_ema_model.buffers(), model.buffers()):
+                        var_ema_b.copy_(var_b)
             var_loss_sum += float(var_loss.detach())
             var_batches += 1
         var_train_loss = var_loss_sum / max(1, var_batches)
@@ -257,7 +274,8 @@ def train_room_localizer(model, optimizer, data_train_set, data_valid_set, var_b
         var_span = var_span_bank[var_valid_batch[2]].numpy()
         var_metrics = localization_metrics(var_pred_xy, var_valid_xy.cpu().numpy(), var_span)
         var_ema_error = (var_metrics["mean_error_m"] if var_ema_error is None
-                         else var_ema_decay * var_metrics["mean_error_m"] + (1 - var_ema_decay) * var_ema_error)
+                         else var_ema_decay_metric * var_metrics["mean_error_m"]
+                         + (1 - var_ema_decay_metric) * var_ema_error)
         #
         wandb.log({"epoch": var_epoch, "train_loss": var_train_loss, "valid_loss": var_valid_loss,
                    "valid_error_m": var_metrics["mean_error_m"],
@@ -285,6 +303,18 @@ def train_room_localizer(model, optimizer, data_train_set, data_valid_set, var_b
             print(f"Early stopping triggered at epoch {var_epoch}")
             break
     #
+    ## the weight EMA is a different point in weight space than the best raw epoch's weights; keep
+    ## whichever scores better on the validation split
+    if var_ema_model is not None and var_best_weight is not None:
+        var_ema_model.eval()
+        with torch.no_grad():
+            var_pred_ema = var_ema_model(var_valid_x).cpu().numpy()
+        var_ema_metrics = localization_metrics(var_pred_ema, var_valid_xy.cpu().numpy(), var_span)
+        print(f"Weight-EMA validation error {var_ema_metrics['mean_error_m']:.4f} m "
+              f"(best raw smoothed {var_best_score:.4f} m)")
+        if var_ema_metrics["mean_error_m"] < var_best_score:
+            var_best_weight = copy.deepcopy(var_ema_model.state_dict())
+            var_best_score = var_ema_metrics["mean_error_m"]
     if var_best_weight is None:
         var_best_weight = copy.deepcopy(model.state_dict())
     print(f"Epoch that the model was saved {var_epoch_saved} - best smoothed error {var_best_score:.4f} m")
@@ -584,6 +614,8 @@ def train_student_localizer(model, teacher, optimizer, data_train_set, data_vali
         num_training_steps=var_epochs * len(var_train_loader),
         min_lr_ratio=preset["nn"]["scheduler"]["min_lr_ratio"])
     #
+    var_grad_clip = float(preset["hwild"].get("grad_clip", 0.0) or 0.0)
+    #
     var_history = {var_key: [] for var_key in ("epoch", "train_loss", "valid_loss", "supervised_loss",
                                                "kd_loss", "valid_error_m", "valid_error_m_smoothed")}
     var_best_score, var_best_weight, var_epoch_saved, var_counter = np.inf, None, 0, 0
@@ -605,6 +637,8 @@ def train_student_localizer(model, teacher, optimizer, data_train_set, data_vali
             var_loss = var_sup + var_kd_weight * var_kd
             optimizer.zero_grad()
             var_loss.backward()
+            if var_grad_clip > 0:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), var_grad_clip)
             optimizer.step()
             var_scheduler.step()
             var_loss_sum += float(var_loss.detach())

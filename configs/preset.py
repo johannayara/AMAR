@@ -259,6 +259,13 @@ preset = {
         "batch_size": 32,
         "lr": 1e-3,
         "weight_decay": 2e-4,
+        ## Localizer training stabilisation (train_room_localizer / train_student_localizer). The
+        ## 5-spot WiMANS rooms leave the regressor oscillating in and out of the good basin, so both
+        ## knobs are exposed. grad_clip (0 = off) clips the global gradient norm each step.
+        ## ema_decay (>0 = on) keeps an exponential moving average of the weights and uses it when it
+        ## scores better on the validation split, which is the strongest lever on the oscillation.
+        "grad_clip": 1.0,
+        "ema_decay": 0.0,
     },
 
     ## NTU-Fi HAR cross-dataset activity transfer. The label space is picked by

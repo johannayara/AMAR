@@ -32,6 +32,7 @@
 ##
 
 import argparse
+import copy
 import os
 import sys
 import time
@@ -43,6 +44,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..',
 
 from configs.preset import preset
 from src.data.unified_rooms import load_wimans_room_targets, wimans_room_names
+from src.models.density_map import get_cosine_schedule_with_warmup
 from src.models.room_localization import localizer_class
 from src.utils import select_device
 
@@ -71,6 +73,17 @@ def parse_args():
     var_args.add_argument("--batch_size", default=32, type=int)
     var_args.add_argument("--valid_frac", default=0.2, type=float)
     var_args.add_argument("--seed", default=39, type=int)
+    var_args.add_argument("--grad_clip", default=1.0, type=float,
+                          help="clip the global gradient norm each step (0 = off)")
+    var_args.add_argument("--ema_decay", default=0.999, type=float,
+                          help="decay of the weight EMA evaluated alongside the raw weights (0 = off)")
+    var_args.add_argument("--schedule", default="cosine", choices=("cosine", "none"),
+                          help="'cosine' (default) mirrors train_room_localizer's warmup+cosine LR; "
+                               "'none' keeps the LR flat")
+    var_args.add_argument("--warmup_frac", default=0.05, type=float,
+                          help="fraction of --steps spent warming the LR up under 'cosine'")
+    var_args.add_argument("--eval_every", default=None, type=int,
+                          help="steps between validation evaluations (default: steps // 10)")
     #
     return var_args.parse_args()
 
@@ -235,6 +248,20 @@ def run():
     var_model.train()
     var_opt = torch.optim.Adam(var_model.parameters(), lr=var_args.lr)
     var_batch = min(var_args.batch_size, len(var_train))
+    var_eval_every = var_args.eval_every or max(1, var_args.steps // 10)
+    var_scheduler = None
+    if var_args.schedule == "cosine":
+        ## mirrors train_room_localizer: warmup then cosine to min_lr_ratio, so the tail is calm
+        var_scheduler = get_cosine_schedule_with_warmup(
+            var_opt, num_warmup_steps=max(1, int(var_args.warmup_frac * var_args.steps)),
+            num_training_steps=var_args.steps,
+            min_lr_ratio=preset["nn"]["scheduler"]["min_lr_ratio"])
+    var_ema_model = None
+    if var_args.ema_decay and var_args.ema_decay > 0:
+        var_ema_model = copy.deepcopy(var_model)
+        for var_p in var_ema_model.parameters():
+            var_p.requires_grad_(False)
+    var_best_valid, var_best_step, var_best_state = float("inf"), 0, None
     var_start = time.time()
     for var_step in range(var_args.steps):
         var_idx = torch.randint(len(var_train), (var_batch,), device=var_device)
@@ -242,14 +269,39 @@ def run():
                                                       var_yt[var_train_t][var_idx])
         var_opt.zero_grad()
         var_loss.backward()
+        if var_args.grad_clip and var_args.grad_clip > 0:
+            torch.nn.utils.clip_grad_norm_(var_model.parameters(), var_args.grad_clip)
         var_opt.step()
-        if var_step % max(1, var_args.steps // 10) == 0 or var_step == var_args.steps - 1:
+        if var_scheduler is not None:
+            var_scheduler.step()
+        if var_ema_model is not None:
+            with torch.no_grad():
+                for var_ema_p, var_p in zip(var_ema_model.parameters(), var_model.parameters()):
+                    var_ema_p.mul_(var_args.ema_decay).add_(var_p, alpha=1.0 - var_args.ema_decay)
+                for var_ema_b, var_b in zip(var_ema_model.buffers(), var_model.buffers()):
+                    var_ema_b.copy_(var_b)
+        if var_step % var_eval_every == 0 or var_step == var_args.steps - 1:
+            var_train_err = evaluate(var_model, var_xt, var_yt, var_train_t)
+            var_valid_err = evaluate(var_model, var_xt, var_yt, var_valid_t)
+            if var_valid_err < var_best_valid:
+                var_best_valid, var_best_step = var_valid_err, var_step
+                var_best_state = copy.deepcopy(var_model.state_dict())
+            var_ema_note = ""
+            if var_ema_model is not None:
+                var_ema_note = f"  ema {evaluate(var_ema_model, var_xt, var_yt, var_valid_t):.3f} m"
             print(f"  step {var_step:4d}  loss {var_loss.item():.4f}  "
-                  f"train {evaluate(var_model, var_xt, var_yt, var_train_t):.3f} m  "
-                  f"valid {evaluate(var_model, var_xt, var_yt, var_valid_t):.3f} m")
+                  f"train {var_train_err:.3f} m  valid {var_valid_err:.3f} m{var_ema_note}")
             var_model.train()
+    var_last_valid = evaluate(var_model, var_xt, var_yt, var_valid_t)
+    var_ema_valid = (evaluate(var_ema_model, var_xt, var_yt, var_valid_t)
+                     if var_ema_model is not None else None)
+    ## the network is worth its best checkpoint, not its last step: load it before the confusion probe
+    if var_best_state is not None:
+        var_model.load_state_dict(var_best_state)
     print(f"trained {var_args.backbone} for {var_args.steps} steps ({time.time() - var_start:.1f}s) "
           f"on {len(var_train)} train / {len(var_valid)} valid windows")
+    print(f"valid: best {var_best_valid:.3f} m @ step {var_best_step} | last {var_last_valid:.3f} m"
+          + (f" | weight-EMA {var_ema_valid:.3f} m" if var_ema_valid is not None else ""))
     #
     ## per-location confusion on the held-out frames: the nearest-centroid row says whether the room's
     ## discrete positions are separable from the CSI at all (data), the trained-model row says whether
