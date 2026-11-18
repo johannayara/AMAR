@@ -806,6 +806,8 @@ def run_few_shot_localization(hwild_sets_by_room, wimans_sets_by_room, var_few_s
     ## last repeat's query predictions per room, kept for the prediction figures, as in
     ## run_localization_cross_domain
     var_env_last_xy = {}
+    #const predictors 
+    var_const_train_baseline = var_teacher_y.mean(axis=0)
     var_const_baseline = var_w_y[var_few_idx].mean(axis=0)
     for var_r in range(var_repeat):
         print(f"\n--- student repeat {var_r} ---")
@@ -842,6 +844,13 @@ def run_few_shot_localization(hwild_sets_by_room, wimans_sets_by_room, var_few_s
             var_student_metrics["const_rmse_m"] = var_const_metrics["rmse_m"]
             var_student_metrics["const_median_error_m"] = var_const_metrics["median_error_m"]
             var_student_metrics["const_occupancy_accuracy"] = var_const_metrics["occupancy_accuracy"]
+            var_const_train_metrics = localization_metrics(
+                np.tile(var_const_train_baseline, (len(var_q_y), 1)), var_q_y, var_span)
+            var_student_metrics["const_train_mean_error_m"] = var_const_train_metrics["mean_error_m"]
+            var_student_metrics["const_train_rmse_m"] = var_const_train_metrics["rmse_m"]
+            var_student_metrics["const_train_median_error_m"] = var_const_train_metrics["median_error_m"]
+            var_student_metrics["const_train_occupancy_accuracy"] = \
+                var_const_train_metrics["occupancy_accuracy"]
             var_student_query_metrics.setdefault(var_room, []).append(var_student_metrics)
             var_teacher_query_metrics.setdefault(var_room, []).append(
                 localization_metrics(var_teacher_xy, var_q_y, var_span))
@@ -856,7 +865,8 @@ def run_few_shot_localization(hwild_sets_by_room, wimans_sets_by_room, var_few_s
             print(f"  [{var_room}] query {len(var_sel)} frames | student {var_student_metrics['mean_error_m']:.4f} m "
                   f"| teacher {var_teacher_query_metrics[var_room][-1]['mean_error_m']:.4f} m "
                   f"| OccAcc {var_student_metrics['occupancy_accuracy']:.4f} "
-                  f"| const {var_student_metrics['const_mean_error_m']:.4f} m")
+                  f"| const(train) {var_student_metrics['const_train_mean_error_m']:.4f} m "
+                  f"| const(support) {var_student_metrics['const_mean_error_m']:.4f} m")
         wandb.finish()
         if var_r != var_repeat - 1:
             del var_student, var_student_opt
@@ -885,6 +895,8 @@ def run_few_shot_localization(hwild_sets_by_room, wimans_sets_by_room, var_few_s
         for var_name in ("mean_error_m", "rmse_m", "median_error_m", "occupancy_accuracy"):
             var_env_result[f"avg_const_{var_name}"] = float(
                 np.mean([var_rep[f"const_{var_name}"] for var_rep in var_student_list]))
+            var_env_result[f"avg_const_train_{var_name}"] = float(
+                np.mean([var_rep[f"const_train_{var_name}"] for var_rep in var_student_list]))
         results[var_room] = var_env_result
         var_true_xy, var_pred_xy = var_env_last_xy[var_room]
         visualize_location_position_scatter(
@@ -893,6 +905,9 @@ def run_few_shot_localization(hwild_sets_by_room, wimans_sets_by_room, var_few_s
             var_room, os.path.join(save_path, var_room), var_bounds,
             var_const_pos=positions_to_meters(np.asarray(var_const_baseline)[None, :], var_bounds),
             var_const_label="constant (mean support position)",
+            var_const_train_pos=positions_to_meters(np.asarray(var_const_train_baseline)[None, :],
+                                                    var_bounds),
+            var_const_train_label="constant (mean training position)",
             var_prior_pos=positions_to_meters(var_w_y[var_few_idx], var_bounds),
             var_prior_label="support pool prior (the frames the student saw)")
         ## collected for the single all-rooms per-sample figure drawn after the loop
@@ -938,6 +953,11 @@ def format_few_shot_result(var_few_shot_ratio, var_kd_weight, results):
             f"{var_env_result[f'se_teacher_{var_name}']:.4f} m (SE)"
             for var_name, var_label in var_metric_labels)
         var_lines.append(f"  Teacher   {var_teacher}  (H-WILD teacher, no WiMANS fine-tuning)")
+        var_const_train = " | ".join(
+            f"{var_label} {var_env_result[f'avg_const_train_{var_name}']:.4f} m"
+            for var_name, var_label in var_metric_labels)
+        var_lines.append(f"  Constant  {var_const_train}  (mean training position; the baseline "
+                         f"run_localization_cross_domain reports)")
         var_const = " | ".join(
             f"{var_label} {var_env_result[f'avg_const_{var_name}']:.4f} m"
             for var_name, var_label in var_metric_labels)

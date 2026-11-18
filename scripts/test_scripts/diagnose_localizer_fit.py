@@ -75,13 +75,13 @@ def parse_args():
     return var_args.parse_args()
 
 
-def centroid_error(var_x, var_y, var_train, var_valid):
+def centroid_predict(var_x, var_y, var_train, var_index):
     """
     [description]
-    : mean error of the nearest-per-position-centroid rule. Each training sample votes on the centroid
-      of its position in the per-window z-scored time-mean CSI; a held-out sample takes the position of
-      its nearest centroid.
-    : return: float, mean error in meters
+    : predicted positions of a nearest-per-position-centroid rule. Each training sample votes on the
+      centroid of its position in the per-window z-scored time-mean CSI; a query sample takes the
+      position of its nearest centroid.
+    : return: (len(var_index), 2) float32 predicted positions in the same frame as var_y
     """
     #
     var_feat = var_x.mean(axis=1).astype(np.float64)
@@ -94,9 +94,73 @@ def centroid_error(var_x, var_y, var_train, var_valid):
         var_coords.append(np.asarray(var_label, dtype=np.float32))
     var_centroids = np.stack(var_centroids)
     var_coords = np.stack(var_coords)
-    var_dist = ((var_feat[var_valid][:, None, :] - var_centroids[None]) ** 2).sum(axis=2)
-    var_pred = var_coords[var_dist.argmin(axis=1)]
+    var_dist = ((var_feat[var_index][:, None, :] - var_centroids[None]) ** 2).sum(axis=2)
+    return var_coords[var_dist.argmin(axis=1)]
+
+
+def centroid_error(var_x, var_y, var_train, var_valid):
+    """
+    [description]
+    : mean error of the nearest-per-position-centroid rule (see centroid_predict).
+    : return: float, mean error in meters
+    """
+    #
+    var_pred = centroid_predict(var_x, var_y, var_train, var_valid)
     return float(np.sqrt(((var_pred - var_y[var_valid]) ** 2).sum(axis=1)).mean())
+
+
+def predict(var_model, var_x, var_index):
+    """
+    [description]
+    : the model's predicted positions on the rows of var_index, as numpy.
+    """
+    var_model.eval()
+    with torch.no_grad():
+        return var_model(var_x[var_index]).cpu().numpy()
+
+
+def position_confusion(var_true_xy, var_pred_xy, var_max_labels=16):
+    """
+    [description]
+    : the per-location confusion of a predictor over a room's discrete positions. Both the truth and
+      the prediction are snapped to the nearest true position, and the (true, predicted) counts are
+      tabulated. This is the readout that separates "the data does not separate the positions" from
+      "the objective/optimizer does not use the signal it has": a non-trivial rule (nearest centroid)
+      and the trained model are run through the same table, so their diagonals are comparable.
+    : var_true_xy / var_pred_xy: (N, 2) positions in the same frame (meters)
+    : var_max_labels: skip rooms with more positions than this (e.g. the "anywhere" room has hundreds)
+    : return: (labels (L, 2), confusion (L, L) int, accuracy float) or None when there are too many
+      distinct positions
+    """
+    #
+    var_true_xy = np.asarray(var_true_xy, dtype=np.float64).reshape(-1, 2)
+    var_pred_xy = np.asarray(var_pred_xy, dtype=np.float64).reshape(-1, 2)
+    var_labels = np.unique(np.round(var_true_xy, 3), axis=0)
+    if len(var_labels) > var_max_labels:
+        return None
+    ## snap truth and prediction to the nearest true position
+    var_true_idx = ((var_true_xy[:, None, :] - var_labels[None]) ** 2).sum(axis=2).argmin(axis=1)
+    var_pred_idx = ((var_pred_xy[:, None, :] - var_labels[None]) ** 2).sum(axis=2).argmin(axis=1)
+    var_confusion = np.zeros((len(var_labels), len(var_labels)), dtype=int)
+    for var_t, var_p in zip(var_true_idx, var_pred_idx):
+        var_confusion[var_t, var_p] += 1
+    var_accuracy = float(np.trace(var_confusion) / max(1, var_confusion.sum()))
+    return var_labels, var_confusion, var_accuracy
+
+
+def report_confusion(var_name, var_labels, var_confusion, var_accuracy):
+    """
+    [description]
+    : print one predictor's per-location confusion and diagonal accuracy.
+    """
+    #
+    print(f"  {var_name}: per-location accuracy {var_accuracy:.3f} over {len(var_labels)} positions "
+          f"({var_confusion.sum()} frames)")
+    var_header = "      true\\pred  " + " ".join(f"{var_i:5d}" for var_i in range(len(var_labels)))
+    print(var_header)
+    for var_t in range(len(var_labels)):
+        print(f"      {var_t:9d}  " + " ".join(f"{var_confusion[var_t, var_p]:5d}"
+                                               for var_p in range(len(var_labels))))
 
 
 def evaluate(var_model, var_x, var_y, var_index):
@@ -186,6 +250,24 @@ def run():
             var_model.train()
     print(f"trained {var_args.backbone} for {var_args.steps} steps ({time.time() - var_start:.1f}s) "
           f"on {len(var_train)} train / {len(var_valid)} valid windows")
+    #
+    ## per-location confusion on the held-out frames: the nearest-centroid row says whether the room's
+    ## discrete positions are separable from the CSI at all (data), the trained-model row says whether
+    ## the model recovered that signal (objective/optimizer/backbone). Read the two diagonals together.
+    var_valid_true = var_y[var_valid]
+    var_valid_centroid = centroid_predict(var_x, var_y, var_train, var_valid)
+    var_valid_model = predict(var_model, var_xt, var_valid_t)
+    print(f"\nper-location confusion on {len(var_valid)} held-out windows "
+          f"(rows true, cols predicted; positions are the true coordinates, in meters):")
+    for var_name, var_pred in (("centroid  (data separability)", var_valid_centroid),
+                               (f"{var_args.backbone:9s} (trained model)", var_valid_model)):
+        var_report = position_confusion(var_valid_true, var_pred)
+        if var_report is None:
+            print(f"  {var_name}: more distinct positions than the confusion matrix supports")
+            continue
+        report_confusion(var_name, *var_report)
+    print(f"  positions (m): " + " ".join(f"({var_p[0]:.2f},{var_p[1]:.2f})"
+                                          for var_p in np.unique(np.round(var_valid_true, 3), axis=0)))
 
 
 if __name__ == "__main__":

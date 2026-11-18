@@ -119,7 +119,12 @@ def format_result(var_model, var_task, result, var_few_shot_ratio, var_kd_weight
                          f"{stats[f'avg_{var_tag}_occupancy_accuracy']:.4f} "
                          f"± {stats[f'se_{var_tag}_occupancy_accuracy']:.4f} (SE)")
         if "avg_const_mean_error_m" in stats:
-            lines.append(f"  Constant MDE: {stats['avg_const_mean_error_m']:.4f} m | "
+            lines.append(f"  Constant(training) MDE: {stats['avg_const_train_mean_error_m']:.4f} m | "
+                         f"RMSE {stats['avg_const_train_rmse_m']:.4f} m | "
+                         f"Median {stats['avg_const_train_median_error_m']:.4f} m | "
+                         f"OccAcc {stats['avg_const_train_occupancy_accuracy']:.4f}  "
+                         f"(mean training position; beat this to show a transferable mapping)")
+            lines.append(f"  Constant(support) MDE: {stats['avg_const_mean_error_m']:.4f} m | "
                          f"RMSE {stats['avg_const_rmse_m']:.4f} m | "
                          f"Median {stats['avg_const_median_error_m']:.4f} m | "
                          f"OccAcc {stats['avg_const_occupancy_accuracy']:.4f}  "

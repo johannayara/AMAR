@@ -18,6 +18,7 @@ MAX_NB_PEOPLE = 6
 GT_COLOR = "#F06595"    
 PRED_COLOR = "#20B8CF"     # darker cyan than the original #66D9E8: at alpha 0.5 the light one washed out
 CONST_COLOR = "#6e3eb0" 
+CONST_TRAIN_COLOR = "#d9480f"   # orange: the training-room mean constant, distinct from the support-mean one
 PRIOR_COLOR = "#32a852"     
 CMAP = "cool" 
 
@@ -976,6 +977,8 @@ def location_prior_positions(var_counts, var_positions, var_max_rows=20000):
 
 def visualize_location_position_scatter(var_true_pos, var_pred_pos, var_room, var_save_dir, var_bounds,
                                         var_const_pos=None, var_const_label="constant baseline",
+                                        var_const_train_pos=None,
+                                        var_const_train_label="constant (mean training position)",
                                         var_prior_pos=None, var_prior_label="training prior",
                                         var_max_points=2000, var_seed=39):
     """
@@ -989,7 +992,10 @@ def visualize_location_position_scatter(var_true_pos, var_pred_pos, var_room, va
     : var_bounds: (x_min, x_max, y_min, y_max) in meters of the room frame
     : var_const_pos: (M, 2) positions of the constant baseline (see location_mean_position), drawn as
       one marker per distinct point: it predicts the same thing for every frame, so its cloud is the
-      point the model has to move away from. None = not drawn.
+      point the model has to move away from. None = not drawn. A few-shot run passes the support mean
+      here and the training-room mean via var_const_train_pos, so both bars are on the figure.
+    : var_const_train_pos: (M, 2) positions of the training-room mean constant, drawn like
+      var_const_pos with its own colour. None = not drawn.
     : var_prior_pos: (M, 2) positions of the data the model was trained on (see
       location_prior_positions), drawn as a cloud *under* the predictions: where the model's
       predictions sit on it, it has learned the training rooms' prior rather than the transfer. None =
@@ -1003,13 +1009,16 @@ def visualize_location_position_scatter(var_true_pos, var_pred_pos, var_room, va
     var_series = []
     if var_prior_pos is not None:
         var_series.append((np.asarray(var_prior_pos, dtype=float).reshape(-1, 2), PRIOR_COLOR,
-                           var_prior_label, "s", 12, 0.5))
+                           var_prior_label, "s", 20, 0.5))
     var_series += [(var_true_pos, GT_COLOR, "true", "o", 12, 0.5),
                    (var_pred_pos, PRED_COLOR, "pred", "^", 16, 0.6)]
-    if var_const_pos is not None:
-        # duplicates are dropped rather than drawn on top of each other
-        var_const_pos = np.unique(np.asarray(var_const_pos, dtype=float).reshape(-1, 2), axis=0)
-        var_series.append((var_const_pos, CONST_COLOR, var_const_label, "X", 150, 0.9))
+    for var_pos, var_color, var_label in ((var_const_pos, CONST_COLOR, var_const_label),
+                                          (var_const_train_pos, CONST_TRAIN_COLOR, var_const_train_label)):
+        if var_pos is None:
+            continue
+        ## duplicates are dropped rather than drawn on top of each other
+        var_pos = np.unique(np.asarray(var_pos, dtype=float).reshape(-1, 2), axis=0)
+        var_series.append((var_pos, var_color, var_label, "X", 70, 0.9))
     #
     os.makedirs(str(var_save_dir), exist_ok=True)
     var_fig, var_ax = plt.subplots(figsize=(7.4, 6))
