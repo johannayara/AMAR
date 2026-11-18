@@ -14,10 +14,6 @@ conda activate AMAR
 start=$(date +%s)
 export WANDB_MODE=offline
 
-# Non-few-shot reference for the few-shot resnet1d runs (scripts/sim_wimans.sh): the same backbone
-# (ResNet1DLocalizer) and the same rooms -- real plus synthetic plus the few-shot "anywhere" source --
-# but trained on the full training rooms, so the few-shot student/teacher can be compared against it.
-# Same loading, shared frame and epoch count as the few-shot runner.
 model=resnet1d
 mkdir -p "./output/cd/sim_wimans/${model}/"
 
