@@ -17,13 +17,36 @@ from src.data.load_data import (load_data_y, encode_data_y, encode_occupancy_y,
                                 load_wimans_room_x, wimans_room_names, wimans_room_source)
 from src.data.activity_transfer import WIMANS_ACTIVITY_ALIASES
 from src.utils import *
-from src.data.unified_rooms import WIMANS_BOUNDS
+from src.data.unified_rooms import WIMANS_BOUNDS, load_wimans_room_targets, normalize_xy_meters
+from src.models.room_localization import (run_localization_cross_domain,
+                                          format_localization_result, localizer_class)
 from configs.preset import preset
 
 import time
 import json
 from datetime import datetime
 from pathlib import Path
+
+#
+## Models the cross-domain runner sends down the single-target (x, y) localizer path instead of the
+## classification / density path. "localizer"/"room_localizer" take the --backbone value; "that"/
+## "resnet1d" are shorthand that also select their own backbone, matching the few-shot runners' names.
+LOCALIZER_MODELS = ("localizer", "room_localizer", "that", "resnet1d")
+
+
+def _model_room_names(var_model):
+    """
+    [description]
+    : the room keys a run should score on. "anywhere" is a localizer-only source: its annotation
+      carries continuous (x, y) positions, not the discrete locations the classification / density
+      encoders read, so it is kept only for the localizer path and dropped everywhere else (where
+      including it would only crash the layout lookup).
+    """
+    #
+    var_names = wimans_room_names()
+    if var_model in LOCALIZER_MODELS:
+        return var_names
+    return [var_name for var_name in var_names if var_name != "anywhere"]
 
 #
 ##
@@ -157,7 +180,7 @@ def master_splitter(preset, var_task, var_model, var_users, var_train_envs):
       a LazyRoomArray, read only when the model consumes it.
     : return: train_sets_by_env, test_sets_by_env (dict {env_name: (X, y)})
     """
-    var_all_envs = wimans_room_names()
+    var_all_envs = _model_room_names(var_model)
     for var_env in var_train_envs:
         if var_env not in var_all_envs:
             raise ValueError(f"training room {var_env!r} is not one of {var_all_envs}")
@@ -166,6 +189,133 @@ def master_splitter(preset, var_task, var_model, var_users, var_train_envs):
     test_sets_by_env = {var_env: _load_room(preset, var_task, var_model, var_users, var_env)
                         for var_env in var_all_envs if var_env not in var_train_envs}
     return train_sets_by_env, test_sets_by_env
+
+
+def _standardize_windows(var_x):
+    """
+    [description]
+    : z-score every CSI window over its time x subcarrier entries, removing the per-device gain/AGC
+      level so only the window's frequency-selective shape is left. Identical to the transform the
+      few-shot runner applies, so the two protocols see the same input.
+    """
+    #
+    var_mu = var_x.mean(axis=(1, 2), keepdims=True)
+    var_sd = var_x.std(axis=(1, 2), keepdims=True) + 1e-6
+    return ((var_x - var_mu) / var_sd).astype(np.float32)
+
+
+def _load_localizer_room(var_env, var_features):
+    """
+    [description]
+    : one WiMANS room as single-target (X, XY) samples for the localizer, in meters from the
+      transmitter. load_wimans_room_targets keeps only the single-occupant frames (a one-position
+      model cannot consume a multi-user label) and routes a "<name><suffix>" key through
+      wimans_room_source, so the real, simulated and "anywhere" sources all load the same way.
+    """
+    #
+    var_x, var_y = load_wimans_room_targets(var_env, var_length=preset["hwild"]["window"],
+                                            var_antennas=var_features)
+    if len(var_x) == 0:
+        raise ValueError(f"no single-occupant WiMANS frames for room {var_env!r}")
+    print(f"  {var_env:12s} X {var_x.shape} XY {var_y.shape} "
+          f"({len(np.unique(var_y.round(3), axis=0))} distinct positions)")
+    return var_x, var_y
+
+
+def load_localizer_rooms(var_train_envs, var_test_envs, var_features, var_standardize):
+    """
+    [description]
+    : load the train/test rooms for the localizer and normalise them into one shared,
+      transmitter-anchored frame. This mirrors scripts/run_few_shot_multi_rooms.py (load ->
+      per-window z-score -> one rectangle over every loaded position), so a normal cross-domain run on
+      the same rooms and backbone is directly comparable to that runner's few-shot teacher/student.
+    : return: (train_sets, test_sets, var_rect, var_spans, var_bounds)
+    """
+    #
+    var_all_envs = wimans_room_names()
+    for var_env in list(var_train_envs) + list(var_test_envs):
+        if var_env not in var_all_envs:
+            raise ValueError(f"room {var_env!r} is not one of {var_all_envs}")
+    train_sets = {var_env: _load_localizer_room(var_env, var_features)
+                  for var_env in var_train_envs}
+    test_sets = {var_env: _load_localizer_room(var_env, var_features)
+                 for var_env in var_test_envs}
+    ## one rectangle over every loaded position covers them all; its origin is the transmitter, so
+    ## every room predicts in the same metric frame and a normalized offset means the same distance
+    var_all_xy = np.concatenate([var_y for _, var_y in
+                                 list(train_sets.values()) + list(test_sets.values())])
+    var_margin = 0.5
+    var_rect = (float(var_all_xy[:, 0].min() - var_margin), float(var_all_xy[:, 0].max() + var_margin),
+                float(var_all_xy[:, 1].min() - var_margin), float(var_all_xy[:, 1].max() + var_margin))
+    if var_standardize == "window":
+        for var_sets in (train_sets, test_sets):
+            for var_room, (var_x, var_y) in var_sets.items():
+                var_sets[var_room] = (_standardize_windows(var_x), var_y)
+        print("CSI: per-window z-score (gain/AGC removed)")
+    else:
+        print("CSI: raw amplitude")
+    for var_sets in (train_sets, test_sets):
+        for var_room, (var_x, var_y) in var_sets.items():
+            var_sets[var_room] = (var_x, normalize_xy_meters(var_y, var_rect))
+    ## every room is normalised by the one rectangle, so its span (what the harness converts an error
+    ## back to meters with) is the rectangle's span
+    var_span = (var_rect[1] - var_rect[0], var_rect[3] - var_rect[2])
+    var_all_rooms = list(train_sets) + list(test_sets)
+    var_spans = {var_room: var_span for var_room in var_all_rooms}
+    var_bounds = {var_room: var_rect for var_room in var_all_rooms}
+    return train_sets, test_sets, var_rect, var_spans, var_bounds
+
+
+def run_localizer(var_task, var_model, var_backbone, var_repeat, var_train_envs, var_features,
+                  var_standardize, var_epochs):
+    """
+    [description]
+    : the localizer cross-domain protocol: train the single-target (x, y) regressor on every
+      --train_envs room and score it on every other WiMANS room (real, simulated, and the few-shot
+      "anywhere" source). This is the non-few-shot counterpart of scripts/run_few_shot_multi_rooms.py:
+      same rooms, same --backbone, same loading and shared frame, but trained on the full training
+      rooms instead of a few-shot support fraction, so the two runs can be compared directly.
+    """
+    #
+    if var_epochs is not None:
+        preset["hwild"]["epoch"] = var_epochs
+    var_test_envs = [var_env for var_env in wimans_room_names() if var_env not in var_train_envs]
+    train_sets, test_sets, var_rect, var_spans, var_bounds = load_localizer_rooms(
+        var_train_envs, var_test_envs, var_features, var_standardize)
+    print(f"\nShared transmitter-anchored frame rectangle (m): "
+          f"x [{var_rect[0]:.2f}, {var_rect[1]:.2f}], y [{var_rect[2]:.2f}, {var_rect[3]:.2f}]  "
+          f"(span {var_rect[1] - var_rect[0]:.2f} x {var_rect[3] - var_rect[2]:.2f} m)")
+    var_save_path = reserve_viz_dir(path=f"cross_domain/{join_envs(var_train_envs)}")
+    var_results = run_localization_cross_domain(
+        train_sets, test_sets, var_repeat=var_repeat, save_path=str(var_save_path),
+        var_spans=var_spans, var_bounds=var_bounds, var_model_factory=localizer_class(var_backbone))
+    var_result = {
+        "protocol": ("train the localizer on WiMANS (real, simulated and/or anywhere) -> test the "
+                     "held-out WiMANS rooms, shared transmitter-anchored metric frame"),
+        "model": var_model,
+        "backbone": var_backbone,
+        "task": var_task,
+        "train_envs": var_train_envs,
+        "test_envs": var_test_envs,
+        "repeat": var_repeat,
+        "epochs": preset["hwild"]["epoch"],
+        "window": preset["hwild"]["window"],
+        "features": var_features,
+        "standardize": var_standardize,
+        "tx_frame_rect_m": var_rect,
+        "per_env": var_results,
+    }
+    var_formatted = format_localization_result(var_train_envs, var_test_envs, var_results)
+    var_stem = build_run_stem(f"room_localizer-{var_backbone}", "localization",
+                              f"train-{join_envs(var_train_envs)}",
+                              f"test-{join_envs(var_test_envs)}",
+                              f"r{var_repeat}", f"e{preset['hwild']['epoch']}", run_timestamp())
+    var_json_path, var_txt_path = save_run_outputs(
+        preset["path"].get("save_dir", "output"), "cross_domain", var_stem, var_result, var_formatted)
+    print(var_formatted)
+    print(f"\nResults saved to: {var_json_path}")
+    print(f"Report saved to:  {var_txt_path}")
+
 
 def parse_args():
     """
@@ -185,9 +335,23 @@ def parse_args():
                           help="Comma-separated training rooms. Overrides --env. Pass two rooms for "
                                "leave-one-room-out: train on those two and test on the remaining one. "
                                "Every room not listed becomes a test room.")
+    var_args.add_argument("--backbone", default="that", choices=("that", "resnet1d"),
+                          help="localizer backbone when --model is 'localizer'/'room_localizer' (it "
+                               "is ignored by the classification / density models). 'that' is "
+                               "RoomLocalizer over the WiMANS THAT backbone, 'resnet1d' is "
+                               "ResNet1DLocalizer over the CSI window (src/models/resnet1d.py). "
+                               "--model that / --model resnet1d are shorthand that also set this.")
+    var_args.add_argument("--features", default="full", choices=("avg", "full"),
+                          help="localizer CSI layout: 'full' (default) keeps the 3 x 3 x 30 = 270 grid "
+                               "the few-shot runs use; 'avg' averages one antenna axis to 90")
+    var_args.add_argument("--standardize", default="window", choices=("none", "window"),
+                          help="localizer input scaling: 'window' (default) z-scores each CSI window, "
+                               "removing the per-capture gain/AGC scale the simulated source shares "
+                               "with the few-shot runs; 'none' feeds raw amplitude")
     var_args.add_argument("--epochs", default=None, type=int,
-                          help="Override preset['nn']['epoch']. The cosine LR schedule is tied to "
-                               "this value, so it must match the actual training length.")
+                          help="Override preset['nn']['epoch'] (classification / density models) or "
+                               "preset['hwild']['epoch'] (localizer). The cosine LR schedule is tied "
+                               "to this value, so it must match the actual training length.")
     var_args.add_argument("--hp", action="append", default=None, type=str, metavar="KEY=VALUE",
                           help="Override a preset field, dotted path, e.g. --hp nn.backbone=thatv "
                                "--hp nn.encoder_norm=group. Repeatable. Values are parsed as "
@@ -372,13 +536,23 @@ def run():
     if var_args.epochs is not None:
         preset["nn"]["epoch"] = var_args.epochs
     var_hp_applied = apply_hp_overrides(var_args.hp)
+    ## The localizer is a single-target (x, y) regressor with its own loading and metric pipeline, so
+    ## it takes a separate branch here; --model that / --model resnet1d select the backbone inline,
+    ## otherwise --backbone does.
+    if var_model in LOCALIZER_MODELS:
+        var_backbone = var_model if var_model in ("that", "resnet1d") else var_args.backbone
+        run_localizer(var_task, var_model, var_backbone, var_repeat, var_train_envs,
+                      var_args.features, var_args.standardize, var_args.epochs)
+        return
     ## The simulated rooms reuse their base room's layout (same physical room), so alias each
     ## "<name><suffix>" key to it once the --hp overrides have enabled the source. This is what keeps
     ## the density-map models' preset["layouts"][room] lookups working for a simulated room without
     ## teaching every call site about the suffix.
-    for var_room in wimans_room_names():
+    for var_room in _model_room_names(var_model):
         if var_room not in preset["layouts"]:
-            preset["layouts"][var_room] = preset["layouts"][wimans_room_source(var_room)[0]]
+            var_base = wimans_room_source(var_room)[0]
+            if var_base in preset["layouts"]:
+                preset["layouts"][var_room] = preset["layouts"][var_base]
 
     # Ensuring there is no data leakage while doing splits.
     train_sets_by_env, test_sets_by_env = master_splitter(
@@ -430,7 +604,7 @@ def run():
     "task": var_task,
     "repeat": var_repeat,
     "train_envs": var_train_envs,
-    "test_envs": [e for e in wimans_room_names() if e not in var_train_envs],
+    "test_envs": [e for e in _model_room_names(var_model) if e not in var_train_envs],
     "epochs": preset["nn"]["epoch"],
     "data": preset["data"],
     "nn": preset["nn"],
@@ -445,7 +619,7 @@ def run():
     }
 
     formatted = format_result(var_model, var_task, result)
-    var_test_envs = [e for e in wimans_room_names() if e not in var_train_envs]
+    var_test_envs = [e for e in _model_room_names(var_model) if e not in var_train_envs]
     var_stem = build_run_stem(var_model, var_task,
                               f"train-{join_envs(var_train_envs)}", f"test-{join_envs(var_test_envs)}",
                               f"r{var_repeat}", f"e{preset['nn']['epoch']}", run_timestamp())
