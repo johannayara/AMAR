@@ -1,0 +1,25 @@
+================================================================================
+NTU-Fi HAR -> WiMANS FEW-SHOT ACTIVITY DISTILLATION (support 10.00%, kd_weight 0.1, kd_temperature 1.0)
+Shared activities (union): ['box', 'circle', 'clean', 'fall', 'jump', 'lie_down', 'nothing', 'pick_up', 'rotation', 'run', 'sit_down', 'stand_up', 'walk', 'wave'] | support frames: 356 | query frames: 2887 | occupants: 1,2,3
+================================================================================
+
+empty_room:
+  Student microF1 0.2370 ± 0.0042 (SE) | presentF1 0.2351 ± 0.0092 (SE) | Acc(TN-inflated) 0.8155 ± 0.0014 (SE) | PPP 8.7137 ± 0.1585 (SE) | Total Error 2.7206 ± 0.0335 (SE)
+  Teacher microF1 0.0171 ± 0.0090 (SE) | presentF1 0.0125 ± 0.0066 (SE) | Acc(TN-inflated) 0.8102 ± 0.0019 (SE) | PPP 1.1411 ± 0.5776 (SE) | Total Error 2.7113 ± 0.0252 (SE)  (NTU-Fi HAR teacher, no WiMANS fine-tuning)
+  MajoritymicroF1 0.0000 | presentF1 0.0000 | Acc(TN-inflated) 0.8066 | PPP 0.0000 | Total Error 2.7593
+  Slots    teacher 8/10 used | student 3/10 used
+
+meeting_room:
+  Student microF1 0.2029 ± 0.0023 (SE) | presentF1 0.2022 ± 0.0057 (SE) | Acc(TN-inflated) 0.8078 ± 0.0004 (SE) | PPP 7.7985 ± 0.2695 (SE) | Total Error 2.8275 ± 0.0084 (SE)
+  Teacher microF1 0.0172 ± 0.0093 (SE) | presentF1 0.0117 ± 0.0059 (SE) | Acc(TN-inflated) 0.8090 ± 0.0020 (SE) | PPP 1.1042 ± 0.6583 (SE) | Total Error 2.7288 ± 0.0259 (SE)  (NTU-Fi HAR teacher, no WiMANS fine-tuning)
+  MajoritymicroF1 0.0000 | presentF1 0.0000 | Acc(TN-inflated) 0.8054 | PPP 0.0000 | Total Error 2.7764
+  Slots    teacher 8/10 used | student 3/10 used
+
+classroom:
+  Student microF1 0.2176 ± 0.0030 (SE) | presentF1 0.2184 ± 0.0040 (SE) | Acc(TN-inflated) 0.8122 ± 0.0017 (SE) | PPP 8.3943 ± 0.2284 (SE) | Total Error 2.7757 ± 0.0259 (SE)
+  Teacher microF1 0.0056 ± 0.0029 (SE) | presentF1 0.0056 ± 0.0028 (SE) | Acc(TN-inflated) 0.8085 ± 0.0006 (SE) | PPP 0.6270 ± 0.3956 (SE) | Total Error 2.7328 ± 0.0080 (SE)  (NTU-Fi HAR teacher, no WiMANS fine-tuning)
+  MajoritymicroF1 0.0000 | presentF1 0.0000 | Acc(TN-inflated) 0.8073 | PPP 0.0000 | Total Error 2.7482
+  Slots    teacher 8/10 used | student 4/10 used
+
+Majority activity: box (the most frequent NTU-Fi HAR activity; always predicting it is the reference to beat)
+Read microF1 / presentF1. Acc(TN-inflated) averages a per-class accuracy in which a class absent from a single-occupant frame is a true negative, so it sits near (C-2)/C whatever the model does -- on this vocabulary a constant and a random guess land on the same number.

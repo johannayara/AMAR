@@ -1,0 +1,11 @@
+[('', 'dataset/wifi_csi/amp', 'dataset/annotation.csv', ['2.4']), ('_synth', 'dataset/synth_wimans/fewshot-groups-3x3-wimans/wifi_csi/amp', 'dataset/synth_wimans/fewshot-groups-3x3-wimans/annotation.csv', ['2.4']), ('anywhere', 'dataset/synth_wimans/fewshot-anywhere-wimans/wifi_csi/amp', 'dataset/synth_wimans/fewshot-anywhere-wimans/annotation.csv', ['2.4'])]
+
+[train] ]meeting_room X (594, 400, 270) XY (594, 2) (5 distinct positions)
+Traceback (most recent call last):
+  File "/cluster/raid/home/jajo/AMAR/scripts/run_few_shot_multi_rooms.py", line 370, in <module>
+    run()
+  File "/cluster/raid/home/jajo/AMAR/scripts/run_few_shot_multi_rooms.py", line 269, in run
+    train_sets_by_room[var_room] = load_room_wimans(var_room, var_args, "train] ")
+  File "/cluster/raid/home/jajo/AMAR/scripts/run_few_shot_multi_rooms.py", line 165, in load_room_wimans
+    raise ValueError(f"unknown room {var_room!r}; not in "
+ValueError: unknown room 'empty_room anywhere'; not in ['empty_room', 'meeting_room', 'classroom', 'empty_room_synth', 'meeting_room_synth', 'classroom_synth', 'anywhere']

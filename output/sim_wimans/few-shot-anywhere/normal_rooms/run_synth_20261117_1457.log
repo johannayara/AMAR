@@ -1,0 +1,15 @@
+[train] ]meeting_room X (594, 400, 270) XY (594, 2) (5 distinct positions)
+[train] ]empty_room   X (594, 400, 270) XY (594, 2) (5 distinct positions)
+[test]  ]classroom    X (594, 400, 270) XY (594, 2) (5 distinct positions)
+Traceback (most recent call last):
+  File "/cluster/raid/home/jajo/AMAR/scripts/run_few_shot_multi_rooms.py", line 370, in <module>
+    run()
+  File "/cluster/raid/home/jajo/AMAR/scripts/run_few_shot_multi_rooms.py", line 271, in run
+    test_sets_by_room[var_room] = load_room_wimans(var_room, var_args, "test]  ")
+  File "/cluster/raid/home/jajo/AMAR/scripts/run_few_shot_multi_rooms.py", line 157, in load_room_wimans
+    var_x, var_y = load_wimans_room_targets(var_room, var_max_samples=var_args.max_samples,
+  File "/cluster/raid/home/jajo/AMAR/src/data/unified_rooms.py", line 204, in load_wimans_room_targets
+    var_x, var_pos, var_mask = load_wimans_room(var_room, var_max_samples=var_max_samples,
+  File "/cluster/raid/home/jajo/AMAR/src/data/unified_rooms.py", line 160, in load_wimans_room
+    raise ValueError(f"no WiMANS samples for room {var_room!r}")
+ValueError: no WiMANS samples for room 'meeting_room_synth'

@@ -1,0 +1,29 @@
+[('', 'dataset/wifi_csi/amp', 'dataset/annotation.csv', ['2.4']), ('_synth', 'dataset/synth_wimans/fewshot-3x3-wimans/wifi_csi/amp', 'dataset/synth_wimans/fewshot-3x3-wimans/annotation.csv', ['2.4']), ('anywhere', 'dataset/synth_wimans/fewshot-anywhere-wimans/wifi_csi/amp', 'dataset/synth_wimans/fewshot-anywhere-wimans/annotation.csv', ['2.4'])]
+
+_synth
+Traceback (most recent call last):
+  File "/cluster/raid/home/jajo/AMAR/scripts/run_few_shot_multi_rooms.py", line 370, in <module>
+    run()
+  File "/cluster/raid/home/jajo/AMAR/scripts/run_few_shot_multi_rooms.py", line 269, in run
+    train_sets_by_room[var_room] = load_room_wimans(var_room, var_args, "train] ")
+  File "/cluster/raid/home/jajo/AMAR/scripts/run_few_shot_multi_rooms.py", line 157, in load_room_wimans
+    var_x, var_y = load_wimans_room_targets(var_room, var_max_samples=var_args.max_samples,
+  File "/cluster/raid/home/jajo/AMAR/src/data/unified_rooms.py", line 217, in load_wimans_room_targets
+    var_x, var_pos, var_mask = load_wimans_room(var_room, var_max_samples=var_max_samples,
+  File "/cluster/raid/home/jajo/AMAR/src/data/unified_rooms.py", line 157, in load_wimans_room
+    var_pd = load_data_y(var_data_y, [var_base], var_band, var_users)
+  File "/cluster/raid/home/jajo/AMAR/src/data/load_data.py", line 34, in load_data_y
+    data_pd_y = pd.read_csv(var_path_data_y, dtype = str)
+  File "/san/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/pandas/util/_decorators.py", line 311, in wrapper
+    return func(*args, **kwargs)
+  File "/san/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/pandas/io/parsers/readers.py", line 680, in read_csv
+    return _read(filepath_or_buffer, kwds)
+  File "/san/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/pandas/io/parsers/readers.py", line 575, in _read
+    parser = TextFileReader(filepath_or_buffer, **kwds)
+  File "/san/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/pandas/io/parsers/readers.py", line 933, in __init__
+    self._engine = self._make_engine(f, self.engine)
+  File "/san/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/pandas/io/parsers/readers.py", line 1217, in _make_engine
+    self.handles = get_handle(  # type: ignore[call-overload]
+  File "/san/home/jajo/.conda/envs/AMAR/lib/python3.9/site-packages/pandas/io/common.py", line 789, in get_handle
+    handle = open(
+FileNotFoundError: [Errno 2] No such file or directory: 'dataset/synth_wimans/fewshot-3x3-wimans/annotation.csv'

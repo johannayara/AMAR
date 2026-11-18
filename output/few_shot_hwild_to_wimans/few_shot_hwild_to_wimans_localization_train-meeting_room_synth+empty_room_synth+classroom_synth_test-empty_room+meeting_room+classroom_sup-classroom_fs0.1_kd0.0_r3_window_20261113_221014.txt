@@ -1,0 +1,21 @@
+================================================================================
+H-WILD -> WiMANS FEW-SHOT LOCALIZATION (support 10.00%, kd_weight 0.0)
+================================================================================
+
+empty_room:
+  Student   MDE 1.8633 ± 0.0107 m (SE) | RMSE 2.0175 ± 0.0131 m (SE) | Median 2.1108 ± 0.0162 m (SE)
+  Teacher   MDE 4.0620 ± 0.0000 m (SE) | RMSE 4.3673 ± 0.0000 m (SE) | Median 4.2264 ± 0.0000 m (SE)  (H-WILD teacher, no WiMANS fine-tuning)
+  Constant  MDE 1.7629 m | RMSE 1.9238 m | Median 2.0677 m  (mean support position; beat this to show the few-shot step learned anything)
+  Occupancy Student 0.1161 ± 0.0056 (SE) | Teacher 0.0131 | Constant 0.1985  (grid-cell occupancy accuracy: fraction of frames whose predicted position is in the true cell)
+
+meeting_room:
+  Student   MDE 2.1875 ± 0.0085 m (SE) | RMSE 2.3834 ± 0.0057 m (SE) | Median 2.4298 ± 0.0320 m (SE)
+  Teacher   MDE 3.8964 ± 0.0000 m (SE) | RMSE 4.3678 ± 0.0000 m (SE) | Median 3.8234 ± 0.0000 m (SE)  (H-WILD teacher, no WiMANS fine-tuning)
+  Constant  MDE 2.1929 m | RMSE 2.3647 m | Median 2.5376 m  (mean support position; beat this to show the few-shot step learned anything)
+  Occupancy Student 0.1310 ± 0.0076 (SE) | Teacher 0.1657 | Constant 0.2048  (grid-cell occupancy accuracy: fraction of frames whose predicted position is in the true cell)
+
+classroom:
+  Student   MDE 1.8836 ± 0.0192 m (SE) | RMSE 2.0288 ± 0.0158 m (SE) | Median 2.1359 ± 0.0234 m (SE)
+  Teacher   MDE 4.1847 ± 0.0000 m (SE) | RMSE 4.4784 ± 0.0000 m (SE) | Median 4.3745 ± 0.0000 m (SE)  (H-WILD teacher, no WiMANS fine-tuning)
+  Constant  MDE 1.7329 m | RMSE 1.9034 m | Median 2.0823 m  (mean support position; beat this to show the few-shot step learned anything)
+  Occupancy Student 0.1396 ± 0.0075 (SE) | Teacher 0.0042 | Constant 0.2021  (grid-cell occupancy accuracy: fraction of frames whose predicted position is in the true cell)

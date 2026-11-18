@@ -1,0 +1,19 @@
+================================================================================
+NTU-Fi HAR -> WiMANS ACTIVITY TRANSFER, PURE SPLIT (model AMAR_WO_RVQ)
+Shared activities (walk_nothing): ['nothing', 'walk'] | query frames: 338 | occupants: 1
+================================================================================
+
+empty_room:
+  Model     microF1 0.1275 ± 0.1039 (SE) | presentF1 0.1580 ± 0.1455 (SE) | Acc(TN-inflated) 0.3636 ± 0.0696 (SE) | PPP 0.0000 ± 0.0000 (SE) | Total Error 8.3216 ± 5.8857 (SE)
+  Majority  microF1 0.4825 | presentF1 0.3254 | Acc(TN-inflated) 0.4825 | PPP 48.2456 | Total Error 1.0351
+
+meeting_room:
+  Model     microF1 0.1267 ± 0.1042 (SE) | presentF1 0.1554 ± 0.1436 (SE) | Acc(TN-inflated) 0.3557 ± 0.0737 (SE) | PPP 0.0000 ± 0.0000 (SE) | Total Error 8.3392 ± 5.9031 (SE)
+  Majority  microF1 0.5088 | presentF1 0.3372 | Acc(TN-inflated) 0.5088 | PPP 50.8772 | Total Error 0.9825
+
+classroom:
+  Model     microF1 0.1276 ± 0.1039 (SE) | presentF1 0.1580 ± 0.1456 (SE) | Acc(TN-inflated) 0.3638 ± 0.0695 (SE) | PPP 0.0000 ± 0.0000 (SE) | Total Error 8.3212 ± 5.8853 (SE)
+  Majority  microF1 0.4818 | presentF1 0.3252 | Acc(TN-inflated) 0.4818 | PPP 48.1818 | Total Error 1.0364
+
+Majority activity: walk (the most frequent NTU-Fi HAR activity; always predicting it is the reference to beat)
+Read microF1 / presentF1. Acc(TN-inflated) averages a per-class accuracy in which a class absent from a single-occupant frame is a true negative, so it sits near (C-2)/C whatever the model does -- on this vocabulary a constant and a random guess land on the same number.
