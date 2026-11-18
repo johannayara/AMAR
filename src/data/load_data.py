@@ -103,11 +103,9 @@ def harmonize_wimans_antennas(var_amp, var_num_tx=3, var_num_rx=3):
     [description]
     : put a WiMANS amplitude capture on the 3 x 3 antenna grid the repo's WiMANS paths assume.
       Real WiMANS is stored as (time, 3 TX, 3 RX, subcarriers) and is returned unchanged. A capture
-      with a single antenna pair -- e.g. the simulated few-shot dataset
-      (dataset/synth_wimans/fewshot-groups-wimans), which is (time, 1, 1, 30) -- is broadcast over
-      the TX and RX axes, so a single-link source can be dropped into any WiMANS path with no change
-      to the model geometry or the feature count. The copies carry no extra information: this makes
-      the tensor the right *shape*, it does not add channel diversity the source does not have.
+      with a single antenna pair is broadcast over
+      the TX and RX axes. The copies carry no extra information: this makes
+      the tensor the right *shape*.
     : var_amp: (time, TX, RX, subcarriers) float32
     : return: (time, var_num_tx, var_num_rx, subcarriers) float32
     """
@@ -135,8 +133,8 @@ def load_wimans_room_x(var_data_x, var_label_list, var_length=None, var_preproce
     : load one WiMANS room's CSI amplitude with the single-link capture harmonized to the 3 x 3 grid.
       Real WiMANS is (time, 3 TX, 3 RX, 30) and is returned unchanged; the simulated few-shot source is
       (time, 1, 1, 30) and is broadcast by harmonize_wimans_antennas as each frame is read.
-    : var_data_x: directory of the room's CSI amplitude files (see wimans_room_source)
-    : var_label_list: the room's selected labels
+    : var_data_x: directory of the room's CSI amplitude files 
+    : var_label_list: the room's selected labels (var_data_y)
     : var_length: window length in packets (default preset["data"]["length"])
     : var_preprocess: optional preprocess override, as load_data_x
     : return: float32 array as load_data_x returns -- (N, length, ...), the trailing axes flattened when
@@ -176,6 +174,7 @@ def wimans_sources():
     """
     #
     ##
+
     var_sources = [("", preset["path"]["data_x"], preset["path"]["data_y"],
                     list(preset["data"]["wifi_band"]))]
     var_synth = preset["data"].get("synth_wimans") or {}
@@ -183,6 +182,9 @@ def wimans_sources():
         var_sources.append((var_synth.get("suffix", "_synth"), var_synth["data_x"],
                             var_synth["data_y"],
                             list(var_synth.get("wifi_band") or preset["data"]["wifi_band"])))
+    if var_synth.get("anywhere"):
+        var_sources.append(("anywhere","dataset/synth_wimans/fewshot-anywhere-wimans/wifi_csi/amp", "dataset/synth_wimans/fewshot-anywhere-wimans/annotation.csv",
+                    list(preset["data"]["wifi_band"])))
     return var_sources
 
 
@@ -200,7 +202,10 @@ def wimans_room_names(var_environments=None):
                         else list(preset["data"]["environment"]))
     var_rooms = list(var_environments)
     for var_suffix, _, _, _ in wimans_sources():
-        if var_suffix:
+        if var_suffix == "anywhere":
+            #add anywhere room 
+            var_rooms.append(var_suffix)
+        elif var_suffix:
             var_rooms.extend(var_name + var_suffix for var_name in var_environments)
     return var_rooms
 
@@ -218,13 +223,18 @@ def wimans_room_source(var_room, var_environments=None):
     var_environments = (list(var_environments) if var_environments is not None
                         else list(preset["data"]["environment"]))
     var_sources = wimans_sources()
+    print(var_sources)
     for var_suffix, var_data_x, var_data_y, var_bands in var_sources:
+        print(var_suffix)
         if not var_suffix and var_room in var_environments:
             return var_room, var_data_x, var_data_y, var_bands
         if var_suffix and var_room.endswith(var_suffix):
-            var_base = var_room[:-len(var_suffix)]
-            if var_base in var_environments:
-                return var_base, var_data_x, var_data_y, var_bands
+            if var_suffix == "anywhere":
+                return var_suffix, var_data_x, var_data_y, var_bands
+            else :
+                var_base = var_room[:-len(var_suffix)]
+                if var_base in var_environments:
+                    return var_base, var_data_x, var_data_y, var_bands
     raise ValueError(f"unknown WiMANS room {var_room!r}; expected one of "
                      f"{wimans_room_names(var_environments)}")
 

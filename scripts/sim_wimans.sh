@@ -20,19 +20,19 @@ export AMAR_ENCODER_NORM=group
 
 python scripts/run_few_shot_multi_rooms.py \
   --backbone resnet1d \
-  --train_rooms "meeting_room, empty_room" \
+  --train_rooms "meeting_room, empty_room, anywhere" \
   --test_rooms "classroom, meeting_room_synth, empty_room_synth, classroom_synth" \
   --support_rooms classroom --repeat 3 --standardize window \
-  --teacher_epochs 70 --student_epochs 70 --few_shot_ratio 0.1 --kd_weight 0 \
+  --teacher_epochs 70 --student_epochs 200 --few_shot_ratio 0.1 --kd_weight 0 \
   --hp data.synth_wimans.enabled=true --no_init_from_teacher \
   > "./output/sim_wimans/few-shot-anywhere/normal_rooms/run_synth_$(date +%Y%m%d_%H%M).log" 2>&1
 
 python scripts/run_few_shot_multi_rooms.py \
   --backbone resnet1d \
-  --train_rooms "meeting_room_synth, empty_room_synth, classroom_synth" \
-  --test_rooms "classroom, meeting_room, empty_room" \
+  --train_rooms "anywhere" \
+  --test_rooms "classroom, meeting_room, empty_room, meeting_room_synth, empty_room_synth, classroom_synth" \
   --support_rooms classroom --repeat 3 --standardize window \
-  --teacher_epochs 70 --student_epochs 70 --few_shot_ratio 0.1 --kd_weight 0 \
+  --teacher_epochs 70 --student_epochs 200 --few_shot_ratio 0.1 --kd_weight 0 \
   --hp data.synth_wimans.enabled=true --no_init_from_teacher \
   > "./output/sim_wimans/few-shot-anywhere/sim_rooms/run_synth_$(date +%Y%m%d_%H%M).log" 2>&1
 

@@ -28,6 +28,7 @@
 import os
 
 import numpy as np
+import pandas as pd
 from scipy.signal import resample_poly
 
 from configs.preset import preset
@@ -141,15 +142,30 @@ def load_wimans_room(var_room, var_max_samples=None, var_length=None, var_band=N
     var_users = var_users if var_users is not None else preset["data"]["num_users"]
     var_base, var_data_x, var_data_y, var_source_band = wimans_room_source(var_room)
     var_band = list(var_band) if var_band is not None else var_source_band
-    var_pd = load_data_y(var_data_y, [var_base], var_band, var_users)
-    var_layout = preset["layouts"][var_base]
-    var_cols = [f"user_{var_idx}_location" for var_idx in range(1, 7)]
-    #
-    var_labels, var_sets = [], []
-    for _, var_row in var_pd.iterrows():
-        var_pts = [var_layout[var_row[var_col]] for var_col in var_cols if var_row[var_col] in var_layout]
-        var_labels.append(var_row["label"])
-        var_sets.append(var_pts)  # may be empty (empty room, count 0)
+    USER_RANGE = range(1, MAX_USERS + 1)
+    if var_base == "anywhere":
+      var_base = "wimans-24"
+      var_pd = load_data_y(var_data_y, [var_base], var_band, var_users)
+      var_cols = [(f"user_{var_idx}_x",f"user_{var_idx}_y") for var_idx in USER_RANGE] 
+      coord_cols = [c for pair in var_cols for c in pair]
+      var_pd[coord_cols] = var_pd[coord_cols].apply(pd.to_numeric, errors="coerce") * 0.1
+
+
+      var_labels, var_sets = [], []
+      for _, var_row in var_pd.iterrows():
+          var_pts = [(var_row[col_x], var_row[col_y]) for col_x, col_y in var_cols if not (pd.isna(var_row[col_x]) or pd.isna(var_row[col_y]))] # (nan, nan) if empty user 
+          var_labels.append(var_row["label"])
+          var_sets.append(var_pts)  # may be empty (empty room, count 0)
+    else : 
+      var_pd = load_data_y(var_data_y, [var_base], var_band, var_users)
+      var_layout = preset["layouts"][var_base] # valid for wimans, wimans_sim rooms 
+      var_cols = [f"user_{var_idx}_location" for var_idx in USER_RANGE] 
+      #
+      var_labels, var_sets = [], []
+      for _, var_row in var_pd.iterrows():
+          var_pts = [var_layout[var_row[var_col]] for var_col in var_cols if var_row[var_col] in var_layout]
+          var_labels.append(var_row["label"])
+          var_sets.append(var_pts)  # may be empty (empty room, count 0)
     if var_max_samples is not None and len(var_labels) > var_max_samples:
         ## WiMANS is ordered single-user first, so a "first N" cut would drop every multi-user
         ## sample; draw a fixed-seed random subset instead.

@@ -35,8 +35,9 @@ preset = {
         ## grid, so it loads with the same feature count as real WiMANS.
         "synth_wimans": {
             "enabled": False,
-            "data_x": "dataset/synth_wimans/fewshot-anywhere-wimans/wifi_csi/amp",
-            "data_y": "dataset/synth_wimans/fewshot-anywhere-wimans/annotation.csv",
+            "anywhere": True, 
+            "data_x": "dataset/synth_wimans/fewshot-groups-3x3-wimans/wifi_csi/amp",
+            "data_y": "dataset/synth_wimans/fewshot-groups-3x3-wimans/annotation.csv",
             "wifi_band": ["2.4"],
             "suffix": "_synth",
         },
