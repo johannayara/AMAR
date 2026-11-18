@@ -1,0 +1,45 @@
+================================================================================
+ROOM-AGNOSTIC LOCALIZATION - train anywhere, test empty_room+meeting_room+classroom+empty_room_synth+meeting_room_synth+classroom_synth
+================================================================================
+
+empty_room:
+  Mean Distance Error: 5.8856 ± 1.0806 m (SE)
+  RMSE:                6.9442 ± 1.5150 m (SE)
+  Median Error:        5.0099 ± 0.5451 m (SE)
+  Constant-baseline:   3.0760 m (mean training position; beat this to show a transferable mapping)
+  Occupancy Accuracy:  0.1004 ± 0.0246 (SE) | constant 0.0000  (grid-cell occupancy accuracy: fraction of frames whose predicted position is in the true cell)
+
+meeting_room:
+  Mean Distance Error: 6.8508 ± 1.4076 m (SE)
+  RMSE:                7.9813 ± 1.7805 m (SE)
+  Median Error:        6.0059 ± 0.7881 m (SE)
+  Constant-baseline:   3.0449 m (mean training position; beat this to show a transferable mapping)
+  Occupancy Accuracy:  0.0696 ± 0.0388 (SE) | constant 0.0000  (grid-cell occupancy accuracy: fraction of frames whose predicted position is in the true cell)
+
+classroom:
+  Mean Distance Error: 4.9734 ± 0.4025 m (SE)
+  RMSE:                5.7259 ± 0.6116 m (SE)
+  Median Error:        4.4988 ± 0.2210 m (SE)
+  Constant-baseline:   3.1030 m (mean training position; beat this to show a transferable mapping)
+  Occupancy Accuracy:  0.1240 ± 0.0239 (SE) | constant 0.0000  (grid-cell occupancy accuracy: fraction of frames whose predicted position is in the true cell)
+
+empty_room_synth:
+  Mean Distance Error: 3.6855 ± 0.0483 m (SE)
+  RMSE:                3.8879 ± 0.0529 m (SE)
+  Median Error:        3.3199 ± 0.1538 m (SE)
+  Constant-baseline:   3.1361 m (mean training position; beat this to show a transferable mapping)
+  Occupancy Accuracy:  0.0074 ± 0.0019 (SE) | constant 0.0000  (grid-cell occupancy accuracy: fraction of frames whose predicted position is in the true cell)
+
+meeting_room_synth:
+  Mean Distance Error: 2.9714 ± 0.0832 m (SE)
+  RMSE:                3.3726 ± 0.1086 m (SE)
+  Median Error:        2.3419 ± 0.1134 m (SE)
+  Constant-baseline:   2.8732 m (mean training position; beat this to show a transferable mapping)
+  Occupancy Accuracy:  0.0019 ± 0.0019 (SE) | constant 0.0000  (grid-cell occupancy accuracy: fraction of frames whose predicted position is in the true cell)
+
+classroom_synth:
+  Mean Distance Error: 3.1154 ± 0.0613 m (SE)
+  RMSE:                3.3831 ± 0.0566 m (SE)
+  Median Error:        2.5842 ± 0.0962 m (SE)
+  Constant-baseline:   2.9899 m (mean training position; beat this to show a transferable mapping)
+  Occupancy Accuracy:  0.0111 ± 0.0056 (SE) | constant 0.0000  (grid-cell occupancy accuracy: fraction of frames whose predicted position is in the true cell)

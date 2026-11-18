@@ -1,0 +1,47 @@
+================================================================================
+EXPERIMENT RESULTS - Model: room_localizer-resnet1d, Task: localization
+Train env: anywhere | Few-shot ratio: 0.1 | KD weight: 0.3
+================================================================================
+PER_ENV_RESULTS:
+
+CLASSROOM:
+  Student MDE: 1.6733 ± 0.0142 m (SE) | RMSE 1.9401 ± 0.0302 m (SE) | Median 1.4640 ± 0.0337 m (SE)
+  Student Occupancy Accuracy: 0.1964 ± 0.0106 (SE)
+  Teacher (frozen, no fine-tuning) MDE: 3.1011 ± 0.0000 m (SE) | RMSE 3.4789 ± 0.0000 m (SE) | Median 3.2915 ± 0.0000 m (SE)
+  Teacher (frozen, no fine-tuning) Occupancy Accuracy: 0.1363 ± 0.0000 (SE)
+  Constant MDE: 1.7276 m | RMSE 1.9008 m | Median 2.0823 m | OccAcc 0.2055  (mean support position; beat this to show the few-shot step learned anything)
+
+CLASSROOM_SYNTH:
+  Student MDE: 2.0330 ± 0.3062 m (SE) | RMSE 2.2231 ± 0.3266 m (SE) | Median 1.9150 ± 0.4516 m (SE)
+  Student Occupancy Accuracy: 0.0743 ± 0.0221 (SE)
+  Teacher (frozen, no fine-tuning) MDE: 3.1030 ± 0.0000 m (SE) | RMSE 3.4025 ± 0.0000 m (SE) | Median 2.5255 ± 0.0000 m (SE)
+  Teacher (frozen, no fine-tuning) Occupancy Accuracy: 0.0120 ± 0.0000 (SE)
+  Constant MDE: 1.6996 m | RMSE 1.8689 m | Median 2.0823 m | OccAcc 0.2048  (mean support position; beat this to show the few-shot step learned anything)
+
+EMPTY_ROOM:
+  Student MDE: 2.1201 ± 0.1155 m (SE) | RMSE 2.3702 ± 0.1534 m (SE) | Median 2.0408 ± 0.0518 m (SE)
+  Student Occupancy Accuracy: 0.1138 ± 0.0212 (SE)
+  Teacher (frozen, no fine-tuning) MDE: 3.5685 ± 0.0000 m (SE) | RMSE 4.1885 ± 0.0000 m (SE) | Median 3.1831 ± 0.0000 m (SE)
+  Teacher (frozen, no fine-tuning) Occupancy Accuracy: 0.1138 ± 0.0000 (SE)
+  Constant MDE: 1.7810 m | RMSE 1.9363 m | Median 2.0677 m | OccAcc 0.1903  (mean support position; beat this to show the few-shot step learned anything)
+
+EMPTY_ROOM_SYNTH:
+  Student MDE: 2.1760 ± 0.1857 m (SE) | RMSE 2.3626 ± 0.1474 m (SE) | Median 1.6900 ± 0.2384 m (SE)
+  Student Occupancy Accuracy: 0.0165 ± 0.0074 (SE)
+  Teacher (frozen, no fine-tuning) MDE: 3.6498 ± 0.0000 m (SE) | RMSE 3.8441 ± 0.0000 m (SE) | Median 3.1176 ± 0.0000 m (SE)
+  Teacher (frozen, no fine-tuning) Occupancy Accuracy: 0.0000 ± 0.0000 (SE)
+  Constant MDE: 1.8171 m | RMSE 1.9534 m | Median 2.0677 m | OccAcc 0.1667  (mean support position; beat this to show the few-shot step learned anything)
+
+MEETING_ROOM:
+  Student MDE: 2.4521 ± 0.0808 m (SE) | RMSE 2.6949 ± 0.1139 m (SE) | Median 2.4547 ± 0.0359 m (SE)
+  Student Occupancy Accuracy: 0.1437 ± 0.0276 (SE)
+  Teacher (frozen, no fine-tuning) MDE: 3.9148 ± 0.0000 m (SE) | RMSE 4.4691 ± 0.0000 m (SE) | Median 3.9576 ± 0.0000 m (SE)
+  Teacher (frozen, no fine-tuning) Occupancy Accuracy: 0.1394 ± 0.0000 (SE)
+  Constant MDE: 2.2078 m | RMSE 2.3759 m | Median 2.5376 m | OccAcc 0.1989  (mean support position; beat this to show the few-shot step learned anything)
+
+MEETING_ROOM_SYNTH:
+  Student MDE: 2.3946 ± 0.1586 m (SE) | RMSE 2.6296 ± 0.2118 m (SE) | Median 1.8882 ± 0.0388 m (SE)
+  Student Occupancy Accuracy: 0.1456 ± 0.0319 (SE)
+  Teacher (frozen, no fine-tuning) MDE: 3.1998 ± 0.0000 m (SE) | RMSE 3.6169 ± 0.0000 m (SE) | Median 2.5135 ± 0.0000 m (SE)
+  Teacher (frozen, no fine-tuning) Occupancy Accuracy: 0.0000 ± 0.0000 (SE)
+  Constant MDE: 2.1012 m | RMSE 2.3002 m | Median 2.5376 m | OccAcc 0.2468  (mean support position; beat this to show the few-shot step learned anything)
