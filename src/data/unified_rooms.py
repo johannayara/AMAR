@@ -34,6 +34,7 @@ from scipy.signal import resample_poly
 from configs.preset import preset
 from src.data.load_data import (load_data_y, harmonize_wimans_antennas, wimans_room_names,
                                 wimans_room_source)
+from src.data.phase import csi_dir, prepare_csi
 from src.data.hwild import (HWILD_ROOMS, room_names as hwild_room_names, load_hwild_room,
                             room_span as hwild_room_span)
 
@@ -141,6 +142,7 @@ def load_wimans_room(var_room, var_max_samples=None, var_length=None, var_band=N
     var_length = var_length if var_length is not None else preset["hwild"]["window"]
     var_users = var_users if var_users is not None else preset["data"]["num_users"]
     var_base, var_data_x, var_data_y, var_source_band = wimans_room_source(var_room)
+    var_data_x = csi_dir(var_data_x)
     var_band = list(var_band) if var_band is not None else var_source_band
     USER_RANGE = range(1, MAX_USERS + 1)
     if var_base == "anywhere":
@@ -191,7 +193,7 @@ def load_wimans_room(var_room, var_max_samples=None, var_length=None, var_band=N
     var_features = WIMANS_FEATURES if var_antennas == "avg" else WIMANS_FEATURES_FULL
     var_x = np.empty((var_num, var_length, var_features), dtype=np.float32)
     for var_idx, var_label in enumerate(var_labels):
-        var_amp = np.load(os.path.join(var_data_x, var_label + ".npy")).astype(np.float32)
+        var_amp = prepare_csi(np.load(os.path.join(var_data_x, var_label + ".npy")).astype(np.float32))
         ## real WiMANS is (time, 3 TX, 3 RX, 30); a single-link capture such as the simulated
         ## few-shot dataset is (time, 1, 1, 30) and is broadcast to the 3 x 3 grid first
         var_amp = harmonize_wimans_antennas(var_amp)

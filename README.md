@@ -144,6 +144,7 @@ preset = {
         "wifi_band": ["5"],                         # WiFi band (2.4 or 5 GHz)
         "environment": ["empty_room"],              # Environment type
         "length": 3000,                             # CSI sequence length
+        "csi_type": "amplitude",                    # "amplitude" or "phase"
     },
     "nn": {
         "lr": 5e-4,                    # Learning rate
@@ -153,6 +154,25 @@ preset = {
     }
 }
 ```
+
+**CSI representation (amplitude vs phase).** `preset["data"]["csi_type"]` selects what every WiMANS
+loader reads; `"amplitude"` (the default) is the historical behaviour, `"phase"` reads phase tensors
+instead. The phase tensors are extracted from the raw complex CSI in `dataset/wifi_csi/mat/*.mat` with
+
+```bash
+python src/data/preprocess.py --what phase      # writes dataset/wifi_csi/phase/<label>.npy
+```
+
+Each source keeps its two representations side by side (`.../wifi_csi/amp` and `.../wifi_csi/phase`),
+and `src/data/phase.py:csi_dir` swaps the trailing `amp` segment for `phase`, so the real, simulated and
+anywhere sources resolve through the same code path. Raw CSI phase is dominated by a per-frame constant
+offset and a linear ramp across subcarriers (packet timing and sampling-time/CFO);
+`preset["data"]["phase"]["sanitize"]` decides what to do with it — `"linear"` (default) unwraps the
+subcarrier axis and subtracts each frame's linear trend (SpotFi-style), `"none"` keeps the raw wrapped
+phase. The sanitisation is applied on load, so one extracted file serves either setting. Only the real
+WiMANS source ships `.mat` captures, so a phase run must disable the amplitude-only synthetic sources
+(`synth_wimans.enabled=false` and `synth_wimans.anywhere=false`). Switch per run without editing the
+file with `--hp data.csi_type=phase`.
 
 ### 2. Run Experiments
 

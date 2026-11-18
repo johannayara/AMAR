@@ -32,6 +32,7 @@ import numpy as np
 from configs.preset import preset
 from src.data.load_data import (load_data_y, harmonize_wimans_antennas, wimans_room_names,
                                 wimans_room_source)
+from src.data.phase import csi_dir, prepare_csi
 from src.data.ntu_har import (NTU_HAR_FEATURES, load_ntu_har, ntu_har_class_names)
 from src.utils import calculate_scores
 
@@ -261,9 +262,10 @@ def load_wimans_frames(var_labels, var_data_x, var_length, var_features, var_sta
     #
     ##
     var_x = np.empty((len(var_labels), var_length, var_features), dtype=np.float32)
+    var_data_x = csi_dir(var_data_x)
     var_lengths = np.zeros(len(var_labels), dtype=np.int64)
     for var_i, var_label in enumerate(var_labels):
-        var_amp = np.load(os.path.join(var_data_x, var_label + ".npy")).astype(np.float32)
+        var_amp = prepare_csi(np.load(os.path.join(var_data_x, var_label + ".npy")).astype(np.float32))
         var_x[var_i], var_lengths[var_i] = harmonize_wimans_features(var_amp, var_features,
                                                                     var_length)
     if var_standardize == "window":

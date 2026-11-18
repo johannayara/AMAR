@@ -30,9 +30,15 @@ preset = {
         "wifi_band": ["2.4"],                           # select WiFi band(s) (e.g., ["2.4"], ["5"], ["2.4", "5"])
         "environment": ["empty_room", "meeting_room", "classroom"],               # select environment(s) (e.g., ["classroom"], ["meeting_room"], ["empty_room"])
         "length": 3000,                                 # default length of CSI
-        ## Optional second WiMANS-format source. When enabled its rooms are appended to the WiMANS. The simulated set
-        ## is a single antenna pair; on the 3x3
-        ## grid, so it loads with the same feature count as real WiMANS.
+        ## Which CSI representation the WiMANS loaders read (src/data/phase.py).
+        ##   "amplitude" (default): the magnitude tensors under each source's ".../wifi_csi/amp".
+        ##   "phase": the phase tensors under ".../wifi_csi/phase"
+        "csi_type": "amplitude",                         # "amplitude" | "phase"
+        ## Phase preprocessing, applied on load only when csi_type == "phase".
+        ##   "linear" (default): unwrap along the subcarrier axis, then subtract each frame's linear
+        ##   "none": keep the raw wrapped phase.
+        "phase": {"sanitize": "linear"},                 # "linear" | "none"
+        ## Optional second WiMANS-format source. When enabled its rooms are appended to the WiMANS. 
         "synth_wimans": {
             "enabled": False,
             "anywhere": True, 

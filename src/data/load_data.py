@@ -10,6 +10,7 @@ import pandas as pd
 #
 from configs.preset import preset
 from src.data.csi_preprocess import preprocess_csi
+from src.data.phase import csi_dir, prepare_csi
 
 #
 ##
@@ -64,6 +65,7 @@ def load_data_x(var_path_data_x,
     """
     #
     ##
+    var_path_data_x = csi_dir(var_path_data_x)
     var_path_list = [os.path.join(var_path_data_x, var_label + ".npy") for var_label in var_label_list]
     #
     # Preallocate the output and write each sample in place. Building a Python list of padded
@@ -75,7 +77,7 @@ def load_data_x(var_path_data_x,
     #
     for var_idx, var_path in enumerate(var_path_list):
         #
-        data_csi = np.load(var_path)
+        data_csi = prepare_csi(np.load(var_path))
         #
         if data_x is None:
             data_x = np.zeros((len(var_path_list), var_length) + data_csi.shape[1:], dtype=np.float32)
@@ -143,11 +145,12 @@ def load_wimans_room_x(var_data_x, var_label_list, var_length=None, var_preproce
     #
     ##
     var_length = var_length if var_length is not None else preset["data"]["length"]
+    var_data_x = csi_dir(var_data_x)
     var_x = None
     var_lengths = np.zeros(len(var_label_list), dtype=np.int64)
     for var_idx, var_label in enumerate(var_label_list):
         var_path = os.path.join(var_data_x, var_label + ".npy")
-        var_amp = harmonize_wimans_antennas(np.load(var_path))
+        var_amp = harmonize_wimans_antennas(prepare_csi(np.load(var_path)))
         if var_x is None:
             var_x = np.zeros((len(var_label_list), var_length) + var_amp.shape[1:], dtype=np.float32)
         var_lengths[var_idx] = var_amp.shape[0]
@@ -223,9 +226,7 @@ def wimans_room_source(var_room, var_environments=None):
     var_environments = (list(var_environments) if var_environments is not None
                         else list(preset["data"]["environment"]))
     var_sources = wimans_sources()
-    print(var_sources)
     for var_suffix, var_data_x, var_data_y, var_bands in var_sources:
-        print(var_suffix)
         if not var_suffix and var_room in var_environments:
             return var_room, var_data_x, var_data_y, var_bands
         if var_suffix and var_room.endswith(var_suffix):
